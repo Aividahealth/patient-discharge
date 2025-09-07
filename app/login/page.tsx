@@ -21,7 +21,7 @@ export default function LoginPage() {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (accessPassword === "NoAirForMyBhai") {
+    if (accessPassword === "Adyar2Austin") {
       setIsAuthenticated(true)
       setPasswordError("")
     } else {
