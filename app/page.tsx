@@ -1,7 +1,10 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Heart, Users, Shield, Globe } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 export default function HomePage() {
   return (
@@ -13,22 +16,20 @@ export default function HomePage() {
             <div className="flex items-center gap-3">
               <Link
                 href="/"
-                className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                className="flex h-20 w-20 items-center justify-center rounded-lg hover:opacity-90 transition-opacity"
               >
-                <Heart className="h-5 w-5" />
+                <Image
+                  src="/aivida-logo.png"
+                  alt="Aivida Logo"
+                  width={80}
+                  height={80}
+                  className="rounded-lg"
+                />
               </Link>
               <div>
                 <h1 className="font-heading text-xl font-semibold text-foreground">Aivida</h1>
                 <p className="text-sm text-muted-foreground">Discharge Instructions Platform</p>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/login">Sign In</Link>
-              </Button>
-              <Button size="sm" asChild>
-                <Link href="/login">Get Started</Link>
-              </Button>
             </div>
           </div>
         </div>
@@ -49,12 +50,13 @@ export default function HomePage() {
             Aivida is the AI-powered discharge companion that transforms complex medical instructions into clear,
             multilingual summaries with medication clarity, appointment scheduling, and 24/7 patient support.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" asChild>
-              <Link href="/patient">See the Patient Experience</Link>
-            </Button>
-            <Button variant="outline" size="lg" className="bg-transparent" asChild>
-              <Link href="/clinician">Explore Clinician Portal</Link>
+          <div className="flex justify-center">
+            <Button 
+              size="lg" 
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg px-8 py-4"
+              onClick={() => window.location.href = 'mailto:ai@aividahealth.ai?subject=Demo Request&body=Hi, I would like to schedule a demo of Aivida.'}
+            >
+              Schedule Demo
             </Button>
           </div>
         </div>
@@ -186,14 +188,6 @@ export default function HomePage() {
             Hospitals lose up to $15M each year from preventable readmissions. Aivida gives patients clarity, clinicians
             efficiency, and administrators insights — delivering measurable ROI from day one.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" asChild>
-              <Link href="/login">Schedule Demo</Link>
-            </Button>
-            <Button variant="outline" size="lg" asChild>
-              <Link href="/login">Access Documentation</Link>
-            </Button>
-          </div>
         </div>
       </section>
     </div>

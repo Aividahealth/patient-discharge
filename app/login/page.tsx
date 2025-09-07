@@ -10,10 +10,24 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Heart, Stethoscope, Settings, Eye, EyeOff, Shield, Users, User } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loginType, setLoginType] = useState("patient")
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [accessPassword, setAccessPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (accessPassword === "NoAirForMyBhai") {
+      setIsAuthenticated(true)
+      setPasswordError("")
+    } else {
+      setPasswordError("Incorrect password. Please try again.")
+    }
+  }
 
   const demoCredentials = {
     patient: {
@@ -32,14 +46,79 @@ export default function LoginPage() {
     },
   }
 
+  // Password protection gate
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-6">
+          {/* Header */}
+          <div className="text-center space-y-2">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="flex h-20 w-20 items-center justify-center rounded-lg">
+                <Image
+                  src="/aivida-logo.png"
+                  alt="Aivida Logo"
+                  width={80}
+                  height={80}
+                  className="rounded-lg"
+                />
+              </div>
+              <div className="text-left">
+                <h1 className="font-heading text-2xl font-bold text-foreground">Aivida</h1>
+                <p className="text-sm text-muted-foreground">Discharge Instructions Platform</p>
+              </div>
+            </div>
+            <p className="text-muted-foreground">Enter access password to continue</p>
+          </div>
+
+          {/* Password Form */}
+          <Card>
+            <CardHeader className="space-y-1">
+              <CardTitle className="font-heading text-xl text-center">Access Required</CardTitle>
+              <CardDescription className="text-center">This area is password protected</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="access-password">Password</Label>
+                  <Input
+                    id="access-password"
+                    type="password"
+                    placeholder="Enter access password"
+                    value={accessPassword}
+                    onChange={(e) => setAccessPassword(e.target.value)}
+                    className={passwordError ? "border-red-500" : ""}
+                  />
+                  {passwordError && (
+                    <p className="text-sm text-red-500">{passwordError}</p>
+                  )}
+                </div>
+                <Button type="submit" className="w-full">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Access Platform
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Heart className="h-6 w-6" />
+            <div className="flex h-20 w-20 items-center justify-center rounded-lg">
+              <Image
+                src="/aivida-logo.png"
+                alt="Aivida Logo"
+                width={80}
+                height={80}
+                className="rounded-lg"
+              />
             </div>
             <div className="text-left">
               <h1 className="font-heading text-2xl font-bold text-foreground">Aivida</h1>
