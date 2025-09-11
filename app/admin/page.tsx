@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator"
 import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
+import { AuthGuard } from "@/components/auth-guard"
 import {
   Settings,
   Database,
@@ -75,7 +76,8 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <AuthGuard>
+      <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Admin Portal" />
       
       {/* Admin Portal Header */}
@@ -1115,6 +1117,7 @@ export default function AdminDashboard() {
       </div>
       
       <CommonFooter />
-    </div>
+      </div>
+    </AuthGuard>
   )
 }

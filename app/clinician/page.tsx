@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
+import { AuthGuard } from "@/components/auth-guard"
 import {
   Upload,
   FileText,
@@ -649,7 +650,8 @@ export default function ClinicianDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <AuthGuard>
+      <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Clinician Portal" />
       
       {/* Clinician Portal Header */}
@@ -1089,6 +1091,7 @@ export default function ClinicianDashboard() {
       </div>
       
       <CommonFooter />
-    </div>
+      </div>
+    </AuthGuard>
   )
 }

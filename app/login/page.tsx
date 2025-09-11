@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,8 +14,10 @@ import Link from "next/link"
 import Image from "next/image"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
+import { setAuthSession } from "@/lib/auth"
 
 export default function LoginPage() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [loginType, setLoginType] = useState("patient")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -24,11 +27,17 @@ export default function LoginPage() {
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (accessPassword === "Adyar2Austin") {
+      setAuthSession()
       setIsAuthenticated(true)
       setPasswordError("")
     } else {
       setPasswordError("Incorrect password. Please try again.")
     }
+  }
+
+  const handlePortalAccess = (portal: string) => {
+    setAuthSession()
+    router.push(`/${portal}`)
   }
 
   const demoCredentials = {
@@ -170,12 +179,13 @@ export default function LoginPage() {
                   />
                   <p className="text-xs text-muted-foreground">{demoCredentials.patient.description}</p>
                 </div>
-                <Link href="/patient" className="block">
-                  <Button className="w-full">
-                    <User className="h-4 w-4 mr-2" />
-                    Access Patient Portal
-                  </Button>
-                </Link>
+                <Button 
+                  className="w-full"
+                  onClick={() => handlePortalAccess('patient')}
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Access Patient Portal
+                </Button>
               </TabsContent>
 
               {/* Clinician Login */}
@@ -212,12 +222,13 @@ export default function LoginPage() {
                   </div>
                   <p className="text-xs text-muted-foreground">{demoCredentials.clinician.description}</p>
                 </div>
-                <Link href="/clinician" className="block">
-                  <Button className="w-full">
-                    <Stethoscope className="h-4 w-4 mr-2" />
-                    Access Clinician Portal
-                  </Button>
-                </Link>
+                <Button 
+                  className="w-full"
+                  onClick={() => handlePortalAccess('clinician')}
+                >
+                  <Stethoscope className="h-4 w-4 mr-2" />
+                  Access Clinician Portal
+                </Button>
               </TabsContent>
 
               {/* Admin Login */}
@@ -254,12 +265,13 @@ export default function LoginPage() {
                   </div>
                   <p className="text-xs text-muted-foreground">{demoCredentials.admin.description}</p>
                 </div>
-                <Link href="/admin" className="block">
-                  <Button className="w-full">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Access Admin Dashboard
-                  </Button>
-                </Link>
+                <Button 
+                  className="w-full"
+                  onClick={() => handlePortalAccess('admin')}
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Access Admin Dashboard
+                </Button>
               </TabsContent>
             </Tabs>
 

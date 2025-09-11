@@ -11,6 +11,7 @@ import { PatientChatbot } from "@/components/patient-chatbot"
 import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
+import { AuthGuard } from "@/components/auth-guard"
 import {
   Heart,
   Pill,
@@ -459,7 +460,8 @@ EMERGENCY CONTACTS:
   const t = translations[language as keyof typeof translations]
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <AuthGuard>
+      <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Patient Portal" />
       
       {/* Patient Portal Header */}
@@ -964,6 +966,7 @@ EMERGENCY CONTACTS:
       <PatientChatbot isOpen={showChat} onClose={() => setShowChat(false)} patientData={patientData} />
       
       <CommonFooter />
-    </div>
+      </div>
+    </AuthGuard>
   )
 }

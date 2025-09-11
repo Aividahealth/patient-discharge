@@ -55,7 +55,7 @@ export function CommonFooter() {
         <div className="border-t border-slate-300 mt-4 pt-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center space-x-2 text-slate-500 text-xs mb-2 md:mb-0">
-              <span>© 2024 Aivida Health. All rights reserved.</span>
+              <span>© 2025 Aivida Health. All rights reserved.</span>
             </div>
             <div className="flex items-center space-x-4 text-slate-500 text-xs">
               <a href="#" className="hover:text-slate-700 transition-colors">
