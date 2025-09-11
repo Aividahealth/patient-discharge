@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { FeedbackButton } from "@/components/feedback-button"
+import { CommonHeader } from "@/components/common-header"
+import { CommonFooter } from "@/components/common-footer"
 import {
   Settings,
   Database,
@@ -73,8 +75,10 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
+    <div className="min-h-screen bg-background flex flex-col">
+      <CommonHeader title="Admin Portal" />
+      
+      {/* Admin Portal Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -83,7 +87,7 @@ export default function AdminDashboard() {
                 <Settings className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="font-heading text-xl font-semibold text-foreground">Aivida</h1>
+                <h1 className="font-heading text-xl font-semibold text-foreground">Admin Portal</h1>
                 <p className="text-sm text-muted-foreground">Admin Dashboard</p>
               </div>
             </div>
@@ -1109,6 +1113,8 @@ export default function AdminDashboard() {
           </TabsContent>
         </Tabs>
       </div>
+      
+      <CommonFooter />
     </div>
   )
 }

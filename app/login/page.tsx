@@ -11,6 +11,8 @@ import { Separator } from "@/components/ui/separator"
 import { Heart, Stethoscope, Settings, Eye, EyeOff, Shield, Users, User } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import { CommonHeader } from "@/components/common-header"
+import { CommonFooter } from "@/components/common-footer"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -49,7 +51,9 @@ export default function LoginPage() {
   // Password protection gate
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="min-h-screen bg-background flex flex-col">
+        <CommonHeader title="Login" />
+        <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6">
           {/* Header */}
           <div className="text-center space-y-2">
@@ -101,12 +105,16 @@ export default function LoginPage() {
             </CardContent>
           </Card>
         </div>
+        </div>
+        <CommonFooter />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col">
+      <CommonHeader title="Login" />
+      <div className="flex-1 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
@@ -303,26 +311,9 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Footer */}
-        <div className="text-center space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Need help? Contact your healthcare provider or system administrator.
-          </p>
-          <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-            <Link href="#" className="hover:text-foreground">
-              Privacy Policy
-            </Link>
-            <span>•</span>
-            <Link href="#" className="hover:text-foreground">
-              Terms of Service
-            </Link>
-            <span>•</span>
-            <Link href="#" className="hover:text-foreground">
-              Support
-            </Link>
-          </div>
-        </div>
       </div>
+      </div>
+      <CommonFooter />
     </div>
   )
 }

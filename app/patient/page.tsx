@@ -9,6 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { PatientChatbot } from "@/components/patient-chatbot"
 import { FeedbackButton } from "@/components/feedback-button"
+import { CommonHeader } from "@/components/common-header"
+import { CommonFooter } from "@/components/common-footer"
 import {
   Heart,
   Pill,
@@ -457,8 +459,10 @@ EMERGENCY CONTACTS:
   const t = translations[language as keyof typeof translations]
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
+    <div className="min-h-screen bg-background flex flex-col">
+      <CommonHeader title="Patient Portal" />
+      
+      {/* Patient Portal Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -467,7 +471,7 @@ EMERGENCY CONTACTS:
                 <Heart className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="font-heading text-xl font-semibold text-foreground">Aivida</h1>
+                <h1 className="font-heading text-xl font-semibold text-foreground">Patient Portal</h1>
                 <p className="text-sm text-muted-foreground">{t.patientPortal}</p>
               </div>
             </div>
@@ -958,6 +962,8 @@ EMERGENCY CONTACTS:
       </Button>
 
       <PatientChatbot isOpen={showChat} onClose={() => setShowChat(false)} patientData={patientData} />
+      
+      <CommonFooter />
     </div>
   )
 }
