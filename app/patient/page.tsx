@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { PatientChatbot } from "@/components/patient-chatbot"
+import { FeedbackButton } from "@/components/feedback-button"
 import {
   Heart,
   Pill,
@@ -486,6 +487,7 @@ EMERGENCY CONTACTS:
                   ))}
                 </select>
               </div>
+              <FeedbackButton userType="patient" />
               <Avatar className="h-8 w-8">
                 <AvatarImage src="/patient-avatar.png" />
                 <AvatarFallback>JS</AvatarFallback>
