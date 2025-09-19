@@ -13,15 +13,15 @@ export function CommonFooter() {
             <div className="flex items-center space-x-3 mb-3">
               <Image
                 src="/aivida-logo.png"
-                alt="Aivida Health"
+                alt="Aivida Healthcare Technologies"
                 width={32}
                 height={32}
                 className="rounded-lg"
               />
-              <span className="text-lg font-bold text-slate-900">Aivida Health</span>
+              <span className="text-lg font-bold text-slate-900">Aivida Healthcare Technologies</span>
             </div>
             <p className="text-slate-600 mb-3 max-w-md text-sm">
-              AI-powered patient discharge instructions platform reducing readmissions through clear, multilingual guidance.
+              AI-powered solutions, guided by human expertise, to make healthcare communication clearer and hospital operations more efficient
             </p>
             <div className="flex space-x-4">
               <div className="flex items-center space-x-2 text-slate-600">
@@ -30,7 +30,7 @@ export function CommonFooter() {
               </div>
               <div className="flex items-center space-x-2 text-slate-600">
                 <Globe className="h-3 w-3" />
-                <span className="text-xs">Multilingual</span>
+                <span className="text-xs">Hospital Ready</span>
               </div>
             </div>
           </div>
@@ -55,7 +55,7 @@ export function CommonFooter() {
         <div className="border-t border-slate-300 mt-4 pt-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="flex items-center space-x-2 text-slate-500 text-xs mb-2 md:mb-0">
-              <span>© 2025 Aivida Health. All rights reserved.</span>
+              <span>© 2025 Aivida Healthcare Technologies. All rights reserved.</span>
             </div>
             <div className="flex items-center space-x-4 text-slate-500 text-xs">
               <a href="#" className="hover:text-slate-700 transition-colors">
