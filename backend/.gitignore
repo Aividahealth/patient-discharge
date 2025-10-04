@@ -58,4 +58,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Local dev settings (service accounts, etc.)
 .settings.dev/
 
-scripts/
+scripts/.settings.dev/

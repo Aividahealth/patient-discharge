@@ -1,0 +1,22 @@
+{
+  "name": "firestore-sync-function",
+  "version": "1.0.0",
+  "description": "Cloud Function to sync GCS uploads to Firestore",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "./deploy.sh"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "@google-cloud/firestore": "^7.10.0",
+    "@google-cloud/storage": "^7.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3"
+  }
+}

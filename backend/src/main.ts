@@ -6,6 +6,14 @@ import express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Enable CORS for frontend
+  app.enableCors({
+    origin: ['http://localhost:3001', 'http://localhost:3000'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   // Ensure Express parses FHIR JSON payloads
   app.use(express.json({ type: ['application/json', 'application/fhir+json'] }));
   // Load dev configuration at startup so it is ready for FHIR module usage
