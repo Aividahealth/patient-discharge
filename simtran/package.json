@@ -1,0 +1,25 @@
+{
+  "name": "discharge-summary-backend",
+  "version": "1.0.0",
+  "description": "Backend Cloud Functions for discharge summary processing",
+  "main": "translation/lib/translation/translation-function.js",
+  "scripts": {
+    "build": "cd common && npm install && npm run build && cd ../translation && npm install && npm run build",
+    "deploy:simplification": "cd simplification && ./deploy.sh",
+    "deploy:translation": "cd translation && ./deploy-translation.sh"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "@google-cloud/storage": "^7.7.0",
+    "@google-cloud/vertexai": "^1.4.0",
+    "@google-cloud/translate": "^8.0.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "typescript": "^5.3.3"
+  }
+}
