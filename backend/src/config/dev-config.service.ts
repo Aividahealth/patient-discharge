@@ -24,8 +24,33 @@ export class DevConfigService {
 
   async load(): Promise<void> {
     const p = path.resolve(process.cwd(), '.settings.dev/config.yaml');
-    const raw = await fs.readFile(p, 'utf8');
-    this.config = YAML.parse(raw) as DevConfig;
+
+    try {
+      // Try to load from file first (for local development)
+      const raw = await fs.readFile(p, 'utf8');
+      this.config = YAML.parse(raw) as DevConfig;
+    } catch (error) {
+      // Fall back to environment variables (for production/Cloud Run)
+      this.config = {
+        service_account_path: process.env.SERVICE_ACCOUNT_PATH || '',
+        fhir_base_url: process.env.FHIR_BASE_URL,
+        fhirstore_url: process.env.FHIRSTORE_URL,
+        gcp: {
+          project_id: process.env.GCP_PROJECT_ID,
+          location: process.env.GCP_LOCATION,
+          dataset: process.env.GCP_DATASET,
+          fhir_store: process.env.GCP_FHIR_STORE,
+        },
+        resource_types: process.env.RESOURCE_TYPES?.split(','),
+        cerner: {
+          base_url: process.env.CERNER_BASE_URL,
+          client_id: process.env.CERNER_CLIENT_ID,
+          client_secret: process.env.CERNER_CLIENT_SECRET,
+          token_url: process.env.CERNER_TOKEN_URL,
+          scopes: process.env.CERNER_SCOPES,
+        },
+      };
+    }
   }
 
   get(): DevConfig {

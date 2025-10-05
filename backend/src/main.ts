@@ -25,6 +25,8 @@ async function bootstrap() {
     Logger.error('Failed to load .settings.dev/config.yaml', (err as Error)?.stack, 'Bootstrap');
     throw err;
   }
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  Logger.log(`Application is running on port ${port}`, 'Bootstrap');
 }
 bootstrap();

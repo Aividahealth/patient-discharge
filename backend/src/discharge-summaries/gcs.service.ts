@@ -27,9 +27,10 @@ export class GcsService {
       const config = this.configService.get();
       const serviceAccountPath = config.service_account_path;
 
-      this.storage = new Storage({
-        keyFilename: serviceAccountPath,
-      });
+      // Use ADC (Application Default Credentials) if no service account path
+      this.storage = new Storage(
+        serviceAccountPath ? { keyFilename: serviceAccountPath } : {},
+      );
 
       this.logger.log('GCS Service initialized');
     }

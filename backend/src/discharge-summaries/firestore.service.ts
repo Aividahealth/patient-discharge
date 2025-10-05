@@ -24,9 +24,10 @@ export class FirestoreService {
       const config = this.configService.get();
       const serviceAccountPath = config.service_account_path;
 
-      this.firestore = new Firestore({
-        keyFilename: serviceAccountPath,
-      });
+      // Use ADC (Application Default Credentials) if no service account path
+      this.firestore = new Firestore(
+        serviceAccountPath ? { keyFilename: serviceAccountPath } : {},
+      );
 
       this.logger.log('Firestore Service initialized');
     }
@@ -343,14 +344,5 @@ export class FirestoreService {
     this.logger.log(`Batch created ${summaries.length} discharge summaries`);
 
     return results;
-  }
-
-  /**
-   * Delete a discharge summary from Firestore
-   */
-  async delete(id: string): Promise<void> {
-    const db = this.getFirestore();
-    await db.collection(this.collectionName).doc(id).delete();
-    this.logger.log(`Deleted discharge summary ${id} from Firestore`);
   }
 }
