@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Storage } from '@google-cloud/storage';
 
-// Initialize GCS client
-const storage = new Storage({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-  credentials: {
-    client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  },
-});
-
+// Mock GCS API for development - replace with actual GCS integration when needed
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -24,31 +15,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // List files in the bucket
-    const [files] = await storage.bucket(bucket).getFiles({
-      prefix,
-      maxResults: limit,
-    });
-
-    const fileList = await Promise.all(
-      files.map(async (file) => {
-        const [metadata] = await file.getMetadata();
-        return {
-          name: file.name,
-          size: metadata.size,
-          contentType: metadata.contentType,
-          timeCreated: metadata.timeCreated,
-          updated: metadata.updated,
-          downloadUrl: `https://storage.googleapis.com/${bucket}/${file.name}`,
-        };
-      })
-    );
+    // Mock file list for development
+    const mockFiles = [
+      {
+        name: 'sample-discharge-summary-1.md',
+        size: '2048',
+        contentType: 'text/markdown',
+        timeCreated: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        downloadUrl: `https://storage.googleapis.com/${bucket}/sample-discharge-summary-1.md`,
+      },
+      {
+        name: 'sample-discharge-summary-2.md',
+        size: '1536',
+        contentType: 'text/markdown',
+        timeCreated: new Date().toISOString(),
+        updated: new Date().toISOString(),
+        downloadUrl: `https://storage.googleapis.com/${bucket}/sample-discharge-summary-2.md`,
+      },
+    ];
 
     return NextResponse.json({
-      files: fileList,
+      files: mockFiles,
       bucket,
       prefix,
-      count: fileList.length,
+      count: mockFiles.length,
     });
   } catch (error) {
     console.error('Error listing GCS files:', error);
@@ -70,16 +61,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get file content
-    const file = storage.bucket(bucket).file(fileName);
-    const [content] = await file.download();
-    const textContent = content.toString('utf-8');
+    // Mock file content for development
+    const mockContent = `# Sample Discharge Summary
+
+## Patient Information
+- Name: John Doe
+- Date of Discharge: ${new Date().toLocaleDateString()}
+- Discharge Diagnosis: Acute myocardial infarction
+
+## Medications
+- Aspirin 81mg daily
+- Metoprolol 25mg twice daily
+- Atorvastatin 20mg at bedtime
+
+## Follow-up Instructions
+- Follow up with cardiologist in 1 week
+- Call 911 if chest pain returns
+- Take medications as prescribed
+
+## Activity Restrictions
+- No heavy lifting for 2 weeks
+- Gradual return to normal activities
+- Cardiac rehabilitation recommended`;
 
     return NextResponse.json({
-      content: textContent,
+      content: mockContent,
       fileName,
       bucket,
-      size: content.length,
+      size: mockContent.length,
     });
   } catch (error) {
     console.error('Error reading GCS file:', error);
