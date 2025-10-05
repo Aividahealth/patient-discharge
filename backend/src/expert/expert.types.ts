@@ -14,6 +14,7 @@ export interface ExpertFeedback {
 
   // Who reviewed
   reviewerName: string;
+  reviewerHospital?: string;
   reviewDate: Date;
 
   // The feedback
@@ -36,6 +37,7 @@ export interface SubmitFeedbackDto {
   reviewType: ReviewType;
   language?: string;
   reviewerName: string;
+  reviewerHospital?: string;
   overallRating: 1 | 2 | 3 | 4 | 5;
   whatWorksWell: string;
   whatNeedsImprovement: string;

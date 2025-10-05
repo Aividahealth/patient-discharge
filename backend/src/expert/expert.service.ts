@@ -119,6 +119,7 @@ export class ExpertService {
       reviewType: dto.reviewType,
       language: dto.language,
       reviewerName: dto.reviewerName,
+      reviewerHospital: dto.reviewerHospital,
       reviewDate: now,
       overallRating: dto.overallRating,
       whatWorksWell: dto.whatWorksWell,

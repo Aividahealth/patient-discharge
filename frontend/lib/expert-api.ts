@@ -43,6 +43,7 @@ export interface SubmitFeedbackRequest {
   reviewType: ReviewType;
   language?: string;
   reviewerName: string;
+  reviewerHospital?: string;
   overallRating: 1 | 2 | 3 | 4 | 5;
   whatWorksWell: string;
   whatNeedsImprovement: string;

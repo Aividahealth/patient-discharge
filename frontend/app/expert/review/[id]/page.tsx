@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Loader2, Star, CheckCircle } from "lucide-react"
 import { getDischargeSummaryContent, DischargeSummaryContent } from "@/lib/discharge-summaries"
 import { submitFeedback } from "@/lib/expert-api"
@@ -24,13 +25,15 @@ export default function ExpertReviewPage() {
   const [submitting, setSubmitting] = useState(false)
   const [rawContent, setRawContent] = useState<DischargeSummaryContent | null>(null)
   const [simplifiedContent, setSimplifiedContent] = useState<DischargeSummaryContent | null>(null)
+  const [translatedContent, setTranslatedContent] = useState<DischargeSummaryContent | null>(null)
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
 
   // Form state
   const [reviewerName, setReviewerName] = useState("")
+  const [reviewerHospital, setReviewerHospital] = useState("")
   const [reviewType, setReviewType] = useState<'simplification' | 'translation'>('simplification')
-  const [language, setLanguage] = useState("")
+  const [language, setLanguage] = useState("es")
   const [overallRating, setOverallRating] = useState<number>(0)
   const [whatWorksWell, setWhatWorksWell] = useState("")
   const [whatNeedsImprovement, setWhatNeedsImprovement] = useState("")
@@ -41,6 +44,13 @@ export default function ExpertReviewPage() {
   useEffect(() => {
     loadContent()
   }, [summaryId])
+
+  useEffect(() => {
+    // Reload translated content when language changes
+    if (reviewType === 'translation' && language) {
+      loadTranslatedContent()
+    }
+  }, [reviewType, language])
 
   const loadContent = async () => {
     try {
@@ -75,6 +85,21 @@ export default function ExpertReviewPage() {
     }
   }
 
+  const loadTranslatedContent = async () => {
+    if (!language) return
+
+    try {
+      const translated = await getDischargeSummaryContent(summaryId, 'translated', language).catch((err) => {
+        console.error('Failed to load translated version:', err)
+        return null
+      })
+
+      setTranslatedContent(translated)
+    } catch (error) {
+      console.error('Failed to load translated content:', error)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -104,6 +129,7 @@ export default function ExpertReviewPage() {
         reviewType,
         language: reviewType === 'translation' ? language : undefined,
         reviewerName: reviewerName.trim(),
+        reviewerHospital: reviewerHospital.trim() || undefined,
         overallRating: overallRating as 1 | 2 | 3 | 4 | 5,
         whatWorksWell,
         whatNeedsImprovement,
@@ -189,31 +215,10 @@ export default function ExpertReviewPage() {
       <main className="container mx-auto px-4 py-8">
         {/* Side-by-side content */}
         <div className="grid lg:grid-cols-2 gap-6 mb-8">
-          {/* Original */}
+          {/* Left side - always shows simplified (English) */}
           <Card className="flex flex-col">
             <CardHeader>
-              <CardTitle>Original (Raw)</CardTitle>
-              <CardDescription>
-                Original medical documentation as written by clinical team
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1">
-              <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
-                {rawContent?.content?.content ? (
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                    {rawContent.content.content}
-                  </pre>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Raw version not available</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Simplified */}
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle>Simplified</CardTitle>
+              <CardTitle>Simplified (English)</CardTitle>
               <CardDescription>
                 Simplified to high school reading level for patients
               </CardDescription>
@@ -230,6 +235,42 @@ export default function ExpertReviewPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Right side - shows original for content review or translated for translation review */}
+          <Card className="flex flex-col">
+            <CardHeader>
+              <CardTitle>
+                {reviewType === 'simplification' ? 'Original (Raw)' : `Translated (${language.toUpperCase()})`}
+              </CardTitle>
+              <CardDescription>
+                {reviewType === 'simplification'
+                  ? 'Original medical documentation as written by clinical team'
+                  : `Translation of simplified version to ${language.toUpperCase()}`
+                }
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1">
+              <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
+                {reviewType === 'simplification' ? (
+                  rawContent?.content?.content ? (
+                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                      {rawContent.content.content}
+                    </pre>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Raw version not available</p>
+                  )
+                ) : (
+                  translatedContent?.content?.content ? (
+                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                      {translatedContent.content.content}
+                    </pre>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Translated version not available for {language.toUpperCase()}</p>
+                  )
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Feedback Form */}
@@ -237,7 +278,10 @@ export default function ExpertReviewPage() {
           <CardHeader>
             <CardTitle>Feedback Form</CardTitle>
             <CardDescription>
-              Please provide your expert review of the simplified version
+              {reviewType === 'simplification'
+                ? 'Content Expert: Review the simplified version for accuracy and clarity'
+                : 'Translation Expert: Review the translated version for accuracy and cultural appropriateness'
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -254,17 +298,32 @@ export default function ExpertReviewPage() {
                 />
               </div>
 
+              {/* Reviewer Hospital */}
+              <div className="space-y-2">
+                <Label htmlFor="reviewerHospital">Your Hospital</Label>
+                <Input
+                  id="reviewerHospital"
+                  placeholder="Enter your hospital or organization"
+                  value={reviewerHospital}
+                  onChange={(e) => setReviewerHospital(e.target.value)}
+                />
+              </div>
+
               {/* Review Type */}
               <div className="space-y-2">
                 <Label>Review Type</Label>
                 <RadioGroup value={reviewType} onValueChange={(v: any) => setReviewType(v)}>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="simplification" id="simplification" />
-                    <Label htmlFor="simplification">Simplification</Label>
+                    <Label htmlFor="simplification" className="font-normal cursor-pointer">
+                      Content Expert (Review simplification quality)
+                    </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="translation" id="translation" />
-                    <Label htmlFor="translation">Translation</Label>
+                    <Label htmlFor="translation" className="font-normal cursor-pointer">
+                      Translation Expert (Review translation quality)
+                    </Label>
                   </div>
                 </RadioGroup>
               </div>
@@ -272,13 +331,34 @@ export default function ExpertReviewPage() {
               {/* Language (if translation) */}
               {reviewType === 'translation' && (
                 <div className="space-y-2">
-                  <Label htmlFor="language">Language</Label>
-                  <Input
-                    id="language"
-                    placeholder="e.g., Spanish, French, Hindi"
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                  />
+                  <Label htmlFor="language">Target Language *</Label>
+                  <Select value={language} onValueChange={setLanguage}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="es">Spanish (Español)</SelectItem>
+                      <SelectItem value="zh">Chinese (中文)</SelectItem>
+                      <SelectItem value="hi">Hindi (हिन्दी)</SelectItem>
+                      <SelectItem value="ar">Arabic (العربية)</SelectItem>
+                      <SelectItem value="pt">Portuguese (Português)</SelectItem>
+                      <SelectItem value="bn">Bengali (বাংলা)</SelectItem>
+                      <SelectItem value="ru">Russian (Русский)</SelectItem>
+                      <SelectItem value="ja">Japanese (日本語)</SelectItem>
+                      <SelectItem value="pa">Punjabi (ਪੰਜਾਬੀ)</SelectItem>
+                      <SelectItem value="de">German (Deutsch)</SelectItem>
+                      <SelectItem value="jv">Javanese (Basa Jawa)</SelectItem>
+                      <SelectItem value="ko">Korean (한국어)</SelectItem>
+                      <SelectItem value="fr">French (Français)</SelectItem>
+                      <SelectItem value="te">Telugu (తెలుగు)</SelectItem>
+                      <SelectItem value="mr">Marathi (मराठी)</SelectItem>
+                      <SelectItem value="tr">Turkish (Türkçe)</SelectItem>
+                      <SelectItem value="ta">Tamil (தமிழ்)</SelectItem>
+                      <SelectItem value="vi">Vietnamese (Tiếng Việt)</SelectItem>
+                      <SelectItem value="ur">Urdu (اردو)</SelectItem>
+                      <SelectItem value="it">Italian (Italiano)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
