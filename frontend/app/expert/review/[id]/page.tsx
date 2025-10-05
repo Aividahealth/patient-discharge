@@ -22,8 +22,8 @@ export default function ExpertReviewPage() {
 
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [rawContent, setRawContent] = useState<string>("")
-  const [simplifiedContent, setSimplifiedContent] = useState<string>("")
+  const [rawContent, setRawContent] = useState<any>(null)
+  const [simplifiedContent, setSimplifiedContent] = useState<any>(null)
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
 
@@ -45,54 +45,31 @@ export default function ExpertReviewPage() {
   const loadContent = async () => {
     try {
       setLoading(true)
-      setError(null)
 
-      // Load raw and simplified content
+      // Load raw and simplified content - same approach as DischargeSummaryViewer
       const [raw, simplified] = await Promise.all([
         getDischargeSummaryContent(summaryId, 'raw').catch((err) => {
-          console.warn('Raw content not available:', err)
+          console.error('Failed to load raw version:', err)
           return null
         }),
         getDischargeSummaryContent(summaryId, 'simplified').catch((err) => {
-          console.warn('Simplified content not available:', err)
+          console.error('Failed to load simplified version:', err)
           return null
         }),
       ])
 
-      // Handle different response structures
-      if (raw) {
-        // Check if content is nested or direct
-        if (typeof raw === 'object' && 'content' in raw) {
-          const content = (raw as any).content
-          if (typeof content === 'string') {
-            setRawContent(content)
-          } else if (content && typeof content === 'object' && 'content' in content) {
-            setRawContent(content.content)
-          }
-        }
-      }
+      // Direct assignment like DischargeSummaryViewer
+      setRawContent(raw)
+      setSimplifiedContent(simplified)
 
-      if (simplified) {
-        // Check if content is nested or direct
-        if (typeof simplified === 'object' && 'content' in simplified) {
-          const content = (simplified as any).content
-          if (typeof content === 'string') {
-            setSimplifiedContent(content)
-          } else if (content && typeof content === 'object' && 'content' in content) {
-            setSimplifiedContent(content.content)
-          }
-        }
-      }
-
-      // Try to get metadata from simplified response or raw
-      const metadata = (simplified as any)?.metadata || (raw as any)?.metadata
+      // Try to get metadata
+      const metadata = simplified?.metadata || raw?.metadata
       if (metadata) {
         if (metadata.patientName) setPatientName(metadata.patientName)
         if (metadata.mrn) setMrn(metadata.mrn)
       }
     } catch (error) {
       console.error('Failed to load content:', error)
-      // Don't show error toast - content is optional for review
     } finally {
       setLoading(false)
     }
@@ -222,9 +199,13 @@ export default function ExpertReviewPage() {
             </CardHeader>
             <CardContent className="flex-1">
               <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                  {rawContent || 'Raw content not available'}
-                </pre>
+                {rawContent?.content?.content ? (
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                    {rawContent.content.content}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Raw version not available</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -239,9 +220,13 @@ export default function ExpertReviewPage() {
             </CardHeader>
             <CardContent className="flex-1">
               <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                  {simplifiedContent || 'Simplified content not available'}
-                </pre>
+                {simplifiedContent?.content?.content ? (
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                    {simplifiedContent.content.content}
+                  </pre>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Simplified version not available</p>
+                )}
               </div>
             </CardContent>
           </Card>
