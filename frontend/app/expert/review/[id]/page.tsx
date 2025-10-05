@@ -45,32 +45,54 @@ export default function ExpertReviewPage() {
   const loadContent = async () => {
     try {
       setLoading(true)
+      setError(null)
 
       // Load raw and simplified content
       const [raw, simplified] = await Promise.all([
-        getDischargeSummaryContent(summaryId, 'raw').catch(() => null),
-        getDischargeSummaryContent(summaryId, 'simplified').catch(() => null),
+        getDischargeSummaryContent(summaryId, 'raw').catch((err) => {
+          console.warn('Raw content not available:', err)
+          return null
+        }),
+        getDischargeSummaryContent(summaryId, 'simplified').catch((err) => {
+          console.warn('Simplified content not available:', err)
+          return null
+        }),
       ])
 
-      if (raw?.content?.content) {
-        setRawContent(raw.content.content)
+      // Handle different response structures
+      if (raw) {
+        // Check if content is nested or direct
+        if (typeof raw === 'object' && 'content' in raw) {
+          const content = (raw as any).content
+          if (typeof content === 'string') {
+            setRawContent(content)
+          } else if (content && typeof content === 'object' && 'content' in content) {
+            setRawContent(content.content)
+          }
+        }
       }
-      if (simplified?.content?.content) {
-        setSimplifiedContent(simplified.content.content)
+
+      if (simplified) {
+        // Check if content is nested or direct
+        if (typeof simplified === 'object' && 'content' in simplified) {
+          const content = (simplified as any).content
+          if (typeof content === 'string') {
+            setSimplifiedContent(content)
+          } else if (content && typeof content === 'object' && 'content' in content) {
+            setSimplifiedContent(content.content)
+          }
+        }
       }
-      if (simplified?.metadata?.patientName) {
-        setPatientName(simplified.metadata.patientName)
-      }
-      if (simplified?.metadata?.mrn) {
-        setMrn(simplified.metadata.mrn)
+
+      // Try to get metadata from simplified response or raw
+      const metadata = (simplified as any)?.metadata || (raw as any)?.metadata
+      if (metadata) {
+        if (metadata.patientName) setPatientName(metadata.patientName)
+        if (metadata.mrn) setMrn(metadata.mrn)
       }
     } catch (error) {
       console.error('Failed to load content:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load discharge summary content",
-        variant: "destructive",
-      })
+      // Don't show error toast - content is optional for review
     } finally {
       setLoading(false)
     }
