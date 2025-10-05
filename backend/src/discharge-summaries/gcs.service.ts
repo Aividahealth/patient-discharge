@@ -24,8 +24,15 @@ export class GcsService {
    */
   private getStorage(): Storage {
     if (!this.storage) {
-      const config = this.configService.get();
-      const serviceAccountPath = config.service_account_path;
+      let serviceAccountPath: string | undefined;
+
+      try {
+        const config = this.configService.get();
+        serviceAccountPath = config.service_account_path;
+      } catch (error) {
+        // Config not loaded yet or running in Cloud Run with ADC
+        this.logger.log('Config not available, using Application Default Credentials');
+      }
 
       // Use ADC (Application Default Credentials) if no service account path
       this.storage = new Storage(
