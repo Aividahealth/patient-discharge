@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ArrowLeft, Loader2, Star, CheckCircle } from "lucide-react"
-import { getDischargeSummaryContent } from "@/lib/discharge-summaries"
+import { getDischargeSummaryContent, DischargeSummaryContent } from "@/lib/discharge-summaries"
 import { submitFeedback } from "@/lib/expert-api"
 import { useToast } from "@/hooks/use-toast"
 
@@ -22,8 +22,8 @@ export default function ExpertReviewPage() {
 
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [rawContent, setRawContent] = useState<any>(null)
-  const [simplifiedContent, setSimplifiedContent] = useState<any>(null)
+  const [rawContent, setRawContent] = useState<DischargeSummaryContent | null>(null)
+  const [simplifiedContent, setSimplifiedContent] = useState<DischargeSummaryContent | null>(null)
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
 
