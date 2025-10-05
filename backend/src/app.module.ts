@@ -7,6 +7,7 @@ import { ConfigModule } from './config/config.module';
 import { CernerModule } from './cerner/cerner.module';
 import { AuditModule } from './audit/audit.module';
 import { DischargeSummariesModule } from './discharge-summaries/discharge-summaries.module';
+import { ExpertModule } from './expert/expert.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { DischargeSummariesModule } from './discharge-summaries/discharge-summar
     CernerModule,
     AuditModule,
     DischargeSummariesModule,
+    ExpertModule,
   ],
   controllers: [AppController],
   providers: [AppService],

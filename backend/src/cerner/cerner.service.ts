@@ -24,11 +24,18 @@ export class CernerService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.authenticate();
+    // Don't authenticate on module init - will authenticate when needed
+    // This prevents issues when config is not loaded yet
   }
 
   async authenticate(): Promise<boolean> {
-    const config = this.configService.get();
+    let config;
+    try {
+      config = this.configService.get();
+    } catch (error) {
+      this.logger.warn('Config not loaded yet, skipping authentication');
+      return false;
+    }
     const cernerConfig = config.cerner;
     
     if (!cernerConfig?.client_id || !cernerConfig?.client_secret || !cernerConfig?.token_url || !cernerConfig?.scopes) {
