@@ -9,9 +9,9 @@ async function bootstrap() {
 
   // Enable CORS for frontend
   app.enableCors({
-    origin: ['http://localhost:3001', 'http://localhost:3000'],
+    origin: '*', // Allow all origins
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
+    credentials: false, // Cannot use wildcard origin with credentials:true
   });
 
   // Ensure Express parses FHIR JSON payloads
