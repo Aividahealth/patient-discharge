@@ -4,7 +4,31 @@
  * Client library for interacting with the discharge summaries backend API
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+// Configure API base URL for different environments
+const getApiBaseUrl = () => {
+  // Production: Use environment variable or default to your Google Cloud backend
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // Fallback to environment variable
+  if (process.env.API_URL) {
+    return process.env.API_URL;
+  }
+  
+  // Development: Use localhost for backend
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000';
+  }
+  
+  // Production fallback: Use your Google Cloud backend URL
+  return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Log API URL for debugging
+console.log('Discharge Summaries API Base URL:', API_BASE_URL);
 
 export interface DischargeSummaryMetadata {
   id: string;
