@@ -3,15 +3,35 @@ import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { DevConfigService } from './config/dev-config.service';
 import express from 'express';
+import cors from 'cors';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { cors: false }); // Disable NestJS CORS
 
-  // Enable CORS for frontend
-  app.enableCors({
-    origin: '*', // Allow all origins
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: false, // Cannot use wildcard origin with credentials:true
+  // Custom CORS middleware
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    const allowedOrigins = [
+      'https://www.aividahealth.ai',
+      'https://aividahealth.ai',
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ];
+
+    if (origin && allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+    }
+
+    // Handle preflight
+    if (req.method === 'OPTIONS') {
+      res.status(200).end();
+      return;
+    }
+
+    next();
   });
 
   // Ensure Express parses FHIR JSON payloads
