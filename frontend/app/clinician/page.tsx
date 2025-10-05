@@ -806,34 +806,49 @@ export default function ClinicianDashboard() {
                         <div>
                           <h4 className="font-medium mb-2">{t.medications}</h4>
                           <p className="text-muted-foreground">
-                            {currentPatient?.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications]?.split('\n').map((line, index) => (
-                              <span key={index}>
-                                {line}
-                                {index < (currentPatient?.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications]?.split('\n').length || 0) - 1 && <br />}
-                              </span>
-                            )) || 'N/A'}
+                            {(() => {
+                              const medications = currentPatient?.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications];
+                              if (!medications || typeof medications !== 'string') return 'N/A';
+                              const lines = (medications as string).split('\n');
+                              return lines.map((line: string, index: number) => (
+                                <span key={index}>
+                                  {line}
+                                  {index < lines.length - 1 && <br />}
+                                </span>
+                              ));
+                            })()}
                           </p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-2">{t.followUp}</h4>
                           <p className="text-muted-foreground">
-                            {currentPatient?.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp]?.split('\n').map((line, index) => (
-                              <span key={index}>
-                                {line}
-                                {index < (currentPatient?.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp]?.split('\n').length || 0) - 1 && <br />}
-                              </span>
-                            )) || 'N/A'}
+                            {(() => {
+                              const followUp = currentPatient?.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp];
+                              if (!followUp || typeof followUp !== 'string') return 'N/A';
+                              const lines = (followUp as string).split('\n');
+                              return lines.map((line: string, index: number) => (
+                                <span key={index}>
+                                  {line}
+                                  {index < lines.length - 1 && <br />}
+                                </span>
+                              ));
+                            })()}
                           </p>
                         </div>
                         <div>
                           <h4 className="font-medium mb-2">{t.activity}</h4>
                           <p className="text-muted-foreground">
-                            {currentPatient?.originalSummary?.activity?.[language as keyof typeof currentPatient.originalSummary.activity]?.split('\n').map((line, index) => (
-                              <span key={index}>
-                                {line}
-                                {index < (currentPatient?.originalSummary?.activity?.[language as keyof typeof currentPatient.originalSummary.activity]?.split('\n').length || 0) - 1 && <br />}
-                              </span>
-                            )) || 'N/A'}
+                            {(() => {
+                              const activity = currentPatient?.originalSummary?.activity?.[language as keyof typeof currentPatient.originalSummary.activity];
+                              if (!activity || typeof activity !== 'string') return 'N/A';
+                              const lines = (activity as string).split('\n');
+                              return lines.map((line: string, index: number) => (
+                                <span key={index}>
+                                  {line}
+                                  {index < lines.length - 1 && <br />}
+                                </span>
+                              ));
+                            })()}
                           </p>
                         </div>
                       </div>
@@ -885,34 +900,49 @@ export default function ClinicianDashboard() {
                           <div>
                             <h4 className="font-medium mb-2">{t.yourMedications}</h4>
                             <p className="text-muted-foreground">
-                              {currentPatient?.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications]?.split('\n').map((line, index) => (
-                                <span key={index}>
-                                  {line}
-                                  {index < (currentPatient?.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications]?.split('\n').length || 0) - 1 && <br />}
-                                </span>
-                              )) || 'N/A'}
+                              {(() => {
+                                const medications = currentPatient?.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications];
+                                if (!medications || typeof medications !== 'string') return 'N/A';
+                                const lines = (medications as string).split('\n');
+                                return lines.map((line: string, index: number) => (
+                                  <span key={index}>
+                                    {line}
+                                    {index < lines.length - 1 && <br />}
+                                  </span>
+                                ));
+                              })()}
                             </p>
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.yourAppointments}</h4>
                             <p className="text-muted-foreground">
-                              {currentPatient?.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments]?.split('\n').map((line, index) => (
-                                <span key={index}>
-                                  {line}
-                                  {index < (currentPatient?.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments]?.split('\n').length || 0) - 1 && <br />}
-                                </span>
-                              )) || 'N/A'}
+                              {(() => {
+                                const appointments = currentPatient?.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments];
+                                if (!appointments || typeof appointments !== 'string') return 'N/A';
+                                const lines = (appointments as string).split('\n');
+                                return lines.map((line: string, index: number) => (
+                                  <span key={index}>
+                                    {line}
+                                    {index < lines.length - 1 && <br />}
+                                  </span>
+                                ));
+                              })()}
                             </p>
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.activityGuidelines}</h4>
                             <p className="text-muted-foreground">
-                              {currentPatient?.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity]?.split('\n').map((line, index) => (
-                                <span key={index}>
-                                  {line}
-                                  {index < (currentPatient?.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity]?.split('\n').length || 0) - 1 && <br />}
-                                </span>
-                              )) || 'N/A'}
+                              {(() => {
+                                const activity = currentPatient?.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity];
+                                if (!activity || typeof activity !== 'string') return 'N/A';
+                                const lines = (activity as string).split('\n');
+                                return lines.map((line: string, index: number) => (
+                                  <span key={index}>
+                                    {line}
+                                    {index < lines.length - 1 && <br />}
+                                  </span>
+                                ));
+                              })()}
                             </p>
                           </div>
                         </div>
