@@ -95,12 +95,18 @@ export class GcsService {
   ): Promise<DischargeSummaryContent> {
     const bucketName = this.getBucketName(version);
 
-    // For translated versions, append language code
+    // For translated versions, the filename should already include the language code
+    // (e.g., "filename-simplified-es.md")
+    // Only append language code if it's not already in the filename
     let fullFileName = fileName;
     if (version === DischargeSummaryVersion.TRANSLATED && language) {
-      // Remove .md extension and add language code
-      const baseName = fileName.replace(/\.md$/, '');
-      fullFileName = `${baseName}-${language}.md`;
+      // Check if language code is already in the filename
+      const expectedSuffix = `-${language}.md`;
+      if (!fileName.endsWith(expectedSuffix)) {
+        // Remove .md extension and add language code
+        const baseName = fileName.replace(/\.md$/, '');
+        fullFileName = `${baseName}-${language}.md`;
+      }
     }
 
     const file = this.getStorage().bucket(bucketName).file(fullFileName);
