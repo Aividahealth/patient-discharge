@@ -1,6 +1,7 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
 import { TranslationService } from './translation.service';
 import { GCSService } from './gcs.service';
+import { FirestoreService } from './firestore.service';
 import { TranslationRequest, TranslationError } from '../common/types';
 import { createLogger } from '../common/utils/logger';
 
@@ -9,6 +10,7 @@ const logger = createLogger('TranslationFunction');
 // Initialize services
 let translationService: TranslationService;
 let gcsService: GCSService;
+let firestoreService: FirestoreService;
 
 /**
  * Initialize services
@@ -16,6 +18,7 @@ let gcsService: GCSService;
 function initializeServices(): void {
   translationService = new TranslationService();
   gcsService = new GCSService();
+  firestoreService = new FirestoreService();
   logger.info('Translation services initialized');
 }
 
@@ -78,10 +81,14 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<unknown>)
 
     // Generate output filename
     const outputFileName = generateTranslatedFileName(fileName, targetLanguage);
-    
+
     // Write translated content to output bucket
     const outputBucket = process.env.OUTPUT_BUCKET || 'discharge-summaries-translated';
     await gcsService.writeFile(outputBucket, outputFileName, translationResult.translatedContent);
+
+    // Update Firestore with translation info
+    logger.info('Updating Firestore with translation', { fileName, outputFileName, targetLanguage });
+    await firestoreService.updateTranslation(fileName, outputFileName, targetLanguage);
 
     const processingTime = Date.now() - startTime;
     logger.info('Translation completed successfully', {

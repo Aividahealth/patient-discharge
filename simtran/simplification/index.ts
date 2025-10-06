@@ -2,6 +2,7 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { SimplificationResult, ValidationError, GCSError, VertexAIError } from '../common/types';
 import { GCSService } from './gcs.service';
 import { SimplificationService } from './simplification.service';
+import { FirestoreService } from './firestore.service';
 import { getConfig } from '../common/utils/config';
 import { createLogger } from '../common/utils/logger';
 
@@ -10,6 +11,7 @@ const logger = createLogger('CloudFunction');
 // Initialize services
 let gcsService: GCSService;
 let simplificationService: SimplificationService;
+let firestoreService: FirestoreService;
 
 /**
  * Initialize services lazily (on first invocation)
@@ -20,6 +22,9 @@ function initializeServices(): void {
   }
   if (!simplificationService) {
     simplificationService = new SimplificationService();
+  }
+  if (!firestoreService) {
+    firestoreService = new FirestoreService();
   }
 }
 
@@ -173,6 +178,11 @@ async function processFile(bucketName: string, fileName: string): Promise<Simpli
       outputFileName,
       simplificationResult.simplifiedContent
     );
+
+    // Step 6: Update Firestore metadata
+    logger.debug('Step 6: Updating Firestore metadata');
+    await firestoreService.upsertDischargeSummary(fileName, outputFileName);
+    logger.info('Firestore metadata updated', { fileName, outputFileName });
 
     const simplifiedSize = Buffer.byteLength(simplificationResult.simplifiedContent, 'utf-8');
     const processingTime = Date.now() - processingStartTime;
