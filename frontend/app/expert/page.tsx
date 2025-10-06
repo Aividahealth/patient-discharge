@@ -103,53 +103,73 @@ export default function ExpertPortalPage() {
           </Card>
         )}
 
-        {/* Summaries List */}
+        {/* Summaries List - Compact Grid Layout */}
         {!loading && summaries.length > 0 && (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {summaries.map((summary) => (
-              <Card key={summary.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg">
-                        {summary.patientName || 'Unknown Patient'}
+              <Card key={summary.id} className="hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-base font-medium leading-tight line-clamp-2">
+                        {summary.summaryTitle || 
+                         (summary.dischargeDate ? 
+                           `Discharge Summary - ${new Date(summary.dischargeDate).toLocaleDateString()}` : 
+                           'Discharge Summary')}
                       </CardTitle>
-                      <CardDescription className="mt-1">
+                      <CardDescription className="text-xs mt-1">
                         {summary.mrn && `MRN: ${summary.mrn}`}
+                        {summary.dischargeDate && (
+                          <span className="ml-2">
+                            Discharged: {new Date(summary.dischargeDate).toLocaleDateString()}
+                          </span>
+                        )}
                       </CardDescription>
                     </div>
-                    <Button onClick={() => handleReview(summary.id)}>
+                    <Button 
+                      onClick={() => handleReview(summary.id)}
+                      size="sm"
+                      className="shrink-0"
+                    >
                       Review →
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                    {summary.simplifiedAt && (
-                      <div>
-                        Simplified: {new Date(summary.simplifiedAt).toLocaleDateString()}
+                <CardContent className="pt-0">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <span>Reviews: {summary.reviewCount}</span>
+                        {summary.reviewCount > 0 && summary.avgRating && (
+                          <div className="flex items-center gap-1 ml-1">
+                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            <span className="font-medium text-foreground">
+                              {summary.avgRating.toFixed(1)}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      <span>Reviews: {summary.reviewCount}</span>
-                      {summary.reviewCount > 0 && summary.avgRating && (
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span className="font-medium text-foreground">
-                            {summary.avgRating.toFixed(1)}
-                          </span>
+                      
+                      {summary.simplifiedAt && (
+                        <div className="text-xs">
+                          {new Date(summary.simplifiedAt).toLocaleDateString()}
                         </div>
                       )}
                     </div>
 
-                    {summary.reviewCount === 0 && (
-                      <Badge variant="secondary">Needs Review</Badge>
-                    )}
+                    <div className="flex gap-1">
+                      {summary.reviewCount === 0 && (
+                        <Badge variant="secondary" className="text-xs px-2 py-0.5">
+                          Needs Review
+                        </Badge>
+                      )}
 
-                    {summary.avgRating && summary.avgRating < 3.5 && (
-                      <Badge variant="destructive">Low Rating</Badge>
-                    )}
+                      {summary.avgRating && summary.avgRating < 3.5 && (
+                        <Badge variant="destructive" className="text-xs px-2 py-0.5">
+                          Low Rating
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {summary.latestReviewDate && (

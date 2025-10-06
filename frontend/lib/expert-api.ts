@@ -26,6 +26,9 @@ export interface ReviewSummary {
   id: string;
   patientName?: string;
   mrn?: string;
+  summaryTitle?: string; // New field for discharge summary title
+  dischargeDate?: Date;
+  admissionDate?: Date;
   simplifiedAt?: Date;
   translatedAt?: Date;
   reviewCount: number;
