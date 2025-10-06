@@ -28,6 +28,7 @@ export interface ReviewSummary {
   mrn?: string;
   summaryTitle?: string; // New field for discharge summary title
   fileName?: string; // Unique file name for each summary
+  language?: string; // Language for translation reviews
   dischargeDate?: Date;
   admissionDate?: Date;
   simplifiedAt?: Date;
