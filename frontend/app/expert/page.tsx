@@ -103,83 +103,122 @@ export default function ExpertPortalPage() {
           </Card>
         )}
 
-        {/* Summaries List - Compact Grid Layout */}
+        {/* Summaries List - Compact Table Layout */}
         {!loading && summaries.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {summaries.map((summary) => (
-              <Card key={summary.id} className="hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base font-medium leading-tight line-clamp-2">
-                        {summary.summaryTitle || 
-                         (summary.dischargeDate ? 
-                           `Discharge Summary - ${new Date(summary.dischargeDate).toLocaleDateString()}` : 
-                           'Discharge Summary')}
-                      </CardTitle>
-                      <CardDescription className="text-xs mt-1">
-                        {summary.mrn && `MRN: ${summary.mrn}`}
-                        {summary.dischargeDate && (
-                          <span className="ml-2">
-                            Discharged: {new Date(summary.dischargeDate).toLocaleDateString()}
-                          </span>
-                        )}
-                      </CardDescription>
-                    </div>
-                    <Button 
-                      onClick={() => handleReview(summary.id)}
-                      size="sm"
-                      className="shrink-0"
+          <div className="border rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">File Name</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">MRN</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Discharge Date</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Reviews</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Rating</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Status</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Last Review</th>
+                    <th className="text-right p-3 text-sm font-medium text-muted-foreground">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summaries.map((summary, index) => (
+                    <tr 
+                      key={summary.id} 
+                      className={`border-b border-border hover:bg-muted/30 transition-colors ${
+                        index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
+                      }`}
                     >
-                      Review →
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
-                        <span>Reviews: {summary.reviewCount}</span>
-                        {summary.reviewCount > 0 && summary.avgRating && (
-                          <div className="flex items-center gap-1 ml-1">
-                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            <span className="font-medium text-foreground">
-                              {summary.avgRating.toFixed(1)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {summary.simplifiedAt && (
-                        <div className="text-xs">
-                          {new Date(summary.simplifiedAt).toLocaleDateString()}
+                      {/* File Name */}
+                      <td className="p-3">
+                        <div className="font-medium text-sm">
+                          {summary.fileName || summary.summaryTitle || `Summary-${summary.id.slice(-8)}`}
                         </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-1">
-                      {summary.reviewCount === 0 && (
-                        <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                          Needs Review
-                        </Badge>
-                      )}
-
-                      {summary.avgRating && summary.avgRating < 3.5 && (
-                        <Badge variant="destructive" className="text-xs px-2 py-0.5">
-                          Low Rating
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {summary.latestReviewDate && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      Last reviewed: {new Date(summary.latestReviewDate).toLocaleString()}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                      </td>
+                      
+                      {/* MRN */}
+                      <td className="p-3">
+                        <div className="text-sm text-muted-foreground">
+                          {summary.mrn || 'N/A'}
+                        </div>
+                      </td>
+                      
+                      {/* Discharge Date */}
+                      <td className="p-3">
+                        <div className="text-sm">
+                          {summary.dischargeDate 
+                            ? new Date(summary.dischargeDate).toLocaleDateString()
+                            : 'N/A'
+                          }
+                        </div>
+                      </td>
+                      
+                      {/* Reviews Count */}
+                      <td className="p-3">
+                        <div className="text-sm font-medium">
+                          {summary.reviewCount}
+                        </div>
+                      </td>
+                      
+                      {/* Rating */}
+                      <td className="p-3">
+                        <div className="flex items-center gap-1">
+                          {summary.reviewCount > 0 && summary.avgRating ? (
+                            <>
+                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm font-medium">
+                                {summary.avgRating.toFixed(1)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">N/A</span>
+                          )}
+                        </div>
+                      </td>
+                      
+                      {/* Status */}
+                      <td className="p-3">
+                        <div className="flex gap-1">
+                          {summary.reviewCount === 0 ? (
+                            <Badge variant="secondary" className="text-xs">
+                              Needs Review
+                            </Badge>
+                          ) : summary.avgRating && summary.avgRating < 3.5 ? (
+                            <Badge variant="destructive" className="text-xs">
+                              Low Rating
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">
+                              Reviewed
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      
+                      {/* Last Review */}
+                      <td className="p-3">
+                        <div className="text-sm text-muted-foreground">
+                          {summary.latestReviewDate 
+                            ? new Date(summary.latestReviewDate).toLocaleDateString()
+                            : 'Never'
+                          }
+                        </div>
+                      </td>
+                      
+                      {/* Action */}
+                      <td className="p-3">
+                        <Button 
+                          onClick={() => handleReview(summary.id)}
+                          size="sm"
+                          className="w-full"
+                        >
+                          Review →
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
