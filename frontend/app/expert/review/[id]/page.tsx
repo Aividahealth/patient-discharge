@@ -1,14 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter, useParams, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Loader2, Star, CheckCircle } from "lucide-react"
 import { getDischargeSummaryContent, DischargeSummaryContent } from "@/lib/discharge-summaries"
@@ -18,8 +17,13 @@ import { useToast } from "@/hooks/use-toast"
 export default function ExpertReviewPage() {
   const router = useRouter()
   const params = useParams()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const summaryId = params.id as string
+
+  // Get review type from URL parameters
+  const reviewTypeFromUrl = searchParams.get('type') as 'simplification' | 'translation' | null
+  const reviewType = reviewTypeFromUrl || 'simplification'
 
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -32,14 +36,28 @@ export default function ExpertReviewPage() {
   // Form state
   const [reviewerName, setReviewerName] = useState("")
   const [reviewerHospital, setReviewerHospital] = useState("")
-  const [reviewType, setReviewType] = useState<'simplification' | 'translation'>('simplification')
   const [language, setLanguage] = useState("es")
+  
+  // Rating fields - different for simplification vs translation
   const [overallRating, setOverallRating] = useState<number>(0)
+  const [languageAccuracy, setLanguageAccuracy] = useState<number>(0)
+  const [culturalAppropriateness, setCulturalAppropriateness] = useState<number>(0)
+  const [medicalTerminology, setMedicalTerminology] = useState<number>(0)
+  
+  // Feedback fields
   const [whatWorksWell, setWhatWorksWell] = useState("")
   const [whatNeedsImprovement, setWhatNeedsImprovement] = useState("")
   const [specificIssues, setSpecificIssues] = useState("")
+  const [suggestedImprovements, setSuggestedImprovements] = useState("")
+  const [culturalNotes, setCulturalNotes] = useState("")
+  
+  // Checkboxes - different for simplification vs translation
   const [hasHallucination, setHasHallucination] = useState(false)
   const [hasMissingInfo, setHasMissingInfo] = useState(false)
+  const [hasGrammarErrors, setHasGrammarErrors] = useState(false)
+  const [hasCulturalIssues, setHasCulturalIssues] = useState(false)
+  const [hasMedicalTermErrors, setHasMedicalTermErrors] = useState(false)
+  const [isOverlyLiteral, setIsOverlyLiteral] = useState(false)
 
   useEffect(() => {
     loadContent()
@@ -121,6 +139,34 @@ export default function ExpertReviewPage() {
       return
     }
 
+    // Additional validation for translation reviews
+    if (reviewType === 'translation') {
+      if (languageAccuracy === 0) {
+        toast({
+          title: "Error",
+          description: "Please select a language accuracy rating",
+          variant: "destructive",
+        })
+        return
+      }
+      if (culturalAppropriateness === 0) {
+        toast({
+          title: "Error",
+          description: "Please select a cultural appropriateness rating",
+          variant: "destructive",
+        })
+        return
+      }
+      if (medicalTerminology === 0) {
+        toast({
+          title: "Error",
+          description: "Please select a medical terminology rating",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
     try {
       setSubmitting(true)
 
@@ -157,27 +203,39 @@ export default function ExpertReviewPage() {
     }
   }
 
-  const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          type="button"
-          onClick={() => onChange(star)}
-          className="focus:outline-none transition-transform hover:scale-110"
-        >
-          <Star
-            className={`h-8 w-8 ${
-              star <= value
-                ? 'fill-yellow-400 text-yellow-400'
-                : 'fill-none text-gray-300'
-            }`}
-          />
-        </button>
-      ))}
-      {value > 0 && (
-        <span className="ml-2 text-sm text-muted-foreground">({value}/5)</span>
+  const StarRating = ({ value, onChange, label, required = false }: { 
+    value: number; 
+    onChange: (v: number) => void; 
+    label?: string;
+    required?: boolean;
+  }) => (
+    <div className="space-y-2">
+      {label && (
+        <Label className="text-sm font-medium">
+          {label} {required && <span className="text-red-500">*</span>}
+        </Label>
       )}
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => onChange(star)}
+            className="focus:outline-none transition-transform hover:scale-110"
+          >
+            <Star
+              className={`h-6 w-6 ${
+                star <= value
+                  ? 'fill-yellow-400 text-yellow-400'
+                  : 'fill-none text-gray-300'
+              }`}
+            />
+          </button>
+        ))}
+        {value > 0 && (
+          <span className="ml-2 text-sm text-muted-foreground">({value}/5)</span>
+        )}
+      </div>
     </div>
   )
 
@@ -309,24 +367,6 @@ export default function ExpertReviewPage() {
                 />
               </div>
 
-              {/* Review Type */}
-              <div className="space-y-2">
-                <Label>Review Type</Label>
-                <RadioGroup value={reviewType} onValueChange={(v: any) => setReviewType(v)}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="simplification" id="simplification" />
-                    <Label htmlFor="simplification" className="font-normal cursor-pointer">
-                      Content Expert (Review simplification quality)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="translation" id="translation" />
-                    <Label htmlFor="translation" className="font-normal cursor-pointer">
-                      Translation Expert (Review translation quality)
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
 
               {/* Language (if translation) */}
               {reviewType === 'translation' && (
@@ -362,18 +402,51 @@ export default function ExpertReviewPage() {
                 </div>
               )}
 
-              {/* Overall Rating */}
-              <div className="space-y-2">
-                <Label>Overall Rating *</Label>
-                <StarRating value={overallRating} onChange={setOverallRating} />
+              {/* Rating Section */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium">Quality Ratings</h3>
+                
+                {/* Overall Rating */}
+                <StarRating 
+                  value={overallRating} 
+                  onChange={setOverallRating} 
+                  label="Overall Quality"
+                  required={true}
+                />
+
+                {/* Translation-specific ratings */}
+                {reviewType === 'translation' && (
+                  <>
+                    <StarRating 
+                      value={languageAccuracy} 
+                      onChange={setLanguageAccuracy} 
+                      label="Language Accuracy"
+                      required={true}
+                    />
+                    <StarRating 
+                      value={culturalAppropriateness} 
+                      onChange={setCulturalAppropriateness} 
+                      label="Cultural Appropriateness"
+                      required={true}
+                    />
+                    <StarRating 
+                      value={medicalTerminology} 
+                      onChange={setMedicalTerminology} 
+                      label="Medical Terminology"
+                      required={true}
+                    />
+                  </>
+                )}
               </div>
 
               {/* What Works Well */}
               <div className="space-y-2">
-                <Label htmlFor="whatWorksWell">What works well in this simplified version?</Label>
+                <Label htmlFor="whatWorksWell">
+                  What works well in this {reviewType === 'simplification' ? 'simplified' : 'translated'} version?
+                </Label>
                 <Textarea
                   id="whatWorksWell"
-                  placeholder="Describe what's good about the simplification..."
+                  placeholder={`Describe what's good about the ${reviewType === 'simplification' ? 'simplification' : 'translation'}...`}
                   value={whatWorksWell}
                   onChange={(e) => setWhatWorksWell(e.target.value)}
                   rows={3}
@@ -394,19 +467,52 @@ export default function ExpertReviewPage() {
 
               {/* Specific Issues */}
               <div className="space-y-2">
-                <Label htmlFor="specificIssues">Specific issues (copy/paste problematic text)</Label>
+                <Label htmlFor="specificIssues">
+                  Specific issues (copy/paste problematic text)
+                </Label>
                 <Textarea
                   id="specificIssues"
-                  placeholder="Copy and paste any specific text that has issues, along with your suggested fix..."
+                  placeholder={`Copy and paste any specific text that has issues, along with your suggested fix...`}
                   value={specificIssues}
                   onChange={(e) => setSpecificIssues(e.target.value)}
                   rows={4}
                 />
               </div>
 
+              {/* Translation-specific feedback fields */}
+              {reviewType === 'translation' && (
+                <>
+                  {/* Suggested Improvements */}
+                  <div className="space-y-2">
+                    <Label htmlFor="suggestedImprovements">Suggested improvements</Label>
+                    <Textarea
+                      id="suggestedImprovements"
+                      placeholder="Provide specific suggestions for better translation..."
+                      value={suggestedImprovements}
+                      onChange={(e) => setSuggestedImprovements(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Cultural Notes */}
+                  <div className="space-y-2">
+                    <Label htmlFor="culturalNotes">Cultural considerations</Label>
+                    <Textarea
+                      id="culturalNotes"
+                      placeholder="Note any important cultural considerations for the target audience..."
+                      value={culturalNotes}
+                      onChange={(e) => setCulturalNotes(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                </>
+              )}
+
               {/* Quick Checks */}
               <div className="space-y-3">
                 <Label>Quick Checks</Label>
+                
+                {/* Common checks for both review types */}
                 <div className="flex items-start space-x-3">
                   <Checkbox
                     id="hasHallucination"
@@ -429,6 +535,56 @@ export default function ExpertReviewPage() {
                     Critical information is missing
                   </Label>
                 </div>
+
+                {/* Translation-specific checks */}
+                {reviewType === 'translation' && (
+                  <>
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="hasGrammarErrors"
+                        checked={hasGrammarErrors}
+                        onCheckedChange={(checked) => setHasGrammarErrors(checked as boolean)}
+                        className="mt-1 h-5 w-5 border-2 border-gray-400 bg-white"
+                      />
+                      <Label htmlFor="hasGrammarErrors" className="font-normal cursor-pointer flex-1 leading-normal">
+                        Grammar and syntax errors found
+                      </Label>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="hasCulturalIssues"
+                        checked={hasCulturalIssues}
+                        onCheckedChange={(checked) => setHasCulturalIssues(checked as boolean)}
+                        className="mt-1 h-5 w-5 border-2 border-gray-400 bg-white"
+                      />
+                      <Label htmlFor="hasCulturalIssues" className="font-normal cursor-pointer flex-1 leading-normal">
+                        Inappropriate cultural references
+                      </Label>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="hasMedicalTermErrors"
+                        checked={hasMedicalTermErrors}
+                        onCheckedChange={(checked) => setHasMedicalTermErrors(checked as boolean)}
+                        className="mt-1 h-5 w-5 border-2 border-gray-400 bg-white"
+                      />
+                      <Label htmlFor="hasMedicalTermErrors" className="font-normal cursor-pointer flex-1 leading-normal">
+                        Incorrect medical terminology
+                      </Label>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        id="isOverlyLiteral"
+                        checked={isOverlyLiteral}
+                        onCheckedChange={(checked) => setIsOverlyLiteral(checked as boolean)}
+                        className="mt-1 h-5 w-5 border-2 border-gray-400 bg-white"
+                      />
+                      <Label htmlFor="isOverlyLiteral" className="font-normal cursor-pointer flex-1 leading-normal">
+                        Overly literal translation (word-for-word)
+                      </Label>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Submit Button */}
