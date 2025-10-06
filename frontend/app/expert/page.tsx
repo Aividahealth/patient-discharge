@@ -111,7 +111,6 @@ export default function ExpertPortalPage() {
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">File Name</th>
-                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">MRN</th>
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">Discharge Date</th>
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">Reviews</th>
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">Rating</th>
@@ -132,13 +131,6 @@ export default function ExpertPortalPage() {
                       <td className="p-3">
                         <div className="font-medium text-sm">
                           {summary.fileName || summary.summaryTitle || `Summary-${summary.id.slice(-8)}`}
-                        </div>
-                      </td>
-                      
-                      {/* MRN */}
-                      <td className="p-3">
-                        <div className="text-sm text-muted-foreground">
-                          {summary.mrn || 'N/A'}
                         </div>
                       </td>
                       
