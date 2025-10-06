@@ -407,23 +407,25 @@ export default function ExpertReviewPage() {
               {/* Quick Checks */}
               <div className="space-y-3">
                 <Label>Quick Checks</Label>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-start space-x-3">
                   <Checkbox
                     id="hasHallucination"
                     checked={hasHallucination}
                     onCheckedChange={(checked) => setHasHallucination(checked as boolean)}
+                    className="mt-1 h-4 w-4 border-2"
                   />
-                  <Label htmlFor="hasHallucination" className="font-normal cursor-pointer">
+                  <Label htmlFor="hasHallucination" className="font-normal cursor-pointer flex-1 leading-normal">
                     I found hallucinated information (made-up details)
                   </Label>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-start space-x-3">
                   <Checkbox
                     id="hasMissingInfo"
                     checked={hasMissingInfo}
                     onCheckedChange={(checked) => setHasMissingInfo(checked as boolean)}
+                    className="mt-1 h-4 w-4 border-2"
                   />
-                  <Label htmlFor="hasMissingInfo" className="font-normal cursor-pointer">
+                  <Label htmlFor="hasMissingInfo" className="font-normal cursor-pointer flex-1 leading-normal">
                     Critical information is missing
                   </Label>
                 </div>

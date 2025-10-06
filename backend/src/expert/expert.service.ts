@@ -114,12 +114,11 @@ export class ExpertService {
     const firestore = this.getFirestore();
     const now = new Date();
 
-    const feedback: ExpertFeedback = {
+    // Build feedback object, excluding undefined values
+    const feedback: any = {
       dischargeSummaryId: dto.dischargeSummaryId,
       reviewType: dto.reviewType,
-      language: dto.language,
       reviewerName: dto.reviewerName,
-      reviewerHospital: dto.reviewerHospital,
       reviewDate: now,
       overallRating: dto.overallRating,
       whatWorksWell: dto.whatWorksWell,
@@ -129,6 +128,14 @@ export class ExpertService {
       hasMissingInfo: dto.hasMissingInfo,
       createdAt: now,
     };
+
+    // Only add optional fields if they have values
+    if (dto.language) {
+      feedback.language = dto.language;
+    }
+    if (dto.reviewerHospital) {
+      feedback.reviewerHospital = dto.reviewerHospital;
+    }
 
     const docRef = await firestore
       .collection(this.feedbackCollection)
@@ -141,7 +148,7 @@ export class ExpertService {
     return {
       ...feedback,
       id: docRef.id,
-    };
+    } as ExpertFeedback;
   }
 
   /**
