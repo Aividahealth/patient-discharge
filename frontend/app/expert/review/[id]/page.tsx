@@ -412,7 +412,7 @@ export default function ExpertReviewPage() {
                     id="hasHallucination"
                     checked={hasHallucination}
                     onCheckedChange={(checked) => setHasHallucination(checked as boolean)}
-                    className="mt-1 h-4 w-4 border-2"
+                    className="mt-1 h-5 w-5 border-2 border-gray-400 bg-white"
                   />
                   <Label htmlFor="hasHallucination" className="font-normal cursor-pointer flex-1 leading-normal">
                     I found hallucinated information (made-up details)
@@ -423,7 +423,7 @@ export default function ExpertReviewPage() {
                     id="hasMissingInfo"
                     checked={hasMissingInfo}
                     onCheckedChange={(checked) => setHasMissingInfo(checked as boolean)}
-                    className="mt-1 h-4 w-4 border-2"
+                    className="mt-1 h-5 w-5 border-2 border-gray-400 bg-white"
                   />
                   <Label htmlFor="hasMissingInfo" className="font-normal cursor-pointer flex-1 leading-normal">
                     Critical information is missing
