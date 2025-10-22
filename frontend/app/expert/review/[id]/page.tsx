@@ -276,10 +276,18 @@ export default function ExpertReviewPage() {
           {/* Left side - always shows simplified (English) */}
           <Card className="flex flex-col">
             <CardHeader>
-              <CardTitle>Simplified (English)</CardTitle>
-              <CardDescription>
-                Simplified to high school reading level for patients
-              </CardDescription>
+            <CardTitle>Simplified (English)</CardTitle>
+            <CardDescription>
+              Simplified to high school reading level for patients
+            </CardDescription>
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                AI Generated
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                This content has been simplified using artificial intelligence
+              </span>
+            </div>
             </CardHeader>
             <CardContent className="flex-1">
               <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
@@ -306,6 +314,16 @@ export default function ExpertReviewPage() {
                   : `Translation of simplified version to ${language.toUpperCase()}`
                 }
               </CardDescription>
+              {reviewType === 'translation' && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                    AI Generated
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    This content has been translated using artificial intelligence
+                  </span>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="flex-1">
               <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">

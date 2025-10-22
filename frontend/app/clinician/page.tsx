@@ -13,6 +13,8 @@ import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
+import jsPDF from "jspdf"
+import html2canvas from "html2canvas"
 import {
   Upload,
   FileText,
@@ -649,6 +651,276 @@ export default function ClinicianDashboard() {
     setApprovalStatus((prev) => ({ ...prev, [section]: !prev[section] }))
   }
 
+  const printDischargeSummary = () => {
+    if (!currentPatient) return
+    
+    // Get the current language translations
+    const t = translations[language as keyof typeof translations]
+    
+    // Create a comprehensive discharge summary content for printing
+    const content = `
+DISCHARGE INSTRUCTIONS - ${currentPatient.name}
+Discharge Date: ${currentPatient.dischargeDate}
+Attending Physician: ${currentPatient.attendingPhysician}
+
+ORIGINAL DISCHARGE SUMMARY:
+${currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}
+
+${currentPatient.originalSummary?.diagnosisText?.[language as keyof typeof currentPatient.originalSummary.diagnosisText] || 'N/A'}
+
+MEDICATIONS:
+${currentPatient.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications] || 'N/A'}
+
+FOLLOW-UP:
+${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp] || 'N/A'}
+
+ACTIVITY:
+${currentPatient.originalSummary?.activity?.[language as keyof typeof currentPatient.originalSummary.activity] || 'N/A'}
+
+PATIENT-FRIENDLY VERSION:
+${currentPatient.patientFriendly?.overview?.[language as keyof typeof currentPatient.patientFriendly.overview] || 'N/A'}
+
+MEDICATIONS (Simplified):
+${currentPatient.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications] || 'N/A'}
+
+APPOINTMENTS (Simplified):
+${currentPatient.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments] || 'N/A'}
+
+ACTIVITY GUIDELINES (Simplified):
+${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity] || 'N/A'}
+
+IMPORTANT: The patient-friendly content has been simplified using artificial intelligence for better patient understanding.
+    `
+    
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Discharge Summary - ${currentPatient.name}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              margin: 20px;
+              color: #333;
+            }
+            h1 {
+              color: #2563eb;
+              border-bottom: 2px solid #2563eb;
+              padding-bottom: 10px;
+            }
+            h2 {
+              color: #1e40af;
+              margin-top: 20px;
+              margin-bottom: 10px;
+            }
+            .patient-info {
+              background-color: #f8fafc;
+              padding: 15px;
+              border-left: 4px solid #2563eb;
+              margin-bottom: 20px;
+            }
+            .section {
+              margin-bottom: 20px;
+            }
+            .original {
+              background-color: #f1f5f9;
+              padding: 15px;
+              border-left: 4px solid #64748b;
+              margin-bottom: 20px;
+            }
+            .simplified {
+              background-color: #f0f9ff;
+              padding: 15px;
+              border-left: 4px solid #0ea5e9;
+              margin-bottom: 20px;
+            }
+            .disclaimer {
+              background-color: #fef3c7;
+              border: 1px solid #f59e0b;
+              padding: 10px;
+              margin-top: 20px;
+              font-style: italic;
+              font-size: 0.9em;
+            }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>DISCHARGE SUMMARY</h1>
+          <div class="patient-info">
+            <strong>Patient:</strong> ${currentPatient.name}<br>
+            <strong>MRN:</strong> ${currentPatient.mrn}<br>
+            <strong>Discharge Date:</strong> ${currentPatient.dischargeDate}<br>
+            <strong>Attending Physician:</strong> ${currentPatient.attendingPhysician}
+          </div>
+          
+          <div class="original">
+            <h2>ORIGINAL DISCHARGE SUMMARY</h2>
+            <h3>Diagnosis:</h3>
+            <p>${currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}</p>
+            
+            <h3>History & Examination:</h3>
+            <p>${currentPatient.originalSummary?.diagnosisText?.[language as keyof typeof currentPatient.originalSummary.diagnosisText] || 'N/A'}</p>
+            
+            <h3>Medications:</h3>
+            <p>${currentPatient.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications] || 'N/A'}</p>
+            
+            <h3>Follow-up:</h3>
+            <p>${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp] || 'N/A'}</p>
+            
+            <h3>Activity:</h3>
+            <p>${currentPatient.originalSummary?.activity?.[language as keyof typeof currentPatient.originalSummary.activity] || 'N/A'}</p>
+          </div>
+          
+          <div class="simplified">
+            <h2>PATIENT-FRIENDLY VERSION</h2>
+            <h3>Overview:</h3>
+            <p>${currentPatient.patientFriendly?.overview?.[language as keyof typeof currentPatient.patientFriendly.overview] || 'N/A'}</p>
+            
+            <h3>Medications:</h3>
+            <p>${currentPatient.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications] || 'N/A'}</p>
+            
+            <h3>Appointments:</h3>
+            <p>${currentPatient.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments] || 'N/A'}</p>
+            
+            <h3>Activity Guidelines:</h3>
+            <p>${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity] || 'N/A'}</p>
+          </div>
+          
+          <div class="disclaimer">
+            <strong>IMPORTANT:</strong> The patient-friendly content has been simplified using artificial intelligence for better patient understanding.
+          </div>
+        </body>
+        </html>
+      `)
+      printWindow.document.close()
+      printWindow.focus()
+      printWindow.print()
+      printWindow.close()
+    }
+  }
+
+  const downloadPDF = async () => {
+    if (!currentPatient) return
+    
+    try {
+      // Get the current language translations
+      const t = translations[language as keyof typeof translations]
+      
+      // Create a comprehensive discharge summary content
+      const content = `
+DISCHARGE SUMMARY - ${currentPatient.name}
+MRN: ${currentPatient.mrn}
+Discharge Date: ${currentPatient.dischargeDate}
+Attending Physician: ${currentPatient.attendingPhysician}
+
+ORIGINAL DISCHARGE SUMMARY:
+${currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}
+
+${currentPatient.originalSummary?.diagnosisText?.[language as keyof typeof currentPatient.originalSummary.diagnosisText] || 'N/A'}
+
+MEDICATIONS:
+${currentPatient.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications] || 'N/A'}
+
+FOLLOW-UP:
+${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp] || 'N/A'}
+
+ACTIVITY:
+${currentPatient.originalSummary?.activity?.[language as keyof typeof currentPatient.originalSummary.activity] || 'N/A'}
+
+PATIENT-FRIENDLY VERSION:
+${currentPatient.patientFriendly?.overview?.[language as keyof typeof currentPatient.patientFriendly.overview] || 'N/A'}
+
+MEDICATIONS (Simplified):
+${currentPatient.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications] || 'N/A'}
+
+APPOINTMENTS (Simplified):
+${currentPatient.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments] || 'N/A'}
+
+ACTIVITY GUIDELINES (Simplified):
+${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity] || 'N/A'}
+
+IMPORTANT: The patient-friendly content has been simplified using artificial intelligence for better patient understanding.
+      `
+
+      // Create PDF
+      const pdf = new jsPDF()
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 20
+      const maxWidth = pageWidth - (margin * 2)
+      
+      // Add title
+      pdf.setFontSize(18)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("DISCHARGE SUMMARY", margin, 30)
+      
+      // Add patient info
+      pdf.setFontSize(12)
+      pdf.setFont("helvetica", "normal")
+      pdf.text(`${currentPatient.name}`, margin, 45)
+      pdf.text(`MRN: ${currentPatient.mrn}`, margin, 55)
+      pdf.text(`Discharge Date: ${currentPatient.dischargeDate}`, margin, 65)
+      pdf.text(`Attending Physician: ${currentPatient.attendingPhysician}`, margin, 75)
+      
+      // Add content with word wrapping
+      const lines = pdf.splitTextToSize(content, maxWidth)
+      let yPosition = 90
+      
+      pdf.setFontSize(10)
+      for (let i = 0; i < lines.length; i++) {
+        if (yPosition > pageHeight - 20) {
+          pdf.addPage()
+          yPosition = 20
+        }
+        pdf.text(lines[i], margin, yPosition)
+        yPosition += 6
+      }
+      
+      // Add AI disclaimer at the bottom
+      pdf.setFontSize(8)
+      pdf.setFont("helvetica", "italic")
+      pdf.text("The patient-friendly content has been simplified using artificial intelligence for better patient understanding.", margin, yPosition + 10)
+      
+      // Save the PDF
+      pdf.save(`discharge-summary-${currentPatient.name.replace(" ", "-").toLowerCase()}.pdf`)
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      // Fallback to text download
+      const content = `
+DISCHARGE SUMMARY - ${currentPatient.name}
+MRN: ${currentPatient.mrn}
+Discharge Date: ${currentPatient.dischargeDate}
+Attending Physician: ${currentPatient.attendingPhysician}
+
+ORIGINAL DISCHARGE SUMMARY:
+${currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}
+
+MEDICATIONS:
+${currentPatient.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications] || 'N/A'}
+
+FOLLOW-UP:
+${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp] || 'N/A'}
+      `
+      const blob = new Blob([content], { type: "text/plain" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `discharge-summary-${currentPatient.name.replace(" ", "-").toLowerCase()}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
+  }
+
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background flex flex-col">
@@ -1079,11 +1351,11 @@ export default function ClinicianDashboard() {
                       <Save className="h-4 w-4 mr-2" />
                       {t.saveDraft}
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={downloadPDF}>
                       <Download className="h-4 w-4 mr-2" />
                       {t.generatePDF}
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={printDischargeSummary}>
                       <Print className="h-4 w-4 mr-2" />
                       {t.printHandout}
                     </Button>
