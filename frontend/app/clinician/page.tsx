@@ -13,6 +13,7 @@ import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
+import { FileUploadModal } from "@/components/file-upload-modal"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import {
@@ -35,6 +36,7 @@ export default function ClinicianDashboard() {
   const [selectedPatient, setSelectedPatient] = useState<string | null>("patient-1")
   const [editMode, setEditMode] = useState(false)
   const [language, setLanguage] = useState("en")
+  const [showUploadModal, setShowUploadModal] = useState(false)
   const [approvalStatus, setApprovalStatus] = useState({
     medications: false,
     appointments: false,
@@ -978,7 +980,11 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                 <CardDescription>{t.patientsReady}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button className="w-full justify-start bg-transparent" variant="outline">
+                <Button 
+                  className="w-full justify-start bg-transparent" 
+                  variant="outline"
+                  onClick={() => setShowUploadModal(true)}
+                >
                   <Upload className="h-4 w-4 mr-2" />
                   {t.uploadNewSummary}
                 </Button>
@@ -1401,6 +1407,12 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
       </div>
       
       <CommonFooter />
+      
+      {/* File Upload Modal */}
+      <FileUploadModal 
+        isOpen={showUploadModal} 
+        onClose={() => setShowUploadModal(false)} 
+      />
       </div>
     </AuthGuard>
   )
