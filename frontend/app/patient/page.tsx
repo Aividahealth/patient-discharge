@@ -562,6 +562,14 @@ EMERGENCY CONTACTS:
               <Card>
                 <CardHeader>
                   <CardTitle className="font-heading">{t.recoverySummary}</CardTitle>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                      AI Generated
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      This content has been simplified using artificial intelligence
+                    </span>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
