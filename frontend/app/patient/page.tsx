@@ -12,6 +12,8 @@ import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
+import jsPDF from "jspdf"
+import html2canvas from "html2canvas"
 import {
   Heart,
   Pill,
@@ -72,8 +74,347 @@ export default function PatientDashboard() {
     setCheckedMeds((prev) => ({ ...prev, [medId]: !prev[medId] }))
   }
 
-  const downloadPDF = () => {
+  const printDischargeSummary = () => {
+    // Get the current language translations
+    const t = translations[language as keyof typeof translations]
+    
+    // Create a comprehensive discharge summary content for printing
     const content = `
+DISCHARGE INSTRUCTIONS - ${patientData.name}
+Discharge Date: March 15, 2024
+Attending Physician: Dr. Sarah Johnson, MD
+
+${t.recoverySummary}
+${t.reasonForStay}: ${t.reasonText}
+${t.whatHappened}: ${t.whatHappenedText}
+
+${t.yourMedications}:
+${patientData.medications.map((med) => `- ${med.name} ${med.dose}: ${med.instructions}`).join("\n")}
+
+${t.upcomingAppointments}:
+${patientData.appointments.map((apt) => `- ${apt.date}: ${apt.doctor} (${apt.specialty})`).join("\n")}
+
+${t.dietActivityGuidelines}:
+${t.foodsToInclude}:
+- Fresh fruits and vegetables
+- Whole grains (brown rice, oats)
+- Lean proteins (fish, chicken, beans)
+- Low-fat dairy products
+- Nuts and seeds (unsalted)
+
+${t.foodsToLimit}:
+- High-sodium foods (processed meats, canned soups)
+- Fried and fast foods
+- Sugary drinks and desserts
+- Excessive alcohol
+
+${t.activityGuidelines}:
+${t.recommendedActivities}:
+- Walking 20-30 minutes daily
+- Light stretching or yoga
+- Swimming (after incision heals)
+- Household chores (light cleaning)
+
+${t.activitiesToAvoid}:
+- Heavy lifting (over 10 pounds)
+- Intense exercise or running
+- Driving for 2 weeks
+- Contact sports
+
+${t.whenToSeekHelp}:
+${t.call911}:
+- Severe chest pain or pressure
+- Difficulty breathing or shortness of breath
+- Sudden weakness or numbness
+- Loss of consciousness
+
+${t.callDoctor}:
+- Increased swelling in legs or feet
+- Rapid weight gain (3+ pounds in 2 days)
+- Persistent cough or wheezing
+- Dizziness or lightheadedness
+- Unusual fatigue or weakness
+- Signs of infection at incision site
+
+EMERGENCY CONTACTS:
+- 24/7 Nurse Hotline: (555) 999-0000
+- Dr. Sarah Johnson: (555) 123-4567
+- Emergency: 911
+
+IMPORTANT: This content has been simplified using artificial intelligence for better patient understanding.
+    `
+    
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Discharge Instructions - ${patientData.name}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              margin: 20px;
+              color: #333;
+            }
+            h1 {
+              color: #2563eb;
+              border-bottom: 2px solid #2563eb;
+              padding-bottom: 10px;
+            }
+            h2 {
+              color: #1e40af;
+              margin-top: 20px;
+              margin-bottom: 10px;
+            }
+            .patient-info {
+              background-color: #f8fafc;
+              padding: 15px;
+              border-left: 4px solid #2563eb;
+              margin-bottom: 20px;
+            }
+            .section {
+              margin-bottom: 20px;
+            }
+            .disclaimer {
+              background-color: #fef3c7;
+              border: 1px solid #f59e0b;
+              padding: 10px;
+              margin-top: 20px;
+              font-style: italic;
+              font-size: 0.9em;
+            }
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>DISCHARGE INSTRUCTIONS</h1>
+          <div class="patient-info">
+            <strong>Patient:</strong> ${patientData.name}<br>
+            <strong>Discharge Date:</strong> March 15, 2024<br>
+            <strong>Attending Physician:</strong> Dr. Sarah Johnson, MD
+          </div>
+          
+          <div class="section">
+            <h2>${t.recoverySummary}</h2>
+            <p><strong>${t.reasonForStay}:</strong> ${t.reasonText}</p>
+            <p><strong>${t.whatHappened}:</strong> ${t.whatHappenedText}</p>
+          </div>
+          
+          <div class="section">
+            <h2>${t.yourMedications}</h2>
+            <ul>
+              ${patientData.medications.map((med) => `<li><strong>${med.name} ${med.dose}:</strong> ${med.instructions}</li>`).join("")}
+            </ul>
+          </div>
+          
+          <div class="section">
+            <h2>${t.upcomingAppointments}</h2>
+            <ul>
+              ${patientData.appointments.map((apt) => `<li><strong>${apt.date}:</strong> ${apt.doctor} (${apt.specialty})</li>`).join("")}
+            </ul>
+          </div>
+          
+          <div class="section">
+            <h2>${t.dietActivityGuidelines}</h2>
+            <h3>${t.foodsToInclude}</h3>
+            <ul>
+              <li>Fresh fruits and vegetables</li>
+              <li>Whole grains (brown rice, oats)</li>
+              <li>Lean proteins (fish, chicken, beans)</li>
+              <li>Low-fat dairy products</li>
+              <li>Nuts and seeds (unsalted)</li>
+            </ul>
+            
+            <h3>${t.foodsToLimit}</h3>
+            <ul>
+              <li>High-sodium foods (processed meats, canned soups)</li>
+              <li>Fried and fast foods</li>
+              <li>Sugary drinks and desserts</li>
+              <li>Excessive alcohol</li>
+            </ul>
+            
+            <h3>${t.activityGuidelines}</h3>
+            <h4>${t.recommendedActivities}</h4>
+            <ul>
+              <li>Walking 20-30 minutes daily</li>
+              <li>Light stretching or yoga</li>
+              <li>Swimming (after incision heals)</li>
+              <li>Household chores (light cleaning)</li>
+            </ul>
+            
+            <h4>${t.activitiesToAvoid}</h4>
+            <ul>
+              <li>Heavy lifting (over 10 pounds)</li>
+              <li>Intense exercise or running</li>
+              <li>Driving for 2 weeks</li>
+              <li>Contact sports</li>
+            </ul>
+          </div>
+          
+          <div class="section">
+            <h2>${t.whenToSeekHelp}</h2>
+            <h3>${t.call911}</h3>
+            <ul>
+              <li>Severe chest pain or pressure</li>
+              <li>Difficulty breathing or shortness of breath</li>
+              <li>Sudden weakness or numbness</li>
+              <li>Loss of consciousness</li>
+            </ul>
+            
+            <h3>${t.callDoctor}</h3>
+            <ul>
+              <li>Increased swelling in legs or feet</li>
+              <li>Rapid weight gain (3+ pounds in 2 days)</li>
+              <li>Persistent cough or wheezing</li>
+              <li>Dizziness or lightheadedness</li>
+              <li>Unusual fatigue or weakness</li>
+              <li>Signs of infection at incision site</li>
+            </ul>
+          </div>
+          
+          <div class="section">
+            <h2>EMERGENCY CONTACTS</h2>
+            <ul>
+              <li><strong>24/7 Nurse Hotline:</strong> (555) 999-0000</li>
+              <li><strong>Dr. Sarah Johnson:</strong> (555) 123-4567</li>
+              <li><strong>Emergency:</strong> 911</li>
+            </ul>
+          </div>
+          
+          <div class="disclaimer">
+            <strong>IMPORTANT:</strong> This content has been simplified using artificial intelligence for better patient understanding.
+          </div>
+        </body>
+        </html>
+      `)
+      printWindow.document.close()
+      printWindow.focus()
+      printWindow.print()
+      printWindow.close()
+    }
+  }
+
+  const downloadPDF = async () => {
+    try {
+      // Get the current language translations
+      const t = translations[language as keyof typeof translations]
+      
+      // Create a comprehensive discharge summary content
+      const content = `
+DISCHARGE INSTRUCTIONS - ${patientData.name}
+Discharge Date: March 15, 2024
+Attending Physician: Dr. Sarah Johnson, MD
+
+${t.recoverySummary}
+${t.reasonForStay}: ${t.reasonText}
+${t.whatHappened}: ${t.whatHappenedText}
+
+${t.yourMedications}:
+${patientData.medications.map((med) => `- ${med.name} ${med.dose}: ${med.instructions}`).join("\n")}
+
+${t.upcomingAppointments}:
+${patientData.appointments.map((apt) => `- ${apt.date}: ${apt.doctor} (${apt.specialty})`).join("\n")}
+
+${t.dietActivityGuidelines}:
+${t.foodsToInclude}:
+- Fresh fruits and vegetables
+- Whole grains (brown rice, oats)
+- Lean proteins (fish, chicken, beans)
+- Low-fat dairy products
+- Nuts and seeds (unsalted)
+
+${t.foodsToLimit}:
+- High-sodium foods (processed meats, canned soups)
+- Fried and fast foods
+- Sugary drinks and desserts
+- Excessive alcohol
+
+${t.activityGuidelines}:
+${t.recommendedActivities}:
+- Walking 20-30 minutes daily
+- Light stretching or yoga
+- Swimming (after incision heals)
+- Household chores (light cleaning)
+
+${t.activitiesToAvoid}:
+- Heavy lifting (over 10 pounds)
+- Intense exercise or running
+- Driving for 2 weeks
+- Contact sports
+
+${t.whenToSeekHelp}:
+${t.call911}:
+- Severe chest pain or pressure
+- Difficulty breathing or shortness of breath
+- Sudden weakness or numbness
+- Loss of consciousness
+
+${t.callDoctor}:
+- Increased swelling in legs or feet
+- Rapid weight gain (3+ pounds in 2 days)
+- Persistent cough or wheezing
+- Dizziness or lightheadedness
+- Unusual fatigue or weakness
+- Signs of infection at incision site
+
+EMERGENCY CONTACTS:
+- 24/7 Nurse Hotline: (555) 999-0000
+- Dr. Sarah Johnson: (555) 123-4567
+- Emergency: 911
+
+IMPORTANT: This content has been simplified using artificial intelligence for better patient understanding.
+      `
+
+      // Create PDF
+      const pdf = new jsPDF()
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 20
+      const maxWidth = pageWidth - (margin * 2)
+      
+      // Add title
+      pdf.setFontSize(18)
+      pdf.setFont("helvetica", "bold")
+      pdf.text("DISCHARGE INSTRUCTIONS", margin, 30)
+      
+      // Add patient info
+      pdf.setFontSize(12)
+      pdf.setFont("helvetica", "normal")
+      pdf.text(`${patientData.name}`, margin, 45)
+      pdf.text(`Discharge Date: March 15, 2024`, margin, 55)
+      pdf.text(`Attending Physician: Dr. Sarah Johnson, MD`, margin, 65)
+      
+      // Add content with word wrapping
+      const lines = pdf.splitTextToSize(content, maxWidth)
+      let yPosition = 80
+      
+      pdf.setFontSize(10)
+      for (let i = 0; i < lines.length; i++) {
+        if (yPosition > pageHeight - 20) {
+          pdf.addPage()
+          yPosition = 20
+        }
+        pdf.text(lines[i], margin, yPosition)
+        yPosition += 6
+      }
+      
+      // Add AI disclaimer at the bottom
+      pdf.setFontSize(8)
+      pdf.setFont("helvetica", "italic")
+      pdf.text("This content has been simplified using artificial intelligence for better patient understanding.", margin, yPosition + 10)
+      
+      // Save the PDF
+      pdf.save(`discharge-instructions-${patientData.name.replace(" ", "-").toLowerCase()}.pdf`)
+    } catch (error) {
+      console.error("Error generating PDF:", error)
+      // Fallback to text download
+      const content = `
 DISCHARGE INSTRUCTIONS - ${patientData.name}
 Discharge Date: March 15, 2024
 Attending Physician: Dr. Sarah Johnson, MD
@@ -88,17 +429,17 @@ EMERGENCY CONTACTS:
 - 24/7 Nurse Hotline: (555) 999-0000
 - Dr. Sarah Johnson: (555) 123-4567
 - Emergency: 911
-    `
-
-    const blob = new Blob([content], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `discharge-instructions-${patientData.name.replace(" ", "-").toLowerCase()}.txt`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+      `
+      const blob = new Blob([content], { type: "text/plain" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `discharge-instructions-${patientData.name.replace(" ", "-").toLowerCase()}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
   }
 
   const languages = {
@@ -522,7 +863,7 @@ EMERGENCY CONTACTS:
                   <Download className="h-4 w-4 mr-2" />
                   {t.downloadPDF}
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => window.print()}>
+                <Button variant="outline" size="sm" onClick={printDischargeSummary}>
                   <Print className="h-4 w-4 mr-2" />
                   {t.print}
                 </Button>
