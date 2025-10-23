@@ -17,14 +17,21 @@ export type GoogleServiceAccount = {
   universe_domain?: string;
 };
 
-const DEFAULT_SERVICE_ACCOUNT_ABS = '/root/patient-discharge/backend/.settings.dev/fhir_store_sa.json';
+const getDefaultServiceAccountPath = () => {
+  const env = process.env.NODE_ENV || 'dev';
+  return path.resolve(process.cwd(), `.settings.${env}/fhir_store_sa.json`);
+};
 
 export async function readServiceAccount(
   filePath?: string,
 ): Promise<GoogleServiceAccount> {
+  const env = process.env.NODE_ENV || 'dev';
   const resolvedPath = filePath
     || process.env.SERVICE_ACCOUNT_PATH
-    || DEFAULT_SERVICE_ACCOUNT_ABS;
+    || getDefaultServiceAccountPath();
+  
+  // Use console.log here since this is a utility function, not a service
+  console.log(`🔐 Google Auth - NODE_ENV: ${env}, Service account path: ${resolvedPath}`);
   const raw = await fs.readFile(path.resolve(resolvedPath), 'utf8');
   const parsed = JSON.parse(raw);
   return parsed as GoogleServiceAccount;

@@ -200,6 +200,72 @@ Content-Type: application/json
 GET /cerner/test/discharge-summary-pipeline/{patientId}
 ```
 
+## Discharge Summary Export Pipeline
+
+Export discharge summaries from Cerner to Google FHIR store:
+
+```bash
+# Export discharge summary for a patient (finds latest)
+POST /discharge-export/export/{patientId}
+Content-Type: application/json
+{
+  "documentId": "optional-specific-document-id"
+}
+
+# Export specific document by ID
+POST /discharge-export/export-document/{documentId}
+Content-Type: application/json
+{
+  "patientId": "patient-id"
+}
+
+# Test export pipeline readiness
+GET /discharge-export/test/{patientId}
+```
+
+### Export Pipeline Process
+
+The export pipeline follows these steps:
+
+1. **Cerner DocumentReference Search** - Find discharge summary metadata
+2. **Duplicate Check** - Verify document hasn't been exported before
+3. **Patient Mapping** - Map Cerner patient to Google FHIR patient (create if needed)
+4. **Cerner Binary Download** - Download the PDF content
+5. **Transform & Encode** - Add identifiers and base64 encode PDF
+6. **Google FHIR Binary Storage** - Store the PDF in Google FHIR
+7. **Google FHIR DocumentReference** - Link to Binary and reference Google Patient
+8. **Google FHIR Composition** - Create structured summary (optional)
+
+### Export Response
+
+```json
+{
+  "success": true,
+  "cernerDocumentId": "12345",
+  "googleBinaryId": "67890",
+  "googleDocumentReferenceId": "abc123",
+  "googleCompositionId": "def456",
+  "cernerPatientId": "1",
+  "googlePatientId": "google-patient-123",
+  "encounterId": "enc-123",
+  "metadata": {
+    "originalSize": 1024000,
+    "contentType": "application/pdf",
+    "exportTimestamp": "2024-01-15T10:30:00Z",
+    "patientMapping": "found",
+    "duplicateCheck": "new"
+  }
+}
+```
+
+### Key Features
+
+- **Duplicate Prevention** - Checks for existing exports using Cerner document ID tags
+- **Patient Mapping** - Automatically maps Cerner patients to Google FHIR patients
+- **Patient Creation** - Creates new Google patients if they don't exist
+- **Identifier Preservation** - Maintains Cerner patient IDs as identifiers in Google FHIR
+- **Audit Trail** - Comprehensive logging of all export operations
+
 ## Error Handling
 
 The API returns proper HTTP status codes and FHIR OperationOutcome resources for errors:

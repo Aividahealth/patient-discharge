@@ -3,6 +3,8 @@ import axios from 'axios';
 import * as qs from 'qs';
 import { DevConfigService } from '../config/dev-config.service';
 import { AuditService } from '../audit/audit.service';
+import { TenantContext } from '../tenant/tenant-context';
+import { AuthType } from '../auth/types/auth.types';
 
 @Injectable()
 export class CernerService implements OnModuleInit {
@@ -15,31 +17,46 @@ export class CernerService implements OnModuleInit {
     private readonly auditService: AuditService
   ) {}
 
-  private getBaseUrl(): string {
-    const config = this.configService.get();
-    if (!config.cerner?.base_url) {
-      throw new Error('Missing Cerner base_url in config.yaml');
+  private getBaseUrl(ctx: TenantContext): string {
+    const cernerConfig = this.configService.getTenantCernerConfig(ctx.tenantId);
+    if (!cernerConfig?.base_url) {
+      throw new Error(`Missing Cerner base_url for tenant: ${ctx.tenantId}`);
     }
-    return config.cerner.base_url;
+    return cernerConfig.base_url;
   }
 
   async onModuleInit() {
     // Don't authenticate on module init - will authenticate when needed
     // This prevents issues when config is not loaded yet
+    // await this.authenticate();
   }
 
-  async authenticate(): Promise<boolean> {
-    let config;
+  async authenticate(ctx: TenantContext, authType: AuthType = AuthType.SYSTEM): Promise<boolean> {
+    if (!this.configService.isLoaded()) {
+      this.logger.warn('Config not loaded yet, skipping authentication');
+      return false;
+    }
+
+    if (authType === AuthType.SYSTEM) {
+      return this.authenticateSystemApp(ctx);
+    } else {
+      return this.authenticateProviderApp(ctx);
+    }
+  }
+
+  private async authenticateSystemApp(ctx: TenantContext): Promise<boolean> {
+    this.logger.log(`Authenticating with system app for tenant: ${ctx.tenantId}`);
+
+    let cernerConfig;
     try {
-      config = this.configService.get();
+      cernerConfig = this.configService.getTenantCernerSystemConfig(ctx.tenantId);
     } catch (error) {
       this.logger.warn('Config not loaded yet, skipping authentication');
       return false;
     }
-    const cernerConfig = config.cerner;
     
     if (!cernerConfig?.client_id || !cernerConfig?.client_secret || !cernerConfig?.token_url || !cernerConfig?.scopes) {
-      this.logger.error('Missing Cerner configuration in config.yaml');
+      this.logger.error('Missing Cerner system app configuration in config.yaml');
       return false;
     }
 
@@ -64,12 +81,30 @@ export class CernerService implements OnModuleInit {
         // Default to 45 minutes if expires_in is missing
         this.accessTokenExpiryMs = Date.now() + (45 * 60 * 1000);
       }
-      this.logger.log('Cerner authentication successful');
+      this.logger.log('Cerner system app authentication successful');
       return true;
     } catch (error) {
-      this.logger.error('Cerner authentication failed', error);
+      this.logger.error('Cerner system app authentication failed', error);
       return false;
     }
+  }
+
+  private async authenticateProviderApp(ctx: TenantContext): Promise<boolean> {
+    this.logger.log(`Authenticating with provider app for tenant: ${ctx.tenantId}, user: ${ctx.userId}`);
+
+    // For provider app, we need to get the user's session token
+    // This would typically be injected or retrieved from session service
+    // For now, we'll assume the token is passed in the context or retrieved from session
+    
+    if (!ctx.userId) {
+      this.logger.error('User ID required for provider app authentication');
+      return false;
+    }
+
+    // TODO: Integrate with session service to get user's access token
+    // For now, we'll return false to indicate provider app auth is not yet implemented
+    this.logger.warn('Provider app authentication not yet fully implemented');
+    return false;
   }
 
   private isTokenValid(): boolean {
@@ -78,17 +113,17 @@ export class CernerService implements OnModuleInit {
     return Date.now() < this.accessTokenExpiryMs;
   }
 
-  private async ensureAccessToken(): Promise<boolean> {
+  private async ensureAccessToken(ctx: TenantContext, authType: AuthType = AuthType.SYSTEM): Promise<boolean> {
     if (this.isTokenValid()) {
       this.logger.log('Reusing existing Cerner access token');
       return true;
     }
     this.logger.log('Cerner access token expired or missing, fetching new token');
-    return this.authenticate();
+    return this.authenticate(ctx, authType);
   }
 
-  async createDischargeSummary(patientId: string, encounterId: string, summaryData: any): Promise<any | null> {
-    const ok = await this.ensureAccessToken();
+  async createDischargeSummary(patientId: string, encounterId: string, summaryData: any, ctx: TenantContext): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
     const documentReference = {
       resourceType: 'DocumentReference',
@@ -137,7 +172,7 @@ export class CernerService implements OnModuleInit {
     };
     try {
       const response = await axios.post(
-        `${this.getBaseUrl()}/DocumentReference`,
+        `${this.getBaseUrl(ctx)}/DocumentReference`,
         documentReference,
         { headers },
       );
@@ -158,14 +193,14 @@ export class CernerService implements OnModuleInit {
   /**
    * Create a FHIR resource in Cerner
    */
-  async createResource(resourceType: string, resource: any): Promise<any | null> {
-    const ok = await this.ensureAccessToken();
+  async createResource(resourceType: string, resource: any, ctx: TenantContext): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
     if (!ok) {
       this.logger.error('Authentication failed. Cannot create resource.');
       return null;
     }
     
-    const url = `${this.getBaseUrl()}/${resourceType}`;
+    const url = `${this.getBaseUrl(ctx)}/${resourceType}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       'Content-Type': 'application/fhir+json',
@@ -189,10 +224,10 @@ export class CernerService implements OnModuleInit {
   /**
    * Fetch a FHIR resource from Cerner by resource type and ID
    */
-  async fetchResource(resourceType: string, resourceId: string): Promise<any | null> {
-    const ok = await this.ensureAccessToken();
+  async fetchResource(resourceType: string, resourceId: string, ctx: TenantContext): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
-    const url = `${this.getBaseUrl()}/${resourceType}/${resourceId}`;
+    const url = `${this.getBaseUrl(ctx)}/${resourceType}/${resourceId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       'Accept': 'application/fhir+json',
@@ -215,10 +250,10 @@ export class CernerService implements OnModuleInit {
   /**
    * Update a FHIR resource in Cerner by resource type and ID
    */
-  async updateResource(resourceType: string, resourceId: string, resource: any): Promise<any | null> {
-    const ok = await this.ensureAccessToken();
+  async updateResource(resourceType: string, resourceId: string, resource: any, ctx: TenantContext): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
-    const url = `${this.getBaseUrl()}/${resourceType}/${resourceId}`;
+    const url = `${this.getBaseUrl(ctx)}/${resourceType}/${resourceId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       'Content-Type': 'application/fhir+json',
@@ -242,10 +277,10 @@ export class CernerService implements OnModuleInit {
   /**
    * Delete a FHIR resource in Cerner by resource type and ID
    */
-  async deleteResource(resourceType: string, resourceId: string): Promise<boolean> {
-    const ok = await this.ensureAccessToken();
+  async deleteResource(resourceType: string, resourceId: string, ctx: TenantContext): Promise<boolean> {
+    const ok = await this.ensureAccessToken(ctx);
     if (!ok) return false;
-    const url = `${this.getBaseUrl()}/${resourceType}/${resourceId}`;
+    const url = `${this.getBaseUrl(ctx)}/${resourceType}/${resourceId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       Accept: 'application/fhir+json',
@@ -268,18 +303,18 @@ export class CernerService implements OnModuleInit {
   /**
    * Search FHIR resources in Cerner by resource type and query parameters
    */
-  async searchResource(resourceType: string, query: Record<string, any>): Promise<any | null> {
-    const ok = await this.ensureAccessToken();
+  async searchResource(resourceType: string, query: Record<string, any>, ctx: TenantContext, authType: AuthType = AuthType.SYSTEM): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx, authType);
     if (!ok) return null;
     
-    const url = `${this.getBaseUrl()}/${resourceType}`;
+    const url = `${this.getBaseUrl(ctx)}/${resourceType}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       Accept: 'application/fhir+json',
     };
     try {
       const response = await axios.get(url, { headers, params: query });
-      this.logger.log(`Searched ${resourceType} successfully.`);
+      // console.log('response', response.data);
       return response.data;
     } catch (error) {
       this.logger.error(`Failed to search ${resourceType}`, error);
@@ -296,7 +331,7 @@ export class CernerService implements OnModuleInit {
    * Search for discharge summaries by patient ID
    * First tries DocumentReference, then falls back to Composition
    */
-  async searchDischargeSummaries(patientId: string): Promise<any | null> {
+  async searchDischargeSummaries(patientId: string, ctx: TenantContext): Promise<any | null> {
     this.logger.log(`Searching discharge summaries for patient ${patientId}`);
     
     // Audit log the request
@@ -312,11 +347,11 @@ export class CernerService implements OnModuleInit {
     // Try DocumentReference first
     const docRefQuery = {
       patient: patientId,
-      type: 'http://loinc.org|18842-5' // Discharge Summary LOINC code
+      // type: 'http://loinc.org|18842-5' // Discharge Summary LOINC code
     };
-    
-    let result = await this.searchResource('DocumentReference', docRefQuery);
-    
+    console.log('docRefQuery', docRefQuery);
+        let result = await this.searchResource('DocumentReference', docRefQuery, ctx);
+    // console.log('result', result.total);
     // If no DocumentReference results, try Composition
     if (!result || (result.total === 0 && result.entry?.length === 0)) {
       this.logger.log('No DocumentReference found, trying Composition');
@@ -333,9 +368,10 @@ export class CernerService implements OnModuleInit {
       
       const compQuery = {
         patient: patientId,
-        type: 'http://loinc.org|18842-5'
+        // type: 'http://loinc.org|18842-5'
       };
-      result = await this.searchResource('Composition', compQuery);
+          result = await this.searchResource('Composition', compQuery, ctx);
+
     }
     
     // Log processing stage
@@ -354,11 +390,11 @@ export class CernerService implements OnModuleInit {
   /**
    * Fetch Binary document content
    */
-  async fetchBinaryDocument(binaryId: string, acceptType: string = 'application/pdf'): Promise<any | null> {
-    const ok = await this.ensureAccessToken();
+  async fetchBinaryDocument(binaryId: string, ctx: TenantContext, acceptType: string = 'application/pdf'): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
     
-    const url = `${this.getBaseUrl()}/Binary/${binaryId}`;
+    const url = `${this.getBaseUrl(ctx)}/Binary/${binaryId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       Accept: acceptType,
@@ -367,16 +403,36 @@ export class CernerService implements OnModuleInit {
     try {
       const response = await axios.get(url, { headers });
       this.logger.log(`Fetched Binary/${binaryId} successfully.`);
+      
+      // Validate binary data
+      const binaryData = response.data;
+      if (typeof binaryData === 'string' && binaryData.length < 10) {
+        this.logger.warn(`⚠️ Binary/${binaryId} contains invalid data: "${binaryData}" - likely corrupted or test data`);
+        return {
+          id: binaryId,
+          contentType: response.headers['content-type'] || acceptType,
+          data: null, // Mark as null to indicate invalid data
+          size: 0,
+          error: 'Invalid binary data - likely corrupted or test data'
+        };
+      }
+      
       return {
         id: binaryId,
         contentType: response.headers['content-type'] || acceptType,
-        data: response.data,
-        size: response.data.length
+        data: binaryData,
+        size: binaryData.length
       };
     } catch (error) {
-      this.logger.error(`Failed to fetch Binary/${binaryId}`, error);
+      this.logger.error(`Failed to fetch Binary/${binaryId}`);
       if (error.response) {
-        this.logger.error('Response:', error.response.data);
+        // Log concise error info without massive data dumps
+        const errorData = error.response.data;
+        if (errorData?.issue?.[0]?.diagnostics) {
+          this.logger.error(`Error: ${errorData.issue[0].diagnostics.substring(0, 200)}...`);
+        } else {
+          this.logger.error(`HTTP ${error.response.status}: ${error.response.statusText}`);
+        }
         return error.response.data;
       }
       return null;
@@ -387,6 +443,7 @@ export class CernerService implements OnModuleInit {
    * Parse DocumentReference and extract key fields
    */
   parseDocumentReference(docRef: any): any {
+    console.log('docRef', docRef);
     if (!docRef || docRef.resourceType !== 'DocumentReference') {
       return null;
     }
@@ -394,9 +451,9 @@ export class CernerService implements OnModuleInit {
     const parsed = {
       id: docRef.id,
       status: docRef.status,
-      type: docRef.type?.coding?.find((c: any) => c.system === 'http://loinc.org' && c.code === '18842-5'),
+      // type: docRef.type?.coding?.find((c: any) => c.system === 'http://loinc.org' && c.code === '18842-5'),
       patientId: docRef.subject?.reference?.replace('Patient/', ''),
-      encounterId: docRef.context?.encounter?.[0]?.reference?.replace('Encounter/', ''),
+      // encounterId: docRef.context?.encounter?.[0]?.reference?.replace('Encounter/', ''),
       date: docRef.date,
       authors: docRef.author?.map((a: any) => a.display || a.reference),
       content: docRef.content?.map((c: any) => ({

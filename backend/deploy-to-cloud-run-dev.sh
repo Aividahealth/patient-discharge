@@ -3,18 +3,19 @@
 # Exit on error
 set -e
 
-# Configuration
+# Configuration for DEV environment
 PROJECT_ID="simtran-474018"
 REGION="us-central1"
-SERVICE_NAME="patient-discharge-backend"
+SERVICE_NAME="patient-discharge-backend-dev"
 REPOSITORY="cloud-run-source-deploy"
 IMAGE_NAME="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE_NAME}"
 
-echo "🚀 Deploying NestJS Backend to Cloud Run"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🚀 Deploying NestJS Backend to Cloud Run (DEV Environment)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Project ID: ${PROJECT_ID}"
 echo "Region: ${REGION}"
 echo "Service: ${SERVICE_NAME}"
+echo "Environment: DEV"
 echo ""
 
 # Set the project
@@ -38,8 +39,8 @@ gcloud artifacts repositories create ${REPOSITORY} \
 echo "🏗️  Building container image..."
 gcloud builds submit --tag ${IMAGE_NAME}
 
-# Deploy to Cloud Run
-echo "🚀 Deploying to Cloud Run..."
+# Deploy to Cloud Run with DEV environment
+echo "🚀 Deploying to Cloud Run (DEV)..."
 gcloud run deploy ${SERVICE_NAME} \
   --image ${IMAGE_NAME} \
   --platform managed \
@@ -55,12 +56,13 @@ gcloud run deploy ${SERVICE_NAME} \
 
 # Get the service URL
 echo ""
-echo "✅ Deployment complete!"
+echo "✅ DEV Deployment complete!"
 echo ""
 SERVICE_URL=$(gcloud run services describe ${SERVICE_NAME} --platform managed --region ${REGION} --format 'value(status.url)')
-echo "🌐 Service URL: ${SERVICE_URL}"
+echo "🌐 DEV Service URL: ${SERVICE_URL}"
 echo ""
 echo "📝 Next steps:"
 echo "1. Update your frontend .env with: NEXT_PUBLIC_API_URL=${SERVICE_URL}"
 echo "2. Test the API: curl ${SERVICE_URL}/discharge-summaries/stats/overview"
+echo "3. Check logs: gcloud logs tail --service=${SERVICE_NAME} --region=${REGION}"
 echo ""

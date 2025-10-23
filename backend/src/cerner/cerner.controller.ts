@@ -1,5 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, HttpException, HttpStatus } from '@nestjs/common';
 import { CernerService } from './cerner.service';
+import { TenantContext } from '../tenant/tenant.decorator';
+import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
+import { AuthType } from '../auth/types/auth.types';
 
 @Controller('cerner')
 export class CernerController {
@@ -7,9 +10,9 @@ export class CernerController {
 
   // Generic CRUD operations
   @Post(':resourceType')
-  async createResource(@Param('resourceType') resourceType: string, @Body() resource: any) {
+  async createResource(@Param('resourceType') resourceType: string, @Body() resource: any, @TenantContext() ctx: TenantContextType) {
     try {
-      const result = await this.cernerService.createResource(resourceType, resource);
+      const result = await this.cernerService.createResource(resourceType, resource, ctx);
       if (result === null) {
         throw new HttpException('Failed to create resource', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -17,7 +20,7 @@ export class CernerController {
       if (result.resourceType === 'OperationOutcome') {
         throw new HttpException(result, HttpStatus.BAD_REQUEST);
       }
-      return result;
+    return result;
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -27,9 +30,9 @@ export class CernerController {
   }
 
   @Get(':resourceType/:id')
-  async fetchResource(@Param('resourceType') resourceType: string, @Param('id') id: string) {
+  async fetchResource(@Param('resourceType') resourceType: string, @Param('id') id: string, @TenantContext() ctx: TenantContextType) {
     try {
-      const result = await this.cernerService.fetchResource(resourceType, id);
+      const result = await this.cernerService.fetchResource(resourceType, id, ctx);
       if (result === null) {
         throw new HttpException('Resource not found or failed to fetch', HttpStatus.NOT_FOUND);
       }
@@ -37,7 +40,7 @@ export class CernerController {
       if (result.resourceType === 'OperationOutcome') {
         throw new HttpException(result, HttpStatus.BAD_REQUEST);
       }
-      return result;
+    return result;
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -51,9 +54,10 @@ export class CernerController {
     @Param('resourceType') resourceType: string,
     @Param('id') id: string,
     @Body() resource: any,
+    @TenantContext() ctx: TenantContextType,
   ) {
     try {
-      const result = await this.cernerService.updateResource(resourceType, id, resource);
+      const result = await this.cernerService.updateResource(resourceType, id, resource, ctx);
       if (result === null) {
         throw new HttpException('Failed to update resource', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -61,7 +65,7 @@ export class CernerController {
       if (result.resourceType === 'OperationOutcome') {
         throw new HttpException(result, HttpStatus.BAD_REQUEST);
       }
-      return result;
+    return result;
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -71,9 +75,9 @@ export class CernerController {
   }
 
   @Delete(':resourceType/:id')
-  async deleteResource(@Param('resourceType') resourceType: string, @Param('id') id: string) {
+  async deleteResource(@Param('resourceType') resourceType: string, @Param('id') id: string, @TenantContext() ctx: TenantContextType) {
     try {
-      const result = await this.cernerService.deleteResource(resourceType, id);
+      const result = await this.cernerService.deleteResource(resourceType, id, ctx);
       if (result === false) {
         throw new HttpException('Failed to delete resource', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -91,9 +95,14 @@ export class CernerController {
   }
 
   @Get(':resourceType')
-  async searchResource(@Param('resourceType') resourceType: string, @Query() query: any) {
+  async searchResource(
+    @Param('resourceType') resourceType: string, 
+    @Query() query: any, 
+    @Query('authType') authType: AuthType = AuthType.SYSTEM,
+    @TenantContext() ctx: TenantContextType
+  ) {
     try {
-      const result = await this.cernerService.searchResource(resourceType, query);
+      const result = await this.cernerService.searchResource(resourceType, query, ctx, authType);
       if (result === null) {
         throw new HttpException('Failed to search resources', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -112,9 +121,9 @@ export class CernerController {
 
   // Specialized operations
   @Post('discharge-summary')
-  async createDischargeSummary(@Body() body: { patientId: string; encounterId: string; summaryData: any }) {
+  async createDischargeSummary(@Body() body: { patientId: string; encounterId: string; summaryData: any }, @TenantContext() ctx: TenantContextType) {
     try {
-      const result = await this.cernerService.createDischargeSummary(body.patientId, body.encounterId, body.summaryData);
+      const result = await this.cernerService.createDischargeSummary(body.patientId, body.encounterId, body.summaryData, ctx);
       if (result === null) {
         throw new HttpException('Failed to create discharge summary', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -126,10 +135,10 @@ export class CernerController {
 
   // Test endpoint to verify token reuse
   @Get('test/token-reuse')
-  async testTokenReuse() {
+  async testTokenReuse(@TenantContext() ctx: TenantContextType) {
     const results: { attempt: number; hasResult: boolean }[] = [];
     for (let i = 0; i < 3; i++) {
-      const result = await this.cernerService.searchResource('Patient', { _count: 1 });
+      const result = await this.cernerService.searchResource('Patient', { _count: 1 }, ctx);
       results.push({ attempt: i + 1, hasResult: !!result });
     }
     return { message: 'Token reuse test completed', results };
@@ -137,9 +146,9 @@ export class CernerController {
 
   // Discharge Summary Operations
   @Get('discharge-summaries/:patientId')
-  async searchDischargeSummaries(@Param('patientId') patientId: string) {
+  async searchDischargeSummaries(@Param('patientId') patientId: string, @TenantContext() ctx: TenantContextType) {
     try {
-      const result = await this.cernerService.searchDischargeSummaries(patientId);
+      const result = await this.cernerService.searchDischargeSummaries(patientId, ctx);
       if (result === null) {
         throw new HttpException('Failed to search discharge summaries', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -158,10 +167,11 @@ export class CernerController {
   @Get('binary/:binaryId')
   async fetchBinaryDocument(
     @Param('binaryId') binaryId: string,
-    @Query('accept') acceptType: string = 'application/pdf'
+    @Query('accept') acceptType: string = 'application/pdf',
+    @TenantContext() ctx: TenantContextType
   ) {
     try {
-      const result = await this.cernerService.fetchBinaryDocument(binaryId, acceptType);
+      const result = await this.cernerService.fetchBinaryDocument(binaryId, ctx, acceptType);
       if (result === null) {
         throw new HttpException('Failed to fetch binary document', HttpStatus.INTERNAL_SERVER_ERROR);
       }
@@ -195,10 +205,10 @@ export class CernerController {
 
   // Acceptance Test Endpoint
   @Get('test/discharge-summary-pipeline/:patientId')
-  async testDischargeSummaryPipeline(@Param('patientId') patientId: string) {
+  async testDischargeSummaryPipeline(@Param('patientId') patientId: string, @TenantContext() ctx: TenantContextType) {
     try {
       // Step 1: Search for discharge summaries
-      const summaries = await this.cernerService.searchDischargeSummaries(patientId);
+      const summaries = await this.cernerService.searchDischargeSummaries(patientId, ctx);
       
       if (!summaries || summaries.total === 0) {
         return {
@@ -218,7 +228,7 @@ export class CernerController {
       if (parsed?.content?.[0]?.url) {
         const binaryId = parsed.content[0].url.split('/').pop();
         if (binaryId) {
-          binaryContent = await this.cernerService.fetchBinaryDocument(binaryId);
+          binaryContent = await this.cernerService.fetchBinaryDocument(binaryId, ctx);
         }
       }
 

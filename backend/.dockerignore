@@ -1,19 +1,80 @@
+# Dependencies
 node_modules
-npm-debug.log
+npm-debug.log*
+
+# Build outputs
 dist
-.git
-.gitignore
-.env
-.env.local
-.env.*.local
-README.md
-.DS_Store
-coverage
-.nyc_output
-*.log
+build
+
+
+
+# IDE files
 .vscode
 .idea
 *.swp
 *.swo
-*~
-.eslintcache
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Test files
+coverage
+.nyc_output
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# next.js build output
+.next
+
+# nuxt.js build output
+.nuxt
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Keep .settings folders for configuration
+!.settings*

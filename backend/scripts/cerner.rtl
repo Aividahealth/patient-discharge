@@ -1,0 +1,195 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2865
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;\red199\green200\blue201;\red26\green28\blue31;}
+{\*\expandedcolortbl;;\cssrgb\c81961\c82353\c82745;\cssrgb\c13333\c14510\c16078;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs30 \cf2 \cb3 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 """\
+Cerner Discharge Summary Generator\
+This script creates discharge summaries in a Cerner dev environment using FHIR API\
+"""\
+import requests\
+import json\
+from datetime import datetime\
+from typing import Dict, Optional\
+import base64\
+class CernerDischargeGenerator:\
+    def __init__(self, base_url: str, client_id: str, client_secret: str):\
+        """\
+        Initialize the Cerner API client\
+        Args:\
+            base_url: Cerner FHIR base URL (e.g., 'https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d')\
+            client_id: Your application's client ID\
+            client_secret: Your application's client secret\
+        """\
+        self.base_url = base_url.rstrip('/')\
+        self.client_id = client_id\
+        self.client_secret = client_secret\
+        self.access_token = None\
+    def authenticate(self) -> bool:\
+        """\
+        Authenticate with Cerner using OAuth 2.0 client credentials flow\
+        """\
+        token_url = "https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/protocols/oauth2/profiles/smart-v1/token"\
+        # Encode credentials\
+        credentials = base64.b64encode(f"\{self.client_id\}:\{self.client_secret\}".encode()).decode()\
+        headers = \{\
+            "Authorization": f"Basic \{credentials\}",\
+            "Content-Type": "application/x-www-form-urlencoded"\
+        \}\
+        data = \{\
+            "grant_type": "client_credentials",\
+            "scope": "system/DocumentReference.write system/Patient.read system/Encounter.read"\
+        \}\
+        try:\
+            response = requests.post(token_url, headers=headers, data=data)\
+            response.raise_for_status()\
+            self.access_token = response.json()['access_token']\
+            return True\
+        except Exception as e:\
+            print(f"Authentication failed: \{e\}")\
+            return False\
+    def create_discharge_summary(self, patient_id: str, encounter_id: str,\
+                                summary_data: Dict) -> Optional[Dict]:\
+        """\
+        Create a discharge summary using FHIR DocumentReference\
+        Args:\
+            patient_id: Patient FHIR ID\
+            encounter_id: Encounter FHIR ID\
+            summary_data: Dictionary containing discharge summary information\
+        """\
+        if not self.access_token:\
+            print("Not authenticated. Call authenticate() first.")\
+            return None\
+        # Create FHIR DocumentReference resource\
+        document_reference = \{\
+            "resourceType": "DocumentReference",\
+            "status": "current",\
+            "type": \{\
+                "coding": [\{\
+                    "system": "http://loinc.org",\
+                    "code": "18842-5",\
+                    "display": "Discharge summary"\
+                \}]\
+            \},\
+            "category": [\{\
+                "coding": [\{\
+                    "system": "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category",\
+                    "code": "clinical-note",\
+                    "display": "Clinical Note"\
+                \}]\
+            \}],\
+            "subject": \{\
+                "reference": f"Patient/\{patient_id\}"\
+            \},\
+            "date": datetime.now().isoformat(),\
+            "author": [\{\
+                "display": summary_data.get("author", "System Generated")\
+            \}],\
+            "context": \{\
+                "encounter": [\{\
+                    "reference": f"Encounter/\{encounter_id\}"\
+                \}],\
+                "period": \{\
+                    "start": summary_data.get("admission_date"),\
+                    "end": summary_data.get("discharge_date", datetime.now().isoformat())\
+                \}\
+            \},\
+            "content": [\{\
+                "attachment": \{\
+                    "contentType": "text/plain",\
+                    "data": base64.b64encode(\
+                        self._format_discharge_summary(summary_data).encode()\
+                    ).decode()\
+                \}\
+            \}]\
+        \}\
+        headers = \{\
+            "Authorization": f"Bearer \{self.access_token\}",\
+            "Content-Type": "application/fhir+json",\
+            "Accept": "application/fhir+json"\
+        \}\
+        try:\
+            response = requests.post(\
+                f"\{self.base_url\}/DocumentReference",\
+                headers=headers,\
+                json=document_reference\
+            )\
+            response.raise_for_status()\
+            return response.json()\
+        except Exception as e:\
+            print(f"Failed to create discharge summary: \{e\}")\
+            if hasattr(e, 'response') and e.response is not None:\
+                print(f"Response: \{e.response.text\}")\
+            return None\
+    def _format_discharge_summary(self, data: Dict) -> str:\
+        """Format the discharge summary text"""\
+        summary = f"""\
+DISCHARGE SUMMARY\
+Patient Information:\
+- Name: \{data.get('patient_name', 'N/A')\}\
+- MRN: \{data.get('mrn', 'N/A')\}\
+- DOB: \{data.get('dob', 'N/A')\}\
+Admission Date: \{data.get('admission_date', 'N/A')\}\
+Discharge Date: \{data.get('discharge_date', datetime.now().strftime('%Y-%m-%d'))\}\
+Chief Complaint:\
+\{data.get('chief_complaint', 'N/A')\}\
+Hospital Course:\
+\{data.get('hospital_course', 'N/A')\}\
+Discharge Diagnosis:\
+\{data.get('discharge_diagnosis', 'N/A')\}\
+Discharge Medications:\
+\{data.get('discharge_medications', 'N/A')\}\
+Follow-up Instructions:\
+\{data.get('followup_instructions', 'N/A')\}\
+Discharge Condition: \{data.get('discharge_condition', 'Stable')\}\
+Discharge Disposition: \{data.get('discharge_disposition', 'Home')\}\
+Prepared by: \{data.get('author', 'System')\}\
+Date: \{datetime.now().strftime('%Y-%m-%d %H:%M:%S')\}\
+        """\
+        return summary.strip()\
+# Example Usage\
+if __name__ == "__main__":\
+    # Configuration - Replace with your actual credentials\
+    BASE_URL = "https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d"\
+    CLIENT_ID = "your_client_id_here"\
+    CLIENT_SECRET = "your_client_secret_here"\
+    # Initialize the generator\
+    generator = CernerDischargeGenerator(BASE_URL, CLIENT_ID, CLIENT_SECRET)\
+    # Authenticate\
+    if generator.authenticate():\
+        print("Authentication successful!")\
+        # Sample discharge summary data\
+        discharge_data = \{\
+            "patient_name": "John Doe",\
+            "mrn": "12345678",\
+            "dob": "1980-05-15",\
+            "admission_date": "2025-09-25T10:00:00Z",\
+            "discharge_date": "2025-10-01T14:00:00Z",\
+            "chief_complaint": "Chest pain and shortness of breath",\
+            "hospital_course": "Patient admitted with acute chest pain. Cardiac workup including EKG and troponins were negative. Ruled out for MI. Symptoms improved with conservative management.",\
+            "discharge_diagnosis": "1. Non-cardiac chest pain\\n2. Anxiety disorder",\
+            "discharge_medications": "1. Aspirin 81mg daily\\n2. Omeprazole 20mg daily\\n3. Alprazolam 0.25mg as needed for anxiety",\
+            "followup_instructions": "Follow up with primary care physician in 1 week. Cardiology follow-up in 2 weeks if symptoms persist.",\
+            "discharge_condition": "Stable, improved",\
+            "discharge_disposition": "Home",\
+            "author": "Dr. Jane Smith"\
+        \}\
+        # Create discharge summary\
+        patient_id = "12345"  # Replace with actual patient FHIR ID\
+        encounter_id = "67890"  # Replace with actual encounter FHIR ID\
+        result = generator.create_discharge_summary(\
+            patient_id=patient_id,\
+            encounter_id=encounter_id,\
+            summary_data=discharge_data\
+        )\
+        if result:\
+            print("Discharge summary created successfully!")\
+            print(f"Document ID: \{result.get('id')\}")\
+        else:\
+            print("Failed to create discharge summary")\
+    else:\
+        print("Authentication failed")}

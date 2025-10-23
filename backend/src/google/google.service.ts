@@ -3,6 +3,7 @@ import { getGoogleAccessToken } from './auth';
 import { AxiosInstance } from 'axios';
 import { createFhirAxiosClient } from './fhirClient.js';
 import { DevConfigService } from '../config/dev-config.service';
+import { TenantContext } from '../tenant/tenant-context';
 
 @Injectable()
 export class GoogleService {
@@ -22,16 +23,24 @@ export class GoogleService {
     return { subject: email, access_token: token };
   }
 
-  private async getFhirClient(): Promise<AxiosInstance> {
-    if (!this.clientPromise) {
-      const cfg = this.configService.get();
-      const baseUrl = cfg.fhir_base_url;
-      if (!baseUrl) {
-        throw new Error('fhir_base_url missing in config.yaml');
-      }
-      this.clientPromise = createFhirAxiosClient(baseUrl);
+  private async getFhirClient(ctx: TenantContext): Promise<AxiosInstance> {
+    const cfg = this.configService.get();
+    let baseUrl = cfg.fhir_base_url; // Default fallback
+    
+    // Construct tenant-specific URL
+    const tenantDataset = this.configService.getTenantGoogleDataset(ctx.tenantId);
+    const tenantFhirStore = this.configService.getTenantGoogleFhirStore(ctx.tenantId);
+    
+    if (cfg.gcp) {
+      baseUrl = `https://healthcare.googleapis.com/v1/projects/${cfg.gcp.project_id}/locations/${cfg.gcp.location}/datasets/${tenantDataset}/fhirStores/${tenantFhirStore}/fhir`;
     }
-    return this.clientPromise;
+    
+    if (!baseUrl) {
+      throw new Error('fhir_base_url missing in config.yaml');
+    }
+    
+    // Create new client for each tenant to avoid caching issues
+    return createFhirAxiosClient(baseUrl);
   }
 
   private isAllowedType(resourceType: string): boolean {
@@ -53,39 +62,76 @@ export class GoogleService {
     }
   }
 
-  async fhirCreate(resourceType: string, body: unknown) {
+  async fhirCreate(resourceType: string, body: unknown, ctx: TenantContext) {
     this.assertAllowed(resourceType);
-    const client = await this.getFhirClient();
-    const { data } = await client.post(`/${resourceType}`, body);
-    return data;
+    const client = await this.getFhirClient(ctx);
+    try {
+      const { data } = await client.post(`/${resourceType}`, body);
+      return data;
+    } catch (error) {
+      console.error(`Google FHIR Create Error for ${resourceType} (tenant: ${ctx.tenantId}):`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        requestData: JSON.stringify(body)
+      });
+      throw error;
+    }
   }
 
-  async fhirRead(resourceType: string, id: string) {
+  async fhirRead(resourceType: string, id: string, ctx: TenantContext) {
     this.assertAllowed(resourceType);
-    const client = await this.getFhirClient();
+    const client = await this.getFhirClient(ctx);
     const { data } = await client.get(`/${resourceType}/${id}`);
     return data;
   }
 
-  async fhirUpdate(resourceType: string, id: string, body: unknown) {
+  async fhirUpdate(resourceType: string, id: string, body: unknown, ctx: TenantContext) {
     this.assertAllowed(resourceType);
-    const client = await this.getFhirClient();
+    const client = await this.getFhirClient(ctx);
     const { data } = await client.put(`/${resourceType}/${id}`, body);
     return data;
   }
 
-  async fhirDelete(resourceType: string, id: string) {
+  async fhirDelete(resourceType: string, id: string, ctx: TenantContext) {
     this.assertAllowed(resourceType);
-    const client = await this.getFhirClient();
+    const client = await this.getFhirClient(ctx);
     const { data } = await client.delete(`/${resourceType}/${id}`);
     return data;
   }
 
-  async fhirSearch(resourceType: string, query: Record<string, any>) {
+  async fhirSearch(resourceType: string, query: Record<string, any>, ctx: TenantContext) {
     this.assertAllowed(resourceType);
-    const client = await this.getFhirClient();
+    const client = await this.getFhirClient(ctx);
     const { data } = await client.get(`/${resourceType}`, { params: query });
     return data;
+  }
+
+  async fhirBundle(bundle: any, ctx: TenantContext) {
+    // For bundles, we need to check if all resource types in the bundle are allowed
+    if (bundle.entry && Array.isArray(bundle.entry)) {
+      for (const entry of bundle.entry) {
+        if (entry.resource && entry.resource.resourceType) {
+          this.assertAllowed(entry.resource.resourceType);
+        }
+      }
+    }
+    
+    const client = await this.getFhirClient(ctx);
+    try {
+      const { data } = await client.post('/', bundle);
+      return data;
+    } catch (error) {
+      console.error(`Google FHIR Bundle Error (tenant: ${ctx.tenantId}):`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        bundleType: bundle.type,
+        entryCount: bundle.entry?.length || 0,
+        requestData: JSON.stringify(bundle, null, 2)
+      });
+      throw error;
+    }
   }
 }
 
