@@ -163,7 +163,7 @@ export class PubSubService {
       });
 
       this.logger.log(
-        `📤 Published encounter export event: ${event.cernerEncounterId} to topic: ${topicName} (Message ID: ${messageId})`,
+        `📤 Published encounter export event: ${event.cernerEncounterId} to topic: ${topicName} (Message ID: ${messageId}) ${JSON.stringify(event)}`,
       );
     } catch (error) {
       this.logger.error(

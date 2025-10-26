@@ -89,36 +89,36 @@ export class DischargeExportService {
       }
       this.logger.log(`✅ Patient mapping successful: ${patientMapping.action} (Google patient: ${patientMapping.googlePatientId})`);
 
-      // Step 4: Download PDF from Cerner Binary
-      this.logger.log(`📥 Step 4: Downloading PDF from Cerner Binary...`);
+      // Step 4: Download Binary data from Cerner
+      this.logger.log(`📥 Step 4: Downloading Binary data from Cerner...`);
       const pdfData = await this.downloadCernerPDF(cernerDoc, ctx);
       if (!pdfData) {
-        this.logger.error(`❌ Failed to download PDF from Cerner`);
+        this.logger.error(`❌ Failed to download Binary data from Cerner`);
         return {
           success: false,
-          error: 'Failed to download PDF from Cerner',
+          error: 'Failed to download Binary data from Cerner',
           metadata: { exportTimestamp, patientMapping: patientMapping.action },
         };
       }
-      this.logger.log(`✅ PDF downloaded successfully (${pdfData.size} bytes, ${pdfData.contentType})`);
+      this.logger.log(`✅ Binary data downloaded successfully (${pdfData.size} bytes, ${pdfData.contentType})`);
 
       // Step 5: Transform and prepare for Google FHIR
       this.logger.log(`🔄 Step 5: Transforming data for Google FHIR...`);
       const transformedData = this.transformForGoogleFHIR(cernerDoc, pdfData);
       this.logger.log(`✅ Data transformation completed`);
 
-      // Step 6: Store PDF in Google FHIR Binary
-      this.logger.log(`💾 Step 6: Storing PDF in Google FHIR Binary...`);
-      const googleBinary = await this.storeInGoogleBinary(transformedData, ctx);
+      // Step 6: Store Binary data in Google FHIR Binary
+      this.logger.log(`💾 Step 6: Storing Binary data in Google FHIR Binary...`);
+      const googleBinary = await this.storeInGoogleBinary(transformedData, cernerDoc, ctx);
       if (!googleBinary) {
-        this.logger.error(`❌ Failed to store PDF in Google FHIR Binary`);
+        this.logger.error(`❌ Failed to store Binary data in Google FHIR Binary`);
         return {
           success: false,
-          error: 'Failed to store PDF in Google FHIR Binary',
+          error: 'Failed to store Binary data in Google FHIR Binary',
           metadata: { exportTimestamp, patientMapping: patientMapping.action },
         };
       }
-      this.logger.log(`✅ PDF stored in Google FHIR Binary: ${googleBinary.id}`);
+      this.logger.log(`✅ Binary data stored in Google FHIR Binary: ${googleBinary.id}`);
 
       // Step 7: Create DocumentReference in Google FHIR
       this.logger.log(`📄 Step 7: Creating DocumentReference in Google FHIR...`);
@@ -627,11 +627,11 @@ export class DischargeExportService {
   private async createGooglePatientFromCerner(cernerPatient: any, cernerPatientId: string, ctx: TenantContext): Promise<any | null> {
     try {
       this.logger.log(`   🆕 Creating Google patient from Cerner data...`);
-      this.logger.log(`   📋 Cerner patient data:`, JSON.stringify(cernerPatient, null, 2));
+      this.logger.log(`   📋 Cerner patient data: ${cernerPatient.id} - ${cernerPatient.name?.[0]?.family || 'N/A'}`);
 
       // Clean null characters from all string fields
       const cleanPatientData = this.cleanNullCharacters(cernerPatient);
-      this.logger.log(`   🧹 Cleaned patient data:`, JSON.stringify(cleanPatientData, null, 2));
+      this.logger.log(`   🧹 Cleaned patient data: ${cleanPatientData.name?.[0]?.family || 'N/A'}`);
       
       // Validate and clean the patient data
       const cleanName = cleanPatientData.name?.filter((n: any) => n && (n.family || n.given)) || [];
@@ -686,7 +686,7 @@ export class DischargeExportService {
       this.logger.log(`      • Birth Date: ${cleanBirthDate || 'N/A'}`);
       this.logger.log(`      • Active: ${googlePatient.active}`);
 
-      this.logger.log(`   📤 Google patient data to be created:`, JSON.stringify(googlePatient, null, 2));
+      this.logger.log(`   📤 Google patient data to be created: ${googlePatient.name?.[0]?.family || 'N/A'}`);
 
       const result = await this.googleService.fhirCreate('Patient', googlePatient, ctx);
       return result;
@@ -713,11 +713,23 @@ export class DischargeExportService {
     }
 
     if (content.data) {
-      // Inline base64 data
-      this.logger.log(`   ✅ Found inline base64 data (${content.size || 0} bytes, ${content.contentType || 'application/pdf'})`);
+      // Inline data - check if it's already base64 or plain text
+      const contentType = content.contentType || 'application/octet-stream';
+      let data = content.data;
+      
+      // If content type is text/plain, we need to encode it to base64
+      if (contentType === 'text/plain' || contentType.startsWith('text/')) {
+        this.logger.log(`   📝 Found plain text data, encoding to base64 (${content.size || 0} bytes, ${contentType})`);
+        data = Buffer.from(content.data, 'utf8').toString('base64');
+      } else {
+        this.logger.log(`   ✅ Found inline base64 data (${content.size || 0} bytes, ${contentType})`);
+      }
+      
+      this.logger.log(`   🔍 Debug - Data type: ${typeof data}, Length: ${data.length}, Is base64: ${/^[A-Za-z0-9+/]*={0,2}$/.test(data)}`);
+      
       return {
-        data: content.data,
-        contentType: content.contentType || 'application/pdf',
+        data: data,
+        contentType: contentType,
         size: content.size || 0,
       };
     } else if (content.url) {
@@ -726,12 +738,26 @@ export class DischargeExportService {
       const binaryId = content.url.split('/').pop();
       if (binaryId) {
         this.logger.log(`   📥 Fetching Binary resource: ${binaryId}`);
-        const binary = await this.cernerService.fetchBinaryDocument(binaryId, ctx, 'application/pdf');
+        // Use the content type from the attachment, or default to application/octet-stream
+        const acceptType = content.contentType || 'application/octet-stream';
+        const binary = await this.cernerService.fetchBinaryDocument(binaryId, ctx, acceptType);
         if (binary && binary.data) {
-          this.logger.log(`   ✅ Binary downloaded successfully (${binary.size || 0} bytes, ${binary.contentType || 'application/pdf'})`);
+          const binaryContentType = binary.contentType || acceptType;
+          let data = binary.data;
+          
+          // If content type is text/plain, we need to encode it to base64
+          if (binaryContentType === 'text/plain' || binaryContentType.startsWith('text/')) {
+            this.logger.log(`   📝 Found plain text data from Binary resource, encoding to base64 (${binary.size || 0} bytes, ${binaryContentType})`);
+            data = Buffer.from(binary.data, 'utf8').toString('base64');
+          } else {
+            this.logger.log(`   ✅ Binary downloaded successfully (${binary.size || 0} bytes, ${binaryContentType})`);
+          }
+          
+          this.logger.log(`   🔍 Debug - Binary data type: ${typeof data}, Length: ${data.length}, Is base64: ${/^[A-Za-z0-9+/]*={0,2}$/.test(data)}`);
+          
           return {
-            data: binary.data,
-            contentType: binary.contentType || 'application/pdf',
+            data: data,
+            contentType: binaryContentType,
             size: binary.size || 0,
           };
         } else if (binary && binary.error) {
@@ -762,7 +788,7 @@ export class DischargeExportService {
       originalEncounterId: cernerDoc.encounterId,
       originalDate: cernerDoc.date,
       originalAuthors: cernerDoc.authors,
-      pdfData: pdfData.data,
+      binaryData: pdfData.data,
       contentType: pdfData.contentType,
       size: pdfData.size,
       exportTimestamp: new Date().toISOString(),
@@ -772,7 +798,7 @@ export class DischargeExportService {
     this.logger.log(`      • Original Cerner ID: ${cernerDoc.id}`);
     this.logger.log(`      • Patient ID: ${cernerDoc.patientId}`);
     this.logger.log(`      • Encounter ID: ${cernerDoc.encounterId || 'N/A'}`);
-    this.logger.log(`      • PDF Size: ${pdfData.size} bytes`);
+    this.logger.log(`      • Binary Size: ${pdfData.size} bytes`);
     this.logger.log(`      • Content Type: ${pdfData.contentType}`);
     this.logger.log(`      • Authors: ${cernerDoc.authors?.length || 0} found`);
 
@@ -780,21 +806,72 @@ export class DischargeExportService {
   }
 
   /**
-   * Step 4: Store PDF in Google FHIR Binary
+   * Step 4: Store Binary data in Google FHIR Binary
    */
-  private async storeInGoogleBinary(transformedData: any, ctx: TenantContext): Promise<any | null> {
-    this.logger.log(`💾 Storing PDF in Google FHIR Binary (${transformedData.size} bytes, ${transformedData.contentType})`);
+  private async storeInGoogleBinary(transformedData: any, cernerDoc: any, ctx: TenantContext): Promise<any | null> {
+    this.logger.log(`💾 Storing Binary data in Google FHIR Binary (${transformedData.size} bytes, ${transformedData.contentType})`);
 
+    this.logger.log(`🔍 Debug - Cerner document type: 	${JSON.stringify(cernerDoc.type)}`);
+    
+    // Determine tag based on DocumentReference type
+    let tagCode = 'discharge-summary';
+    let tagDisplay = 'Discharge Summary';
+    
+    if (cernerDoc.type) {
+      // First check type.text for "Discharge Instructions"
+      // if (cernerDoc.type.text && cernerDoc.type.text.toLowerCase().includes('discharge instructions')) {
+      //   tagCode = 'discharge-instructions';
+      //   tagDisplay = 'Discharge Instructions';
+      //   this.logger.log(`   🏷️ Document type: Discharge Instructions (from type.text)`);
+      // }
+      // Then check type.coding array for specific LOINC codes
+      if (cernerDoc.type.coding && Array.isArray(cernerDoc.type.coding)) {
+        // Check all coding entries for LOINC codes
+        let foundType = false;
+        for (const coding of cernerDoc.type.coding) {
+          if (coding.system === 'http://loinc.org') {
+            if (coding.code === '18842-5') {
+              tagCode = 'discharge-summary';
+              tagDisplay = 'Discharge Summary';
+              this.logger.log(`   🏷️ Document type: Discharge Summary (18842-5)`);
+              foundType = true;
+              break;
+            } else if (coding.code === '74213-0') {
+              tagCode = 'discharge-instructions';
+              tagDisplay = 'Discharge Instructions';
+              this.logger.log(`   🏷️ Document type: Discharge Instructions (74213-0)`);
+              foundType = true;
+              break;
+            } else if (coding.code === '8653-8') {
+              tagCode = 'discharge-instructions';
+              tagDisplay = 'Discharge Instructions';
+              this.logger.log(`   🏷️ Document type: Discharge Instructions (8653-8)`);
+              foundType = true;
+              break;
+            }
+          }
+        }
+        
+        if (!foundType) {
+          this.logger.log(`   🏷️ Document type: No matching LOINC code found in ${cernerDoc.type.coding.length} coding entries, using default tag`);
+        }
+      } else {
+        this.logger.log(`   🏷️ No document type coding found, using default tag`);
+      }
+    } else {
+      this.logger.log(`   🏷️ No document type found, using default tag`);
+    }
+    
     const binaryResource = {
       resourceType: 'Binary',
       contentType: transformedData.contentType,
-      data: transformedData.pdfData,
+      data: transformedData.binaryData,
       meta: {
         tag: [
           {
             system: 'http://aivida.com/fhir/tags',
-            code: 'discharge-summary',
-            display: 'Discharge Summary',
+            code: tagCode,
+            display: tagDisplay,
           },
           {
             system: 'http://aivida.com/fhir/tags',
@@ -827,11 +904,14 @@ export class DischargeExportService {
     encounterId?: string,
   ): Promise<any | null> {
     this.logger.log(`📄 Creating DocumentReference in Google FHIR for patient ${googlePatientId}`);
-
+    
+    // Debug logging for Cerner document type
+    this.logger.log(`🔍 Cerner document type: ${cernerDoc}`);
+    
     const documentReference = {
       resourceType: 'DocumentReference',
       status: 'current',
-      type: {
+      type: cernerDoc.type || {
         coding: [
           {
             system: 'http://loinc.org',

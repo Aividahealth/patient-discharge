@@ -167,7 +167,7 @@ export class CernerController {
   @Get('binary/:binaryId')
   async fetchBinaryDocument(
     @Param('binaryId') binaryId: string,
-    @Query('accept') acceptType: string = 'application/pdf',
+    @Query('accept') acceptType: string = 'application/octet-stream',
     @TenantContext() ctx: TenantContextType
   ) {
     try {
@@ -195,6 +195,33 @@ export class CernerController {
         throw new HttpException('Invalid DocumentReference format', HttpStatus.BAD_REQUEST);
       }
       return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(error.message || 'Internal server error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  /**
+   * Create DocumentReference in Cerner with base64 content
+   */
+  @Post('document-reference')
+  async createDocumentReference(@Body() body: any, @TenantContext() ctx: TenantContextType) {
+    try {
+      const result = await this.cernerService.createResource('DocumentReference', body, ctx);
+      if (result === null) {
+        throw new HttpException('Failed to create DocumentReference', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+      if (result.resourceType === 'OperationOutcome') {
+        throw new HttpException(result, HttpStatus.BAD_REQUEST);
+      }
+      return {
+        success: true,
+        result,
+        timestamp: new Date().toISOString(),
+        tenantId: ctx.tenantId,
+      };
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;

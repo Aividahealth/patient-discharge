@@ -151,7 +151,7 @@ export class DischargeSummariesExportService {
       
       const query = {
         // patient: patientId,
-        '_id': 97958647,
+        '_id': 97996600,
         // status: 'finished',
         // _lastUpdated: `gt${sixtyMinutesAgo}`,
         // _count: 5,
@@ -632,11 +632,11 @@ export class DischargeSummariesExportService {
       // Create conditional create bundle for remaining resources (encounter already created)
       const conditionalBundle = this.createConditionalCreateBundle(bundle);
       
-      this.logger.log(`📦 Creating conditional create bundle with ${JSON.stringify(conditionalBundle, null, 2)} entries`);
+      this.logger.log(`📦 Creating conditional create bundle with ${conditionalBundle.entry?.length || 0} entries`);
       
       // Execute the bundle
       const bundleResponse = await this.googleService.fhirBundle(conditionalBundle, ctx);
-      this.logger.log(`🔍 Debug - bundleResponse: ${JSON.stringify(bundleResponse, null, 2)}`);
+      this.logger.log(`🔍 Debug - bundleResponse: ${bundleResponse?.entry?.length || 0} entries processed`);
       if (bundleResponse && bundleResponse.entry) {
         // Process bundle response to extract created resource IDs
         for (const entry of bundleResponse.entry) {
@@ -697,9 +697,9 @@ export class DischargeSummariesExportService {
         resource: encounter,
       }],
     };
-    console.log('bundle', JSON.stringify(bundle, null, 2));
+    console.log('bundle', `${bundle.entry?.length || 0} entries`);
     const response = await this.googleService.fhirBundle(bundle, ctx);
-    console.log('response', JSON.stringify(response, null, 2));
+    console.log('response', response.status);
     
     if (response?.entry?.[0]?.response?.status?.startsWith('201')) {
       // Extract ID from location URL
@@ -832,7 +832,7 @@ export class DischargeSummariesExportService {
     ctx: TenantContext
   ): Promise<any | null> {
     try {
-      this.logger.log(`📋 Processing composition for encounter ${cernerEncounterId} with resources: ${JSON.stringify(resourceIds, null, 2)}`);
+      this.logger.log(`📋 Processing composition for encounter ${cernerEncounterId} with ${Object.keys(resourceIds).length} resource types`);
       
       // Check if Composition already exists for this encounter
       const existingComposition = await this.findCompositionByEncounter(cernerEncounterId, ctx);
@@ -926,7 +926,7 @@ export class DischargeSummariesExportService {
         section: this.createCompositionSections(resourceIds),
       };
 
-      this.logger.log(`📋 Creating new composition payload: ${JSON.stringify(composition, null, 2)}`);
+      this.logger.log(`📋 Creating new composition with ${composition.section?.length || 0} sections`);
       const result = await this.googleService.fhirCreate('Composition', composition, ctx);
       this.logger.log(`✅ Created new composition for encounter ${cernerEncounterId}: ${result.id}`);
       return result;
@@ -950,7 +950,7 @@ export class DischargeSummariesExportService {
         date: new Date().toISOString(), // Update timestamp
       };
 
-      this.logger.log(`📋 Updating composition payload: ${JSON.stringify(updatedComposition, null, 2)}`);
+      this.logger.log(`📋 Updating composition with ${updatedComposition.section?.length || 0} sections`);
       const result = await this.googleService.fhirUpdate('Composition', existingComposition.id, updatedComposition, ctx);
       this.logger.log(`✅ Updated composition ${existingComposition.id} with new resources`);
       return result;
@@ -1154,8 +1154,6 @@ export class DischargeSummariesExportService {
         },
       };
 
-      this.logger.log(`📡 Publishing encounter export event payload: ${JSON.stringify(eventPayload, null, 2)}`);
-      
       await this.pubSubService.publishEncounterExportEvent(eventPayload as EncounterExportEvent);
       
       this.logger.log(`✅ Successfully published encounter export event for encounter ${result.cernerEncounterId}`);

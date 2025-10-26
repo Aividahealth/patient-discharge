@@ -73,7 +73,7 @@ export class GoogleService {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        requestData: JSON.stringify(body)
+        // requestData: JSON.stringify(body)
       });
       throw error;
     }

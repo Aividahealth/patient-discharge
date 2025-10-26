@@ -390,7 +390,7 @@ export class CernerService implements OnModuleInit {
   /**
    * Fetch Binary document content
    */
-  async fetchBinaryDocument(binaryId: string, ctx: TenantContext, acceptType: string = 'application/pdf'): Promise<any | null> {
+  async fetchBinaryDocument(binaryId: string, ctx: TenantContext, acceptType: string = 'application/octet-stream'): Promise<any | null> {
     const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
     
@@ -443,7 +443,6 @@ export class CernerService implements OnModuleInit {
    * Parse DocumentReference and extract key fields
    */
   parseDocumentReference(docRef: any): any {
-    console.log('docRef', docRef);
     if (!docRef || docRef.resourceType !== 'DocumentReference') {
       return null;
     }
@@ -451,6 +450,7 @@ export class CernerService implements OnModuleInit {
     const parsed = {
       id: docRef.id,
       status: docRef.status,
+      type: docRef.type,
       // type: docRef.type?.coding?.find((c: any) => c.system === 'http://loinc.org' && c.code === '18842-5'),
       patientId: docRef.subject?.reference?.replace('Patient/', ''),
       // encounterId: docRef.context?.encounter?.[0]?.reference?.replace('Encounter/', ''),
