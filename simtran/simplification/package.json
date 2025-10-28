@@ -6,12 +6,16 @@
   "scripts": {
     "build": "tsc",
     "dev": "npm run build && functions-framework --target=processDischargeSummary --signature-type=cloudevent",
+    "dev:pubsub": "npm run build && functions-framework --target=processDischargeExportEvent --signature-type=cloudevent",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"**/*.ts\"",
-    "deploy": "./deploy.sh"
+    "deploy": "./deploy.sh",
+    "deploy:gcs": "./deploy.sh gcs",
+    "deploy:pubsub": "./deploy.sh pubsub",
+    "deploy:all": "./deploy.sh all"
   },
   "keywords": [
     "cloud-function",
@@ -28,8 +32,10 @@
   "dependencies": {
     "@google-cloud/firestore": "^7.1.0",
     "@google-cloud/functions-framework": "^3.3.0",
+    "@google-cloud/pubsub": "^4.1.0",
     "@google-cloud/storage": "^7.7.0",
     "@google-cloud/vertexai": "^1.4.0",
+    "axios": "^1.6.2",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {

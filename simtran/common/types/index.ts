@@ -126,3 +126,52 @@ export class TranslationError extends Error {
     this.name = 'TranslationError';
   }
 }
+
+/**
+ * Pub/Sub Message Types
+ */
+export interface DischargeExportEvent {
+  tenantId: string;
+  patientId: string;
+  exportTimestamp: string;
+  status: string;
+  cernerEncounterId: string;
+  googleEncounterId: string;
+  googleCompositionId: string;
+}
+
+/**
+ * FHIR API Response Types
+ */
+export interface BinaryTag {
+  code: string;
+  display: string;
+  system: string;
+}
+
+export interface Binary {
+  id: string;
+  contentType: string;
+  size: number;
+  text: string;
+  category: string;
+  tags: BinaryTag[];
+}
+
+export interface FHIRBinariesResponse {
+  success: boolean;
+  compositionId: string;
+  dischargeSummaries: Binary[];
+  dischargeInstructions: Binary[];
+  totalBinaries: number;
+  processedBinaries: number;
+  timestamp: string;
+  tenantId: string;
+}
+
+export class FHIRAPIError extends Error {
+  constructor(message: string, public readonly retryable: boolean = false) {
+    super(message);
+    this.name = 'FHIRAPIError';
+  }
+}

@@ -218,5 +218,8 @@ async function processFile(bucketName: string, fileName: string): Promise<Simpli
   }
 }
 
+// Export Pub/Sub handler
+export { processDischargeExportEvent } from './pubsub-handler';
+
 // Export for local testing
 export { gcsService, simplificationService };

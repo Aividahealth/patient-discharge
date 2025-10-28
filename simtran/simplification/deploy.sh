@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Deployment script for discharge-summary-simplifier Cloud Function
-# This script builds and deploys the Cloud Function to Google Cloud
+# Deployment script for discharge-summary-simplifier Cloud Functions
+# This script builds and deploys the Cloud Functions to Google Cloud
+# Usage: ./deploy.sh [gcs|pubsub|all]
+#   gcs    - Deploy only GCS-triggered function
+#   pubsub - Deploy only Pub/Sub-triggered function
+#   all    - Deploy both functions (default)
 
 set -e  # Exit on error
 
@@ -11,20 +15,31 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Configuration
-FUNCTION_NAME="discharge-summary-simplifier"
+# Deployment mode (default: all)
+DEPLOY_MODE="${1:-all}"
+
+# Configuration for GCS-triggered function
+GCS_FUNCTION_NAME="discharge-summary-simplifier"
+GCS_ENTRY_POINT="processDischargeSummary"
+GCS_TRIGGER_BUCKET="discharge-summaries-raw"
+
+# Configuration for Pub/Sub-triggered function
+PUBSUB_FUNCTION_NAME="discharge-export-processor"
+PUBSUB_ENTRY_POINT="processDischargeExportEvent"
+
+# Common configuration
 RUNTIME="nodejs20"
 REGION="us-central1"
-ENTRY_POINT="processDischargeSummary"
-TRIGGER_BUCKET="discharge-summaries-raw"
 MEMORY="512MB"
 TIMEOUT="540s"
 GEN2_FLAG="--gen2"
 
 echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}Discharge Summary Simplifier${NC}"
-echo -e "${GREEN}Cloud Function Deployment${NC}"
+echo -e "${GREEN}Cloud Functions Deployment${NC}"
 echo -e "${GREEN}================================${NC}"
+echo ""
+echo -e "${GREEN}Deployment Mode: ${DEPLOY_MODE}${NC}"
 echo ""
 
 # Check if PROJECT_ID is set
@@ -46,15 +61,33 @@ if [ -z "$MODEL_NAME" ]; then
     echo -e "${YELLOW}MODEL_NAME not set, using default: ${MODEL_NAME}${NC}"
 fi
 
+# Check if PUBSUB_TOPIC is set (optional, default to discharge-export-events)
+if [ -z "$PUBSUB_TOPIC" ]; then
+    PUBSUB_TOPIC="discharge-export-events"
+    echo -e "${YELLOW}PUBSUB_TOPIC not set, using default: ${PUBSUB_TOPIC}${NC}"
+else
+    echo -e "${GREEN}Using Pub/Sub topic: ${PUBSUB_TOPIC}${NC}"
+fi
+
 echo -e "${GREEN}Configuration:${NC}"
 echo "  Project ID: $PROJECT_ID"
-echo "  Function Name: $FUNCTION_NAME"
 echo "  Region: $REGION"
 echo "  Runtime: $RUNTIME"
-echo "  Trigger Bucket: $TRIGGER_BUCKET"
 echo "  Memory: $MEMORY"
 echo "  Timeout: $TIMEOUT"
 echo "  Model: $MODEL_NAME"
+if [ "$DEPLOY_MODE" == "gcs" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    echo ""
+    echo "  GCS Function:"
+    echo "    Name: $GCS_FUNCTION_NAME"
+    echo "    Trigger Bucket: $GCS_TRIGGER_BUCKET"
+fi
+if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    echo ""
+    echo "  Pub/Sub Function:"
+    echo "    Name: $PUBSUB_FUNCTION_NAME"
+    echo "    Trigger Topic: $PUBSUB_TOPIC"
+fi
 echo ""
 
 # Verify gcloud is installed
@@ -76,10 +109,76 @@ fi
 echo -e "${GREEN}Step 1: Building TypeScript...${NC}"
 # Build common components first
 cd ../common && npm install && npm run build
-cd ../simplification && npm install && npm run build
+# Copy common into simplification for Cloud Build
+cd ../simplification
+echo "Copying common modules for deployment..."
+cp -r ../common ./common
+
+# Backup original files
+echo "Backing up source files..."
+for file in *.ts; do
+  if [ -f "$file" ]; then
+    cp "$file" "$file.backup"
+  fi
+done
+
+# Update imports to use ./common instead of ../common
+echo "Updating import statements..."
+for file in *.ts; do
+  if [ -f "$file" ]; then
+    sed -i.tmp "s|from '../common/|from './common/|g" "$file"
+    rm -f "$file.tmp"
+  fi
+done
+
+# Also backup and update tsconfig
+cp tsconfig.json tsconfig.json.backup
+cat > tsconfig.json <<'TSCONFIG_EOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "outDir": "./lib",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "baseUrl": "./",
+    "paths": {
+      "@common/*": ["./common/*"]
+    }
+  },
+  "include": [
+    "./**/*.ts",
+    "./common/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib",
+    "**/*.test.ts"
+  ]
+}
+TSCONFIG_EOF
+
+npm install && npm run build
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Error: TypeScript build failed${NC}"
+    # Restore backups
+    for file in *.ts.backup; do
+      if [ -f "$file" ]; then
+        mv "$file" "${file%.backup}"
+      fi
+    done
+    rm -rf ./common
+    mv tsconfig.json.backup tsconfig.json
     exit 1
 fi
 
@@ -89,10 +188,10 @@ echo ""
 # Check if buckets exist
 echo -e "${GREEN}Step 2: Verifying GCS buckets...${NC}"
 
-if ! gsutil ls -b "gs://${TRIGGER_BUCKET}" &> /dev/null; then
-    echo -e "${YELLOW}Warning: Input bucket gs://${TRIGGER_BUCKET} does not exist${NC}"
+if ! gsutil ls -b "gs://${GCS_TRIGGER_BUCKET}" &> /dev/null; then
+    echo -e "${YELLOW}Warning: Input bucket gs://${GCS_TRIGGER_BUCKET} does not exist${NC}"
     echo "Creating bucket..."
-    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${TRIGGER_BUCKET}"
+    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${GCS_TRIGGER_BUCKET}"
 fi
 
 OUTPUT_BUCKET="discharge-summaries-simplified"
@@ -105,6 +204,21 @@ fi
 echo -e "${GREEN}✓ Buckets verified${NC}"
 echo ""
 
+# Check/create Pub/Sub topic if needed
+if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    echo -e "${GREEN}Step 2b: Verifying Pub/Sub topic...${NC}"
+
+    FULL_TOPIC_NAME="projects/${PROJECT_ID}/topics/${PUBSUB_TOPIC}"
+    if ! gcloud pubsub topics describe "$PUBSUB_TOPIC" --project="$PROJECT_ID" &> /dev/null; then
+        echo -e "${YELLOW}Warning: Pub/Sub topic ${PUBSUB_TOPIC} does not exist${NC}"
+        echo "Creating topic..."
+        gcloud pubsub topics create "$PUBSUB_TOPIC" --project="$PROJECT_ID"
+    fi
+
+    echo -e "${GREEN}✓ Pub/Sub topic verified${NC}"
+    echo ""
+fi
+
 # Enable required APIs
 echo -e "${GREEN}Step 3: Enabling required Google Cloud APIs...${NC}"
 gcloud services enable cloudfunctions.googleapis.com --project="$PROJECT_ID"
@@ -113,11 +227,15 @@ gcloud services enable artifactregistry.googleapis.com --project="$PROJECT_ID"
 gcloud services enable aiplatform.googleapis.com --project="$PROJECT_ID"
 gcloud services enable storage.googleapis.com --project="$PROJECT_ID"
 
+if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    gcloud services enable pubsub.googleapis.com --project="$PROJECT_ID"
+fi
+
 echo -e "${GREEN}✓ APIs enabled${NC}"
 echo ""
 
-# Deploy Cloud Function
-echo -e "${GREEN}Step 4: Deploying Cloud Function...${NC}"
+# Deploy Cloud Functions
+echo -e "${GREEN}Step 4: Deploying Cloud Functions...${NC}"
 echo "This may take a few minutes..."
 echo ""
 
@@ -165,21 +283,66 @@ examples/
 translation/
 EOF
 
-# Deploy from parent directory to include common folder
-cd ..
-gcloud functions deploy "$FUNCTION_NAME" \
-    $GEN2_FLAG \
-    --runtime="$RUNTIME" \
-    --region="$REGION" \
-    --source=. \
-    --entry-point="$ENTRY_POINT" \
-    --trigger-bucket="$TRIGGER_BUCKET" \
-    --memory="$MEMORY" \
-    --timeout="$TIMEOUT" \
-    --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},INPUT_BUCKET=discharge-summaries-raw,OUTPUT_BUCKET=discharge-summaries-simplified" \
-    --project="$PROJECT_ID"
+# Get FHIR API base URL from environment or use default
+FHIR_API_BASE_URL="${FHIR_API_BASE_URL:-http://localhost:3000}"
 
-if [ $? -ne 0 ]; then
+DEPLOY_STATUS=0
+
+# Deploy GCS-triggered function
+if [ "$DEPLOY_MODE" == "gcs" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    echo -e "${GREEN}Deploying GCS-triggered function: $GCS_FUNCTION_NAME${NC}"
+    gcloud functions deploy "$GCS_FUNCTION_NAME" \
+        $GEN2_FLAG \
+        --runtime="$RUNTIME" \
+        --region="$REGION" \
+        --source=. \
+        --entry-point="$GCS_ENTRY_POINT" \
+        --trigger-bucket="$GCS_TRIGGER_BUCKET" \
+        --memory="$MEMORY" \
+        --timeout="$TIMEOUT" \
+        --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},INPUT_BUCKET=discharge-summaries-raw,OUTPUT_BUCKET=discharge-summaries-simplified" \
+        --project="$PROJECT_ID"
+
+    GCS_DEPLOY_STATUS=$?
+    if [ $GCS_DEPLOY_STATUS -ne 0 ]; then
+        DEPLOY_STATUS=$GCS_DEPLOY_STATUS
+    fi
+    echo ""
+fi
+
+# Deploy Pub/Sub-triggered function
+if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    echo -e "${GREEN}Deploying Pub/Sub-triggered function: $PUBSUB_FUNCTION_NAME${NC}"
+    gcloud functions deploy "$PUBSUB_FUNCTION_NAME" \
+        $GEN2_FLAG \
+        --runtime="$RUNTIME" \
+        --region="$REGION" \
+        --source=. \
+        --entry-point="$PUBSUB_ENTRY_POINT" \
+        --trigger-topic="$PUBSUB_TOPIC" \
+        --memory="$MEMORY" \
+        --timeout="$TIMEOUT" \
+        --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},INPUT_BUCKET=discharge-summaries-raw,OUTPUT_BUCKET=discharge-summaries-simplified,FHIR_API_BASE_URL=${FHIR_API_BASE_URL}" \
+        --project="$PROJECT_ID"
+
+    PUBSUB_DEPLOY_STATUS=$?
+    if [ $PUBSUB_DEPLOY_STATUS -ne 0 ]; then
+        DEPLOY_STATUS=$PUBSUB_DEPLOY_STATUS
+    fi
+    echo ""
+fi
+
+# Clean up and restore original files
+echo "Cleaning up deployment files..."
+rm -rf ./common
+mv tsconfig.json.backup tsconfig.json
+for file in *.ts.backup; do
+  if [ -f "$file" ]; then
+    mv "$file" "${file%.backup}"
+  fi
+done
+
+if [ $DEPLOY_STATUS -ne 0 ]; then
     echo -e "${RED}Error: Deployment failed${NC}"
     exit 1
 fi
@@ -189,15 +352,34 @@ echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}Deployment Successful! 🎉${NC}"
 echo -e "${GREEN}================================${NC}"
 echo ""
-echo -e "${GREEN}Function Details:${NC}"
-echo "  Name: $FUNCTION_NAME"
-echo "  Region: $REGION"
-echo "  Trigger: gs://${TRIGGER_BUCKET}"
-echo "  Output: gs://${OUTPUT_BUCKET}"
-echo ""
-echo -e "${GREEN}To test the function:${NC}"
-echo "  gsutil cp your-discharge-summary.md gs://${TRIGGER_BUCKET}/"
-echo ""
-echo -e "${GREEN}To view logs:${NC}"
-echo "  gcloud functions logs read $FUNCTION_NAME --region=$REGION --project=$PROJECT_ID"
-echo ""
+
+# Display deployed function details
+if [ "$DEPLOY_MODE" == "gcs" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    echo -e "${GREEN}GCS-Triggered Function:${NC}"
+    echo "  Name: $GCS_FUNCTION_NAME"
+    echo "  Region: $REGION"
+    echo "  Trigger: gs://${GCS_TRIGGER_BUCKET}"
+    echo "  Output: gs://${OUTPUT_BUCKET}"
+    echo ""
+    echo -e "${GREEN}To test:${NC}"
+    echo "  gsutil cp your-discharge-summary.md gs://${GCS_TRIGGER_BUCKET}/"
+    echo ""
+    echo -e "${GREEN}To view logs:${NC}"
+    echo "  gcloud functions logs read $GCS_FUNCTION_NAME --region=$REGION --project=$PROJECT_ID"
+    echo ""
+fi
+
+if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
+    echo -e "${GREEN}Pub/Sub-Triggered Function:${NC}"
+    echo "  Name: $PUBSUB_FUNCTION_NAME"
+    echo "  Region: $REGION"
+    echo "  Trigger Topic: projects/${PROJECT_ID}/topics/${PUBSUB_TOPIC}"
+    echo "  Output: gs://${OUTPUT_BUCKET}"
+    echo ""
+    echo -e "${GREEN}To test:${NC}"
+    echo '  gcloud pubsub topics publish '"$PUBSUB_TOPIC"' --message='"'"'{"tenantId":"default","patientId":"","exportTimestamp":"2025-10-27T15:15:45.925Z","status":"success","cernerEncounterId":"97996600","googleEncounterId":"94562854-4223-43a2-af83-747c3794ce12","googleCompositionId":"22036570-3dc8-4f2f-bf03-43b561af09b9"}'"'"' --project='"$PROJECT_ID"
+    echo ""
+    echo -e "${GREEN}To view logs:${NC}"
+    echo "  gcloud functions logs read $PUBSUB_FUNCTION_NAME --region=$REGION --project=$PROJECT_ID"
+    echo ""
+fi
