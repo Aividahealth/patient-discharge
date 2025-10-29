@@ -1,0 +1,49 @@
+# **Discharge Summary**
+
+Patient Name: [Redacted]
+
+MRN: [Redacted]
+
+DOB: [Redacted]
+
+Admit Date: 11/20/2025
+
+Discharge Date: 11/23/2025
+
+Attending Physician: [Redacted], MD
+
+Service: Neurology
+
+---
+
+### **Admitting Diagnosis (ICD-10):**
+
+* Acute Ischemic Stroke (I63.9)
+
+* Atrial Fibrillation (I48.91)
+
+* Hypertension (I10)
+
+---
+
+### **Discharge Diagnosis:**
+
+* Acute ischemic stroke, left middle cerebral artery territory
+
+* Atrial fibrillation, newly diagnosed
+
+* Hypertension, well-controlled
+
+---
+
+### **Hospital Course:**
+
+The patient is a 72-year-old male who presented to the ED with acute onset left-sided weakness and facial droop. NIH Stroke Scale was 8 on arrival. CT head showed no acute hemorrhage. CT angiography revealed occlusion of the left M1 segment of the middle cerebral artery.
+
+Patient was within the 4.5-hour window for thrombolytic therapy. After careful evaluation, tPA was administered without complications. Follow-up imaging showed partial recanalization of the occluded vessel. Patient was monitored in the stroke unit with frequent neurological assessments.
+
+Echocardiogram revealed left atrial enlargement and moderate mitral regurgitation. 24-hour Holter monitor showed paroxysmal atrial fibrillation. Cardiology was consulted and patient was started on anticoagulation with apixaban.
+
+Physical and occupational therapy were initiated early. Patient showed gradual improvement in left-sided strength and coordination. By discharge, patient was able to ambulate with minimal assistance and perform most activities of daily living independently.
+
+---

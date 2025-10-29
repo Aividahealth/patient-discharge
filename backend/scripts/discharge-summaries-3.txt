@@ -1,0 +1,49 @@
+# **Discharge Summary**
+
+Patient Name: [Redacted]
+
+MRN: [Redacted]
+
+DOB: [Redacted]
+
+Admit Date: 11/02/2025
+
+Discharge Date: 11/05/2025
+
+Attending Physician: [Redacted], MD
+
+Service: Orthopedics
+
+---
+
+### **Admitting Diagnosis (ICD-10):**
+
+* Fracture of right femur (S72.001A)
+
+* Osteoporosis (M81.0)
+
+* Fall from standing height (W01.0)
+
+---
+
+### **Discharge Diagnosis:**
+
+* Right intertrochanteric hip fracture, status post ORIF
+
+* Osteoporosis, severe
+
+* Fall from standing height
+
+---
+
+### **Hospital Course:**
+
+The patient is a 78-year-old female with a history of osteoporosis who presented to the ED after a fall from standing height at home. She complained of severe right hip pain and inability to bear weight. X-rays confirmed an intertrochanteric fracture of the right femur.
+
+Orthopedic surgery was consulted and patient was taken to the operating room on hospital day 1 for open reduction and internal fixation with a sliding hip screw. The procedure was completed without complications. Post-operatively, patient was started on DVT prophylaxis and pain management.
+
+Physical therapy was initiated on post-operative day 1 with focus on mobility and weight-bearing as tolerated. Patient progressed well with physical therapy and was able to ambulate with a walker by discharge. Pain was well-controlled with oral analgesics.
+
+Bone density scan confirmed severe osteoporosis. Endocrinology was consulted for osteoporosis management. Patient was started on bisphosphonate therapy and calcium/vitamin D supplementation. Fall prevention strategies were discussed with patient and family.
+
+---

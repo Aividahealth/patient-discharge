@@ -1,0 +1,49 @@
+# **Discharge Summary**
+
+Patient Name: [Redacted]
+
+MRN: [Redacted]
+
+DOB: [Redacted]
+
+Admit Date: 09/28/2025
+
+Discharge Date: 10/03/2025
+
+Attending Physician: [Redacted], MD
+
+Service: Pediatric Endocrinology
+
+---
+
+### **Admitting Diagnosis (ICD-10):**
+
+* New-Onset Type 1 Diabetes Mellitus (E10.9)
+
+* Mild Diabetic Ketoacidosis (E10.10)
+
+* Dehydration (E86.0)
+
+---
+
+### **Discharge Diagnosis:**
+
+* Type 1 Diabetes Mellitus, new onset, insulin-dependent
+
+* Mild DKA, resolved
+
+* Dehydration, corrected
+
+---
+
+### **Hospital Course:**
+
+The patient is an 11-year-old female with no significant past medical history who presented with 2 weeks of polyuria, polydipsia, weight loss (~4 kg), and new-onset nocturnal enuresis. Two days prior to admission, she developed nausea, vomiting, and abdominal discomfort. On arrival, she was tachycardic (HR 128), mildly tachypneic (RR 28), and had dry mucous membranes.
+
+Initial labs: glucose 412 mg/dL, Na 132, K 4.9, Cl 97, HCO₃ 15, AG 18, VBG pH 7.28, beta-hydroxybutyrate elevated. HbA1c 12.1%. UA: 4+ glucose, 3+ ketones. These findings were consistent with mild DKA.
+
+She was admitted to the PICU for management. Started on IV fluids and insulin infusion at 0.05 units/kg/hr. Hourly glucose monitoring and frequent electrolyte checks were performed. Potassium supplementation initiated once urine output established. No arrhythmias noted. By HD#2, acidosis resolved (pH 7.35, HCO₃ 21, AG closed), and patient was transitioned to subcutaneous insulin regimen (glargine nightly, lispro with meals and correction scale).
+
+Diabetes education was initiated with patient and family, including insulin administration, glucose monitoring, carb counting, and sick-day rules. Social work assisted with insurance coverage for supplies. By HD#4, patient was tolerating diet, demonstrating appropriate insulin injection technique, and BG stabilized between 120–200 mg/dL on basal-bolus regimen.
+
+---

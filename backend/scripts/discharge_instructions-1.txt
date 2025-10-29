@@ -1,0 +1,89 @@
+### **Pertinent Results:**
+
+* Admission glucose: 412 → 160 mg/dL at discharge
+
+* VBG: pH 7.28, HCO₃ 15, AG 18 → normalized (pH 7.35, HCO₃ 21, AG 10\)
+
+* Na 132 → 137, K 4.9 → 4.2, Cr 0.7 → 0.5
+
+* HbA1c: 12.1%
+
+* UA: glucose/ketones resolved
+
+---
+
+### **Condition at Discharge:**
+
+* Vitals: T 98.1°F, HR 94, RR 18, BP 100/62, SpO₂ 99% RA
+
+* Exam: Alert, interactive, no distress, well hydrated, tolerating diet
+
+* Family demonstrated insulin injection and glucose monitoring competency
+
+---
+
+### **Discharge Medications:**
+
+New:
+
+* Insulin glargine 14 units SQ QHS
+
+* Insulin lispro 1 unit per 15 g carbohydrate with meals \+ correction scale (1 unit per 50 mg/dL \>150)
+
+* Glucagon emergency kit
+
+* Supplies: glucose monitor, test strips, ketone strips, lancets
+
+Continued:
+
+* None
+
+Stopped:
+
+* None
+
+---
+
+### **Follow-Up Appointments:**
+
+* Endocrinology clinic in 1 week for insulin titration
+
+* PCP in 3–5 days for post-hospital follow-up
+
+* Diabetes educator in 2 weeks
+
+* Ophthalmology referral in 6–12 months (baseline diabetic eye exam)
+
+---
+
+### **Diet and Lifestyle Instructions:**
+
+* Resume regular age-appropriate diet with carbohydrate counting
+
+* Encourage consistent meal times and snacks
+
+* BG monitoring before meals and at bedtime (minimum 4 times/day)
+
+* Sick-day management reviewed (BG q2–4h, ketones if BG \>250 mg/dL)
+
+* Emphasize hydration, avoid sugary drinks unless treating hypoglycemia
+
+---
+
+### **Patient Instructions (Clinical Style):**
+
+Family counseled extensively on new-onset diabetes care. Emphasized adherence to insulin regimen, recognition of hypo- and hyperglycemia, and importance of daily glucose monitoring. Sick-day rules reinforced. Patient and parents demonstrated competency in insulin injection technique and carb counting. Written materials and emergency contacts provided.
+
+---
+
+### **Return Precautions:**
+
+Return to ED or call provider for:
+
+* Persistent vomiting or inability to tolerate oral fluids
+
+* BG \>300 mg/dL with moderate/large ketones
+
+* Lethargy, confusion, or seizure activity
+
+* Signs of hypoglycemia not resolving with oral glucose (shakiness, confusion, seizure, LOC)

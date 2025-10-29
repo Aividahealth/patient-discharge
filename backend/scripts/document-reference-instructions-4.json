@@ -1,0 +1,80 @@
+{
+  "resourceType": "DocumentReference",
+  "identifier": [
+    {
+      "system": "https://fhir.cerner.com/ceuuid",
+      "value": "CE87caf4b7-9397-4667-707e-218-2sd02ad12asdsd0sdf-4"
+    }
+  ],
+  "status": "current",
+  "docStatus": "final",
+  "type": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "74213-0",
+        "display": "Discharge instructions",
+        "userSelected": false
+      }
+    ],
+    "text": "Discharge Instructions"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category",
+          "code": "clinical-note",
+          "display": "Clinical Note",
+          "userSelected": false
+        }
+      ],
+      "text": "Clinical Note"
+    }
+  ],
+  "subject": {
+    "reference": "Patient/1",
+    "display": "Harry, Potter"
+  },
+  "date": "2025-07-28T12:01:11Z",
+  "author": [
+    {
+      "reference": "Practitioner/1",
+      "display": "SYSTEM, SYSTEM Cerner"
+    }
+  ],
+  "authenticator": {
+    "reference": "Practitioner/1",
+    "display": "SYSTEM, SYSTEM Cerner"
+  },
+  "custodian": {
+    "reference": "Organization/685844",
+    "display": "Model Clinic 1"
+  },
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "title": "Discharge Instructions",
+        "creation": "2025-07-28T12:01:10.000Z",
+        "data": "IyMjICoqUGVydGluZW50IFJlc3VsdHM6KioKCiogTklIIFN0cm9rZSBTY2FsZTogOCDihpIgMiAoc2lnbmlmaWNhbnQgaW1wcm92ZW1lbnQpCgoqIENUOiBObyBhY3V0ZSBoZW1vcnJoYWdlLCBwYXJ0aWFsIHJlY2FuYWxpemF0aW9uIG9mIGxlZnQgTUNBCgoqIEVjaG86IEVGIDYwJSwgbWlsZCBsZWZ0IGF0cmlhbCBlbmxhcmdlbWVudAoKKiBIb2x0ZXI6IFBhcm94eXNtYWwgYXRyaWFsIGZpYnJpbGxhdGlvbgoKLS0tCgojIyMgKipDb25kaXRpb24gYXQgRGlzY2hhcmdlOioqCgoqIFZpdGFsczogVCA5OC4ywrBGLCBIUiA3MiwgUlIgMTYsIEJQIDEzNS84MiwgU3BP4oKCIDk4JSBSQQoKKiBFeGFtOiBBbGVydCwgb3JpZW50ZWQgeDMsIG1pbGQgbGVmdCBmYWNpYWwgZHJvb3AsIGxlZnQgYXJtIHdlYWtuZXNzIDQvNQoKKiBTcGVlY2g6IE1pbGQgZHlzYXJ0aHJpYSwgbm8gYXBoYXNpYQoKKiBHYWl0OiBBbWJ1bGF0b3J5IHdpdGggbWluaW1hbCBhc3Npc3RhbmNlCgotLS0KCiMjIyAqKkRpc2NoYXJnZSBNZWRpY2F0aW9uczoqKgoKTmV3OgoKKiBBcGl4YWJhbiA1bWcgdHdpY2UgZGFpbHkKCiogTWV0b3Byb2xvbCAyNW1nIHR3aWNlIGRhaWx5CgoqIEF0b3J2YXN0YXRpbiA0MG1nIGRhaWx5CgoqIEFzcGlyaW4gODFtZyBkYWlseQoKKiBEb25lcGV6aWwgNW1nIGRhaWx5CgpDb250aW51ZWQ6CgoqIE5vbmUKClN0b3BwZWQ6CgoqIE5vbmUKCi0tLQoKIyMjICoqRm9sbG93LVVwIEFwcG9pbnRtZW50czoqKgoKKiBOZXVyb2xvZ3kgaW4gMSB3ZWVrIGZvciBzdHJva2UgZm9sbG93LXVwCgoqIENhcmRpb2xvZ3kgaW4gMiB3ZWVrcyBmb3IgQUZpYiBtYW5hZ2VtZW50CgoqIFNwZWVjaCB0aGVyYXB5IDJ4L3dlZWsgZm9yIDQgd2Vla3MKCiogUGh5c2ljYWwgdGhlcmFweSAzeC93ZWVrIGZvciA2IHdlZWtzCgoqIFByaW1hcnkgY2FyZSBpbiAxIG1vbnRoCgotLS0KCiMjIyAqKkFjdGl2aXR5IGFuZCBTYWZldHkgSW5zdHJ1Y3Rpb25zOioqCgoqIE5vIGRyaXZpbmcgdW50aWwgY2xlYXJlZCBieSBuZXVyb2xvZ2lzdAoKKiBIb21lIHNhZmV0eSBldmFsdWF0aW9uIHJlY29tbWVuZGVkCgoqIEdyYWR1YWwgaW5jcmVhc2UgaW4gYWN0aXZpdHkgYXMgdG9sZXJhdGVkCgoqIEZhbGwgcHJldmVudGlvbiBzdHJhdGVnaWVzIGRpc2N1c3NlZAoKKiBNZWRpY2F0aW9uIG1hbmFnZW1lbnQgYXNzaXN0YW5jZSByZWNvbW1lbmRlZAoKLS0tCgojIyMgKipQYXRpZW50IEluc3RydWN0aW9ucyAoQ2xpbmljYWwgU3R5bGUpOioqCgpQYXRpZW50IGFuZCBmYW1pbHkgZWR1Y2F0ZWQgb24gc3Ryb2tlIHJlY292ZXJ5LCBtZWRpY2F0aW9uIG1hbmFnZW1lbnQsIGFuZCB3YXJuaW5nIHNpZ25zIG9mIHJlY3VycmVudCBzdHJva2UuIEVtcGhhc2l6ZWQgaW1wb3J0YW5jZSBvZiBhbnRpY29hZ3VsYXRpb24gY29tcGxpYW5jZSBhbmQgcmVndWxhciBmb2xsb3ctdXAuIEhvbWUgc2FmZXR5IG1vZGlmaWNhdGlvbnMgZGlzY3Vzc2VkIGluY2x1ZGluZyByZW1vdmFsIG9mIGZhbGwgaGF6YXJkcyBhbmQgaW5zdGFsbGF0aW9uIG9mIHNhZmV0eSBlcXVpcG1lbnQuCgotLS0KCiMjIyAqKlJldHVybiBQcmVjYXV0aW9uczoqKgoKUmV0dXJuIHRvIEVEIG9yIGNhbGwgcHJvdmlkZXIgZm9yOgoKKiBTdWRkZW4gd2Vha25lc3Mgb3IgbnVtYm5lc3MgKGVzcGVjaWFsbHkgb24gb25lIHNpZGUpCgoqIFN1ZGRlbiBjb25mdXNpb24gb3IgZGlmZmljdWx0eSBzcGVha2luZwoKKiBTdWRkZW4gc2V2ZXJlIGhlYWRhY2hlCgoqIFN1ZGRlbiB2aXNpb24gY2hhbmdlcwoKKiBTaWducyBvZiBibGVlZGluZyAodW51c3VhbCBicnVpc2luZywgYmxvb2QgaW4gc3Rvb2wvdXJpbmUpCgoqIFNpZ25zIG9mIGJsb29kIGNsb3QgKGNhbGYgc3dlbGxpbmcsIHdhcm10aCwgcmVkbmVzcykK"
+      },
+      "format": {
+        "system": "http://ihe.net/fhir/ValueSet/IHE.FormatCode.codesystem",
+        "code": "urn:ihe:iti:xds:2017:mimeTypeSufficient",
+        "display": "mimeType Sufficient"
+      }
+    }
+  ],
+  "context": {
+    "encounter": [
+      {
+        "reference": "Encounter/97958647"
+      }
+    ],
+    "period": {
+      "start": "2025-07-28T12:01:10Z",
+      "end": "2025-07-28T12:01:10Z"
+    }
+  }
+}

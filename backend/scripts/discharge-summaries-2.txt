@@ -1,0 +1,49 @@
+# **Discharge Summary**
+
+Patient Name: [Redacted]
+
+MRN: [Redacted]
+
+DOB: [Redacted]
+
+Admit Date: 10/15/2025
+
+Discharge Date: 10/18/2025
+
+Attending Physician: [Redacted], MD
+
+Service: Cardiology
+
+---
+
+### **Admitting Diagnosis (ICD-10):**
+
+* Acute Myocardial Infarction (I21.9)
+
+* Hypertension (I10)
+
+* Hyperlipidemia (E78.5)
+
+---
+
+### **Discharge Diagnosis:**
+
+* ST-Elevation Myocardial Infarction, treated with PCI
+
+* Hypertension, well-controlled
+
+* Hyperlipidemia, on statin therapy
+
+---
+
+### **Hospital Course:**
+
+The patient is a 58-year-old male with a history of hypertension and hyperlipidemia who presented to the ED with acute onset chest pain radiating to the left arm, associated with diaphoresis and nausea. EKG showed ST-elevation in leads II, III, and aVF consistent with inferior STEMI. Troponin I was elevated at 15.2 ng/mL.
+
+Patient was immediately taken to the cardiac catheterization lab where coronary angiography revealed 100% occlusion of the right coronary artery. Primary PCI was performed with successful placement of a drug-eluting stent. Post-procedure, patient's chest pain resolved and EKG normalized.
+
+Patient was monitored in the CCU for 48 hours with no complications. Echocardiogram showed mild inferior wall hypokinesis with preserved overall left ventricular function (EF 55%). Patient was started on dual antiplatelet therapy, beta-blocker, ACE inhibitor, and high-intensity statin.
+
+Cardiac rehabilitation was discussed and patient was educated on lifestyle modifications including diet, exercise, and medication adherence. Patient demonstrated understanding of warning signs and when to seek immediate medical attention.
+
+---

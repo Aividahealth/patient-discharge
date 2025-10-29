@@ -1,0 +1,80 @@
+{
+  "resourceType": "DocumentReference",
+  "identifier": [
+    {
+      "system": "https://fhir.cerner.com/ceuuid",
+      "value": "CE87caf4b7-9397-4667-707e-218-2sd02ad12asdsd0sdf-summary-2"
+    }
+  ],
+  "status": "current",
+  "docStatus": "final",
+  "type": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "18842-5",
+        "display": "Discharge summary",
+        "userSelected": false
+      }
+    ],
+    "text": "Discharge Summary"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category",
+          "code": "clinical-note",
+          "display": "Clinical Note",
+          "userSelected": false
+        }
+      ],
+      "text": "Clinical Note"
+    }
+  ],
+  "subject": {
+    "reference": "Patient/1",
+    "display": "Harry, Potter"
+  },
+  "date": "2025-07-28T12:01:11Z",
+  "author": [
+    {
+      "reference": "Practitioner/1",
+      "display": "SYSTEM, SYSTEM Cerner"
+    }
+  ],
+  "authenticator": {
+    "reference": "Practitioner/1",
+    "display": "SYSTEM, SYSTEM Cerner"
+  },
+  "custodian": {
+    "reference": "Organization/685844",
+    "display": "Model Clinic 1"
+  },
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "title": "Discharge Summary",
+        "creation": "2025-07-28T12:01:10.000Z",
+        "data": "IyAqKkRpc2NoYXJnZSBTdW1tYXJ5KioKClBhdGllbnQgTmFtZTogW1JlZGFjdGVkXQoKTVJOOiBbUmVkYWN0ZWRdCgpET0I6IFtSZWRhY3RlZF0KCkFkbWl0IERhdGU6IDEwLzE1LzIwMjUKCkRpc2NoYXJnZSBEYXRlOiAxMC8xOC8yMDI1CgpBdHRlbmRpbmcgUGh5c2ljaWFuOiBbUmVkYWN0ZWRdLCBNRAoKU2VydmljZTogQ2FyZGlvbG9neQoKLS0tCgojIyMgKipBZG1pdHRpbmcgRGlhZ25vc2lzIChJQ0QtMTApOioqCgoqIEFjdXRlIE15b2NhcmRpYWwgSW5mYXJjdGlvbiAoSTIxLjkpCgoqIEh5cGVydGVuc2lvbiAoSTEwKQoKKiBIeXBlcmxpcGlkZW1pYSAoRTc4LjUpCgotLS0KCiMjIyAqKkRpc2NoYXJnZSBEaWFnbm9zaXM6KioKCiogU1QtRWxldmF0aW9uIE15b2NhcmRpYWwgSW5mYXJjdGlvbiwgdHJlYXRlZCB3aXRoIFBDSQoKKiBIeXBlcnRlbnNpb24sIHdlbGwtY29udHJvbGxlZAoKKiBIeXBlcmxpcGlkZW1pYSwgb24gc3RhdGluIHRoZXJhcHkKCi0tLQoKIyMjICoqSG9zcGl0YWwgQ291cnNlOioqCgpUaGUgcGF0aWVudCBpcyBhIDU4LXllYXItb2xkIG1hbGUgd2l0aCBhIGhpc3Rvcnkgb2YgaHlwZXJ0ZW5zaW9uIGFuZCBoeXBlcmxpcGlkZW1pYSB3aG8gcHJlc2VudGVkIHRvIHRoZSBFRCB3aXRoIGFjdXRlIG9uc2V0IGNoZXN0IHBhaW4gcmFkaWF0aW5nIHRvIHRoZSBsZWZ0IGFybSwgYXNzb2NpYXRlZCB3aXRoIGRpYXBob3Jlc2lzIGFuZCBuYXVzZWEuIEVLRyBzaG93ZWQgU1QtZWxldmF0aW9uIGluIGxlYWRzIElJLCBJSUksIGFuZCBhVkYgY29uc2lzdGVudCB3aXRoIGluZmVyaW9yIFNURU1JLiBUcm9wb25pbiBJIHdhcyBlbGV2YXRlZCBhdCAxNS4yIG5nL21MLgoKUGF0aWVudCB3YXMgaW1tZWRpYXRlbHkgdGFrZW4gdG8gdGhlIGNhcmRpYWMgY2F0aGV0ZXJpemF0aW9uIGxhYiB3aGVyZSBjb3JvbmFyeSBhbmdpb2dyYXBoeSByZXZlYWxlZCAxMDAlIG9jY2x1c2lvbiBvZiB0aGUgcmlnaHQgY29yb25hcnkgYXJ0ZXJ5LiBQcmltYXJ5IFBDSSB3YXMgcGVyZm9ybWVkIHdpdGggc3VjY2Vzc2Z1bCBwbGFjZW1lbnQgb2YgYSBkcnVnLWVsdXRpbmcgc3RlbnQuIFBvc3QtcHJvY2VkdXJlLCBwYXRpZW50J3MgY2hlc3QgcGFpbiByZXNvbHZlZCBhbmQgRUtHIG5vcm1hbGl6ZWQuCgpQYXRpZW50IHdhcyBtb25pdG9yZWQgaW4gdGhlIENDVSBmb3IgNDggaG91cnMgd2l0aCBubyBjb21wbGljYXRpb25zLiBFY2hvY2FyZGlvZ3JhbSBzaG93ZWQgbWlsZCBpbmZlcmlvciB3YWxsIGh5cG9raW5lc2lzIHdpdGggcHJlc2VydmVkIG92ZXJhbGwgbGVmdCB2ZW50cmljdWxhciBmdW5jdGlvbiAoRUYgNTUlKS4gUGF0aWVudCB3YXMgc3RhcnRlZCBvbiBkdWFsIGFudGlwbGF0ZWxldCB0aGVyYXB5LCBiZXRhLWJsb2NrZXIsIEFDRSBpbmhpYml0b3IsIGFuZCBoaWdoLWludGVuc2l0eSBzdGF0aW4uCgpDYXJkaWFjIHJlaGFiaWxpdGF0aW9uIHdhcyBkaXNjdXNzZWQgYW5kIHBhdGllbnQgd2FzIGVkdWNhdGVkIG9uIGxpZmVzdHlsZSBtb2RpZmljYXRpb25zIGluY2x1ZGluZyBkaWV0LCBleGVyY2lzZSwgYW5kIG1lZGljYXRpb24gYWRoZXJlbmNlLiBQYXRpZW50IGRlbW9uc3RyYXRlZCB1bmRlcnN0YW5kaW5nIG9mIHdhcm5pbmcgc2lnbnMgYW5kIHdoZW4gdG8gc2VlayBpbW1lZGlhdGUgbWVkaWNhbCBhdHRlbnRpb24uCgotLS0K"
+      },
+      "format": {
+        "system": "http://ihe.net/fhir/ValueSet/IHE.FormatCode.codesystem",
+        "code": "urn:ihe:iti:xds:2017:mimeTypeSufficient",
+        "display": "mimeType Sufficient"
+      }
+    }
+  ],
+  "context": {
+    "encounter": [
+      {
+        "reference": "Encounter/97958647"
+      }
+    ],
+    "period": {
+      "start": "2025-07-28T12:01:10Z",
+      "end": "2025-07-28T12:01:10Z"
+    }
+  }
+}

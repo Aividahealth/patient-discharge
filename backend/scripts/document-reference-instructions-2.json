@@ -1,0 +1,80 @@
+{
+  "resourceType": "DocumentReference",
+  "identifier": [
+    {
+      "system": "https://fhir.cerner.com/ceuuid",
+      "value": "CE87caf4b7-9397-4667-707e-218-2sd02ad12asdsd0sdf-2"
+    }
+  ],
+  "status": "current",
+  "docStatus": "final",
+  "type": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "74213-0",
+        "display": "Discharge instructions",
+        "userSelected": false
+      }
+    ],
+    "text": "Discharge Instructions"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category",
+          "code": "clinical-note",
+          "display": "Clinical Note",
+          "userSelected": false
+        }
+      ],
+      "text": "Clinical Note"
+    }
+  ],
+  "subject": {
+    "reference": "Patient/1",
+    "display": "Harry, Potter"
+  },
+  "date": "2025-07-28T12:01:11Z",
+  "author": [
+    {
+      "reference": "Practitioner/1",
+      "display": "SYSTEM, SYSTEM Cerner"
+    }
+  ],
+  "authenticator": {
+    "reference": "Practitioner/1",
+    "display": "SYSTEM, SYSTEM Cerner"
+  },
+  "custodian": {
+    "reference": "Organization/685844",
+    "display": "Model Clinic 1"
+  },
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "title": "Discharge Instructions",
+        "creation": "2025-07-28T12:01:10.000Z",
+        "data": "IyMjICoqUGVydGluZW50IFJlc3VsdHM6KioKCiogVHJvcG9uaW4gSTogMTUuMiDihpIgMi4xIG5nL21MIChub3JtYWwgPDAuMDQpCgoqIEVLRzogU1QtZWxldmF0aW9uIHJlc29sdmVkLCBubyBuZXcgY2hhbmdlcwoKKiBFY2hvOiBFRiA1NSUsIG1pbGQgaW5mZXJpb3Igd2FsbCBoeXBva2luZXNpcwoKKiBMREw6IDE4MCDihpIgOTUgbWcvZEwgKG9uIHN0YXRpbikKCi0tLQoKIyMjICoqQ29uZGl0aW9uIGF0IERpc2NoYXJnZToqKgoKKiBWaXRhbHM6IFQgOTguNsKwRiwgSFIgNjgsIFJSIDE2LCBCUCAxMTgvNzIsIFNwT+KCgiA5OCUgUkEKCiogRXhhbTogQWxlcnQsIGNvbWZvcnRhYmxlLCBubyBjaGVzdCBwYWluLCBubyBzaG9ydG5lc3Mgb2YgYnJlYXRoCgoqIEluY2lzaW9uIHNpdGVzIGNsZWFuIGFuZCBkcnksIG5vIHNpZ25zIG9mIGluZmVjdGlvbgoKLS0tCgojIyMgKipEaXNjaGFyZ2UgTWVkaWNhdGlvbnM6KioKCk5ldzoKCiogQXNwaXJpbiA4MW1nIGRhaWx5CgoqIENsb3BpZG9ncmVsIDc1bWcgZGFpbHkgKGNvbnRpbnVlIGZvciAxMiBtb250aHMpCgoqIE1ldG9wcm9sb2wgMjVtZyB0d2ljZSBkYWlseQoKKiBMaXNpbm9wcmlsIDVtZyBkYWlseQoKKiBBdG9ydmFzdGF0aW4gODBtZyBkYWlseQoKQ29udGludWVkOgoKKiBOb25lCgpTdG9wcGVkOgoKKiBOb25lCgotLS0KCiMjIyAqKkZvbGxvdy1VcCBBcHBvaW50bWVudHM6KioKCiogQ2FyZGlvbG9neSBpbiAxIHdlZWsgZm9yIHBvc3QtUENJIGZvbGxvdy11cAoKKiBQQ1AgaW4gMiB3ZWVrcyBmb3IgbWVkaWNhdGlvbiBtYW5hZ2VtZW50CgoqIENhcmRpYWMgcmVoYWJpbGl0YXRpb24gcHJvZ3JhbSAoc3RhcnQgaW4gMSB3ZWVrKQoKKiBMaXBpZCBjbGluaWMgaW4gNiB3ZWVrcwoKLS0tCgojIyMgKipBY3Rpdml0eSBhbmQgTGlmZXN0eWxlIEluc3RydWN0aW9uczoqKgoKKiBObyBoZWF2eSBsaWZ0aW5nID4xMCBwb3VuZHMgZm9yIDEgd2VlawoKKiBHcmFkdWFsIGluY3JlYXNlIGluIGFjdGl2aXR5IGFzIHRvbGVyYXRlZAoKKiBDYXJkaWFjIHJlaGFiaWxpdGF0aW9uIHByb2dyYW0gcmVjb21tZW5kZWQKCiogTG93LXNvZGl1bSwgaGVhcnQtaGVhbHRoeSBkaWV0CgoqIFNtb2tpbmcgY2Vzc2F0aW9uIGNvdW5zZWxpbmcgcHJvdmlkZWQKCiogU3RyZXNzIG1hbmFnZW1lbnQgdGVjaG5pcXVlcyBkaXNjdXNzZWQKCi0tLQoKIyMjICoqUGF0aWVudCBJbnN0cnVjdGlvbnMgKENsaW5pY2FsIFN0eWxlKToqKgoKUGF0aWVudCBlZHVjYXRlZCBvbiBwb3N0LU1JIGNhcmUgaW5jbHVkaW5nIG1lZGljYXRpb24gYWRoZXJlbmNlLCBsaWZlc3R5bGUgbW9kaWZpY2F0aW9ucywgYW5kIHdhcm5pbmcgc2lnbnMgb2YgY29tcGxpY2F0aW9ucy4gRW1waGFzaXplZCBpbXBvcnRhbmNlIG9mIGR1YWwgYW50aXBsYXRlbGV0IHRoZXJhcHkgYW5kIHJlZ3VsYXIgZm9sbG93LXVwLiBQYXRpZW50IGRlbW9uc3RyYXRlZCB1bmRlcnN0YW5kaW5nIG9mIGFjdGl2aXR5IHJlc3RyaWN0aW9ucyBhbmQgd2hlbiB0byBzZWVrIGltbWVkaWF0ZSBtZWRpY2FsIGF0dGVudGlvbi4KCi0tLQoKIyMjICoqUmV0dXJuIFByZWNhdXRpb25zOioqCgpSZXR1cm4gdG8gRUQgb3IgY2FsbCBwcm92aWRlciBmb3I6CgoqIENoZXN0IHBhaW4gb3IgcHJlc3N1cmUKCiogU2hvcnRuZXNzIG9mIGJyZWF0aCBhdCByZXN0CgoqIFNldmVyZSBmYXRpZ3VlIG9yIHdlYWtuZXNzCgoqIFNpZ25zIG9mIGJsZWVkaW5nICh1bnVzdWFsIGJydWlzaW5nLCBibG9vZCBpbiBzdG9vbC91cmluZSkKCiogU2lnbnMgb2YgaW5mZWN0aW9uIGF0IGluY2lzaW9uIHNpdGVzCg=="
+      },
+      "format": {
+        "system": "http://ihe.net/fhir/ValueSet/IHE.FormatCode.codesystem",
+        "code": "urn:ihe:iti:xds:2017:mimeTypeSufficient",
+        "display": "mimeType Sufficient"
+      }
+    }
+  ],
+  "context": {
+    "encounter": [
+      {
+        "reference": "Encounter/97958647"
+      }
+    ],
+    "period": {
+      "start": "2025-07-28T12:01:10Z",
+      "end": "2025-07-28T12:01:10Z"
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "resourceType": "DocumentReference",
+  "identifier": [
+    {
+      "system": "https://fhir.cerner.com/ceuuid",
+      "value": "CE87caf4b7-9397-4667-707e-218-2sd02ad12asdsd0sdf-1"
+    }
+  ],
+  "status": "current",
+  "docStatus": "final",
+  "type": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "74213-0",
+        "display": "Discharge instructions",
+        "userSelected": false
+      }
+    ],
+    "text": "Discharge Instructions"
+  },
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category",
+          "code": "clinical-note",
+          "display": "Clinical Note",
+          "userSelected": false
+        }
+      ],
+      "text": "Clinical Note"
+    }
+  ],
+  "subject": {
+    "reference": "Patient/1",
+    "display": "Harry, Potter"
+  },
+  "date": "2025-07-28T12:01:11Z",
+  "author": [
+    {
+      "reference": "Practitioner/1",
+      "display": "SYSTEM, SYSTEM Cerner"
+    }
+  ],
+  "authenticator": {
+    "reference": "Practitioner/1",
+    "display": "SYSTEM, SYSTEM Cerner"
+  },
+  "custodian": {
+    "reference": "Organization/685844",
+    "display": "Model Clinic 1"
+  },
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "title": "Discharge Instructions",
+        "creation": "2025-07-28T12:01:10.000Z",
+        "data": "IyMjICoqUGVydGluZW50IFJlc3VsdHM6KioKCiogQWRtaXNzaW9uIGdsdWNvc2U6IDQxMiDihpIgMTYwIG1nL2RMIGF0IGRpc2NoYXJnZQoKKiBWQkc6IHBIIDcuMjgsIEhDT+KCgyAxNSwgQUcgMTgg4oaSIG5vcm1hbGl6ZWQgKHBIIDcuMzUsIEhDT+KCgyAyMSwgQUcgMTBcKQoKKiBOYSAxMzIg4oaSIDEzNywgSyA0Ljkg4oaSIDQuMiwgQ3IgMC43IOKGkiAwLjUKCiogSGJBMWM6IDEyLjElCgoqIFVBOiBnbHVjb3NlL2tldG9uZXMgcmVzb2x2ZWQKCi0tLQoKIyMjICoqQ29uZGl0aW9uIGF0IERpc2NoYXJnZToqKgoKKiBWaXRhbHM6IFQgOTguMcKwRiwgSFIgOTQsIFJSIDE4LCBCUCAxMDAvNjIsIFNwT+KCgiA5OSUgUkEKCiogRXhhbTogQWxlcnQsIGludGVyYWN0aXZlLCBubyBkaXN0cmVzcywgd2VsbCBoeWRyYXRlZCwgdG9sZXJhdGluZyBkaWV0CgoqIEZhbWlseSBkZW1vbnN0cmF0ZWQgaW5zdWxpbiBpbmplY3Rpb24gYW5kIGdsdWNvc2UgbW9uaXRvcmluZyBjb21wZXRlbmN5CgotLS0KCiMjIyAqKkRpc2NoYXJnZSBNZWRpY2F0aW9uczoqKgoKTmV3OgoKKiBJbnN1bGluIGdsYXJnaW5lIDE0IHVuaXRzIFNRIFFIUwoKKiBJbnN1bGluIGxpc3BybyAxIHVuaXQgcGVyIDE1IGcgY2FyYm9oeWRyYXRlIHdpdGggbWVhbHMgXCsgY29ycmVjdGlvbiBzY2FsZSAoMSB1bml0IHBlciA1MCBtZy9kTCBcPjE1MCkKCiogR2x1Y2Fnb24gZW1lcmdlbmN5IGtpdAoKKiBTdXBwbGllczogZ2x1Y29zZSBtb25pdG9yLCB0ZXN0IHN0cmlwcywga2V0b25lIHN0cmlwcywgbGFuY2V0cwoKQ29udGludWVkOgoKKiBOb25lCgpTdG9wcGVkOgoKKiBOb25lCgotLS0KCiMjIyAqKkZvbGxvdy1VcCBBcHBvaW50bWVudHM6KioKCiogRW5kb2NyaW5vbG9neSBjbGluaWMgaW4gMSB3ZWVrIGZvciBpbnN1bGluIHRpdHJhdGlvbgoKKiBQQ1AgaW4gM+KAkzUgZGF5cyBmb3IgcG9zdC1ob3NwaXRhbCBmb2xsb3ctdXAKCiogRGlhYmV0ZXMgZWR1Y2F0b3IgaW4gMiB3ZWVrcwoKKiBPcGh0aGFsbW9sb2d5IHJlZmVycmFsIGluIDbigJMxMiBtb250aHMgKGJhc2VsaW5lIGRpYWJldGljIGV5ZSBleGFtKQoKLS0tCgojIyMgKipEaWV0IGFuZCBMaWZlc3R5bGUgSW5zdHJ1Y3Rpb25zOioqCgoqIFJlc3VtZSByZWd1bGFyIGFnZS1hcHByb3ByaWF0ZSBkaWV0IHdpdGggY2FyYm9oeWRyYXRlIGNvdW50aW5nCgoqIEVuY291cmFnZSBjb25zaXN0ZW50IG1lYWwgdGltZXMgYW5kIHNuYWNrcwoKKiBCRyBtb25pdG9yaW5nIGJlZm9yZSBtZWFscyBhbmQgYXQgYmVkdGltZSAobWluaW11bSA0IHRpbWVzL2RheSkKCiogU2ljay1kYXkgbWFuYWdlbWVudCByZXZpZXdlZCAoQkcgcTLigJM0aCwga2V0b25lcyBpZiBCRyBcPjI1MCBtZy9kTCkKCiogRW1waGFzaXplIGh5ZHJhdGlvbiwgYXZvaWQgc3VnYXJ5IGRyaW5rcyB1bmxlc3MgdHJlYXRpbmcgaHlwb2dseWNlbWlhCgotLS0KCiMjIyAqKlBhdGllbnQgSW5zdHJ1Y3Rpb25zIChDbGluaWNhbCBTdHlsZSk6KioKCkZhbWlseSBjb3Vuc2VsZWQgZXh0ZW5zaXZlbHkgb24gbmV3LW9uc2V0IGRpYWJldGVzIGNhcmUuIEVtcGhhc2l6ZWQgYWRoZXJlbmNlIHRvIGluc3VsaW4gcmVnaW1lbiwgcmVjb2duaXRpb24gb2YgaHlwby0gYW5kIGh5cGVyZ2x5Y2VtaWEsIGFuZCBpbXBvcnRhbmNlIG9mIGRhaWx5IGdsdWNvc2UgbW9uaXRvcmluZy4gU2ljay1kYXkgcnVsZXMgcmVpbmZvcmNlZC4gUGF0aWVudCBhbmQgcGFyZW50cyBkZW1vbnN0cmF0ZWQgY29tcGV0ZW5jeSBpbiBpbnN1bGluIGluamVjdGlvbiB0ZWNobmlxdWUgYW5kIGNhcmIgY291bnRpbmcuIFdyaXR0ZW4gbWF0ZXJpYWxzIGFuZCBlbWVyZ2VuY3kgY29udGFjdHMgcHJvdmlkZWQuCgotLS0KCiMjIyAqKlJldHVybiBQcmVjYXV0aW9uczoqKgoKUmV0dXJuIHRvIEVEIG9yIGNhbGwgcHJvdmlkZXIgZm9yOgoKKiBQZXJzaXN0ZW50IHZvbWl0aW5nIG9yIGluYWJpbGl0eSB0byB0b2xlcmF0ZSBvcmFsIGZsdWlkcwoKKiBCRyBcPjMwMCBtZy9kTCB3aXRoIG1vZGVyYXRlL2xhcmdlIGtldG9uZXMKCiogTGV0aGFyZ3ksIGNvbmZ1c2lvbiwgb3Igc2VpenVyZSBhY3Rpdml0eQoKKiBTaWducyBvZiBoeXBvZ2x5Y2VtaWEgbm90IHJlc29sdmluZyB3aXRoIG9yYWwgZ2x1Y29zZSAoc2hha2luZXNzLCBjb25mdXNpb24sIHNlaXp1cmUsIExPQykK"
+      },
+      "format": {
+        "system": "http://ihe.net/fhir/ValueSet/IHE.FormatCode.codesystem",
+        "code": "urn:ihe:iti:xds:2017:mimeTypeSufficient",
+        "display": "mimeType Sufficient"
+      }
+    }
+  ],
+  "context": {
+    "encounter": [
+      {
+        "reference": "Encounter/97958647"
+      }
+    ],
+    "period": {
+      "start": "2025-07-28T12:01:10Z",
+      "end": "2025-07-28T12:01:10Z"
+    }
+  }
+}

@@ -150,11 +150,17 @@ export class DischargeSummariesExportService {
       const sixtyMinutesAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       
       const query = {
-        // patient: patientId,
-        '_id': 97996600,
+        patient: patientId,
+        // `_id`: '97958647',
+        // '_id': 97996600,
+        // '_id': '97958672',
+        // '_id': '97958720',
+        // '_id': '97958919',
+        // '_id': '97996765',
+
         // status: 'finished',
         // _lastUpdated: `gt${sixtyMinutesAgo}`,
-        // _count: 5,
+        _count: 5,
       };
 
       this.logger.log(`🔍 Searching for encounters with query: ${JSON.stringify(query)}`);
@@ -1125,33 +1131,31 @@ export class DischargeSummariesExportService {
    */
   private async publishEncounterExportEvent(result: EncounterExportResult, ctx: TenantContext): Promise<void> {
     try {
+      // Calculate total resources (excluding encounter and composition)
+      const totalResources = (result.documentReferenceIds?.length || 0) + 
+                           (result.medicationRequestIds?.length || 0) + 
+                           (result.appointmentIds?.length || 0) + 
+                           (result.conditionIds?.length || 0) + 
+                           (result.binaryIds?.length || 0);
+      
+      // Only publish event if there are resources other than just the encounter
+      if (totalResources === 0) {
+        this.logger.log(`📭 No additional resources found for encounter ${result.cernerEncounterId}, skipping event publication`);
+        return;
+      }
+      
       this.logger.log(`🔍 Debug - result.conditionIds in event publishing: ${JSON.stringify(result.conditionIds)}`);
+      this.logger.log(`📡 Publishing event for encounter ${result.cernerEncounterId} with ${totalResources} additional resources`);
+      
       const eventPayload = {
         tenantId: ctx.tenantId,
         patientId: result.cernerPatientId || '',
         exportTimestamp: result.metadata?.exportTimestamp || new Date().toISOString(),
         status: result.success ? 'success' : 'failed',
         error: result.error,
-
         cernerEncounterId: result.cernerEncounterId || '',
         googleEncounterId: result.googleEncounterId,
-
-        googleDocumentReferenceIds: result.documentReferenceIds,
-        googleMedicationRequestIds: result.medicationRequestIds,
-        googleAppointmentIds: result.appointmentIds,
-        googleConditionIds: result.conditionIds,
-        googleBinaryIds: result.binaryIds,
         googleCompositionId: result.compositionId,
-
-        counts: {
-          documentReferences: result.documentReferenceIds?.length,
-          medicationRequests: result.medicationRequestIds?.length,
-          appointments: result.appointmentIds?.length,
-          conditions: result.conditionIds?.length,
-          binaries: result.binaryIds?.length,
-          compositions: result.compositionId ? 1 : 0,
-          totalResources: result.metadata?.resourcesProcessed,
-        },
       };
 
       await this.pubSubService.publishEncounterExportEvent(eventPayload as EncounterExportEvent);
