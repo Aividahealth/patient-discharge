@@ -1,10 +1,10 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { SimplificationResult, ValidationError, GCSError, VertexAIError } from '../common/types';
+import { SimplificationResult, ValidationError, GCSError, VertexAIError } from './common/types';
 import { GCSService } from './gcs.service';
 import { SimplificationService } from './simplification.service';
 import { FirestoreService } from './firestore.service';
-import { getConfig } from '../common/utils/config';
-import { createLogger } from '../common/utils/logger';
+import { getConfig } from './common/utils/config';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('CloudFunction');
 

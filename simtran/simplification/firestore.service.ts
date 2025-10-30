@@ -1,5 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
-import { createLogger } from '../common/utils/logger';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('FirestoreService');
 

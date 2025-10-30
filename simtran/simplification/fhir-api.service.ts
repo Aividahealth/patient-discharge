@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
-import { FHIRBinariesResponse, FHIRAPIError } from '../common/types';
-import { createLogger } from '../common/utils/logger';
+import { GoogleAuth } from 'google-auth-library';
+import { FHIRBinariesResponse, FHIRAPIError } from './common/types';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('FHIRAPIService');
 
@@ -10,10 +11,26 @@ const logger = createLogger('FHIRAPIService');
 export class FHIRAPIService {
   private readonly baseUrl: string;
   private readonly timeout: number = 30000; // 30 seconds
+  private readonly auth: GoogleAuth;
 
   constructor(baseUrl: string = 'http://localhost:3000') {
     this.baseUrl = baseUrl;
+    this.auth = new GoogleAuth();
     logger.info('FHIRAPIService initialized', { baseUrl });
+  }
+
+  /**
+   * Get an identity token for authenticating to Cloud Run services
+   */
+  private async getIdToken(): Promise<string> {
+    try {
+      const client = await this.auth.getIdTokenClient(this.baseUrl);
+      const tokenResponse = await client.idTokenProvider.fetchIdToken(this.baseUrl);
+      return tokenResponse;
+    } catch (error) {
+      logger.error('Failed to get identity token', error as Error);
+      throw new FHIRAPIError('Failed to authenticate to FHIR API', false);
+    }
   }
 
   /**
@@ -30,10 +47,14 @@ export class FHIRAPIService {
     });
 
     try {
+      // Get identity token for authentication
+      const idToken = await this.getIdToken();
+
       const response = await axios.get<FHIRBinariesResponse>(url, {
         timeout: this.timeout,
         headers: {
           'Accept': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
         },
       });
 
@@ -70,12 +91,24 @@ export class FHIRAPIService {
           const status = axiosError.response.status;
           const retryable = status >= 500 || status === 429; // Retry on server errors and rate limits
 
+          logger.error('FHIR API request failed', error as Error, {
+            compositionId,
+            status,
+            statusText: axiosError.response.statusText,
+            responseData: JSON.stringify(axiosError.response.data).substring(0, 500),
+          });
+
           throw new FHIRAPIError(
-            `API request failed with status ${status}: ${axiosError.message}`,
+            `API request failed with status ${status}: ${JSON.stringify(axiosError.response.data)}`,
             retryable
           );
         } else if (axiosError.request) {
           // The request was made but no response was received
+          logger.error('No response from FHIR API', error as Error, {
+            compositionId,
+            message: axiosError.message,
+          });
+
           throw new FHIRAPIError(
             `No response received from API for composition ${compositionId}: ${axiosError.message}`,
             true // Retryable
@@ -84,6 +117,10 @@ export class FHIRAPIService {
       }
 
       // Generic error
+      logger.error('Unexpected error fetching binaries', error as Error, {
+        compositionId,
+      });
+
       throw new FHIRAPIError(
         `Failed to fetch binaries for composition ${compositionId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
         false
@@ -92,21 +129,30 @@ export class FHIRAPIService {
   }
 
   /**
-   * Validate that the response contains required data
+   * Validate that the response contains at least some data
+   * Lenient validation: accepts response if at least one type of binary exists
    */
   validateBinariesResponse(response: FHIRBinariesResponse): boolean {
-    if (!response.dischargeSummaries || response.dischargeSummaries.length === 0) {
-      logger.warning('No discharge summaries found in response', {
+    const hasSummaries = response.dischargeSummaries && response.dischargeSummaries.length > 0;
+    const hasInstructions = response.dischargeInstructions && response.dischargeInstructions.length > 0;
+
+    if (!hasSummaries && !hasInstructions) {
+      logger.warning('No discharge summaries or instructions found in response', {
         compositionId: response.compositionId,
       });
       return false;
     }
 
-    if (!response.dischargeInstructions || response.dischargeInstructions.length === 0) {
-      logger.warning('No discharge instructions found in response', {
+    if (!hasSummaries) {
+      logger.info('No discharge summaries found, will process instructions only', {
         compositionId: response.compositionId,
       });
-      return false;
+    }
+
+    if (!hasInstructions) {
+      logger.info('No discharge instructions found, will process summaries only', {
+        compositionId: response.compositionId,
+      });
     }
 
     return true;

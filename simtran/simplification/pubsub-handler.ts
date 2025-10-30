@@ -1,11 +1,11 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { DischargeExportEvent, FHIRAPIError, ValidationError, SimplificationResult } from '../common/types';
+import { DischargeExportEvent, FHIRAPIError, ValidationError, SimplificationResult } from './common/types';
 import { FHIRAPIService } from './fhir-api.service';
 import { GCSService } from './gcs.service';
 import { SimplificationService } from './simplification.service';
 import { FirestoreService } from './firestore.service';
-import { getConfig } from '../common/utils/config';
-import { createLogger } from '../common/utils/logger';
+import { getConfig } from './common/utils/config';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('PubSubHandler');
 
@@ -154,44 +154,56 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<{
       throw new ValidationError('FHIR API response missing required binaries');
     }
 
-    // Step 2: Process discharge summaries
+    // Step 2: Process discharge summaries (if available)
     logger.debug('Step 2: Processing discharge summaries');
     const dischargeSummaryResults: SimplificationResult[] = [];
 
-    for (const summary of binariesResponse.dischargeSummaries) {
-      const fileName = `${event.googleCompositionId}-discharge-summary.txt`;
+    if (binariesResponse.dischargeSummaries && binariesResponse.dischargeSummaries.length > 0) {
+      for (const summary of binariesResponse.dischargeSummaries) {
+        const fileName = `${event.googleCompositionId}-discharge-summary.txt`;
 
-      // Write original content to input bucket
-      await gcsService.writeFile(config.inputBucket, fileName, summary.text);
+        // Write original content to input bucket
+        await gcsService.writeFile(config.inputBucket, fileName, summary.text);
 
-      logger.info('Wrote discharge summary to file', {
-        fileName,
-        contentLength: summary.text.length,
+        logger.info('Wrote discharge summary to file', {
+          fileName,
+          contentLength: summary.text.length,
+        });
+
+        // Process through simplification pipeline
+        const result = await processBinary(fileName, summary.text, 'discharge-summary');
+        dischargeSummaryResults.push(result);
+      }
+    } else {
+      logger.info('Skipping discharge summaries - none available', {
+        compositionId: event.googleCompositionId,
       });
-
-      // Process through simplification pipeline
-      const result = await processBinary(fileName, summary.text, 'discharge-summary');
-      dischargeSummaryResults.push(result);
     }
 
-    // Step 3: Process discharge instructions
+    // Step 3: Process discharge instructions (if available)
     logger.debug('Step 3: Processing discharge instructions');
     const dischargeInstructionResults: SimplificationResult[] = [];
 
-    for (const instruction of binariesResponse.dischargeInstructions) {
-      const fileName = `${event.googleCompositionId}-discharge-instructions.txt`;
+    if (binariesResponse.dischargeInstructions && binariesResponse.dischargeInstructions.length > 0) {
+      for (const instruction of binariesResponse.dischargeInstructions) {
+        const fileName = `${event.googleCompositionId}-discharge-instructions.txt`;
 
-      // Write original content to input bucket
-      await gcsService.writeFile(config.inputBucket, fileName, instruction.text);
+        // Write original content to input bucket
+        await gcsService.writeFile(config.inputBucket, fileName, instruction.text);
 
-      logger.info('Wrote discharge instructions to file', {
-        fileName,
-        contentLength: instruction.text.length,
+        logger.info('Wrote discharge instructions to file', {
+          fileName,
+          contentLength: instruction.text.length,
+        });
+
+        // Process through simplification pipeline
+        const result = await processBinary(fileName, instruction.text, 'discharge-instructions');
+        dischargeInstructionResults.push(result);
+      }
+    } else {
+      logger.info('Skipping discharge instructions - none available', {
+        compositionId: event.googleCompositionId,
       });
-
-      // Process through simplification pipeline
-      const result = await processBinary(fileName, instruction.text, 'discharge-instructions');
-      dischargeInstructionResults.push(result);
     }
 
     const processingTime = Date.now() - processingStartTime;

@@ -4,10 +4,10 @@ import {
   SimplificationResponse,
   VertexAIError,
   GenerationConfig,
-} from '../common/types';
-import { getConfig } from '../common/utils/config';
-import { createLogger } from '../common/utils/logger';
-import { SIMPLIFICATION_SYSTEM_PROMPT, createSimplificationPrompt } from '../common/utils/prompts';
+} from './common/types';
+import { getConfig } from './common/utils/config';
+import { createLogger } from './common/utils/logger';
+import { SIMPLIFICATION_SYSTEM_PROMPT, createSimplificationPrompt } from './common/utils/prompts';
 
 const logger = createLogger('SimplificationService');
 
