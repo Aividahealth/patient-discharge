@@ -52,14 +52,43 @@ export async function processDischargeExportEvent(cloudEvent: CloudEvent<unknown
     initializeServices();
 
     // Parse the Pub/Sub message
-    const messageData = cloudEvent.data as { message?: { data?: string } };
+    // For Gen2 Cloud Functions, CloudEvent.data can be:
+    // 1. A base64 string directly (when using gcloud pubsub topics publish)
+    // 2. An object with { message: { data: base64string, ... } }
+    const eventData = cloudEvent.data;
 
-    if (!messageData || !messageData.message || !messageData.message.data) {
-      throw new ValidationError('Invalid Pub/Sub message format: missing message.data');
+    let base64Data: string;
+
+    // Check if eventData is a string (base64-encoded message directly)
+    if (typeof eventData === 'string') {
+      logger.debug('CloudEvent data is base64 string directly');
+      base64Data = eventData;
+    } else if (eventData && typeof eventData === 'object') {
+      // Check for wrapped format
+      const wrappedData = eventData as any;
+      logger.debug('Received CloudEvent data structure', {
+        hasMessage: !!wrappedData?.message,
+        hasData: !!wrappedData?.message?.data,
+        dataKeys: Object.keys(eventData)
+      });
+
+      if (wrappedData?.message?.data) {
+        // Standard Gen2 Pub/Sub format
+        base64Data = wrappedData.message.data;
+      } else if (wrappedData?.data) {
+        // Alternative format where message is at root level
+        base64Data = wrappedData.data;
+      } else {
+        throw new ValidationError(`Invalid Pub/Sub message format: missing data field`);
+      }
+    } else {
+      throw new ValidationError(`Invalid Pub/Sub message format: unexpected type ${typeof eventData}`);
     }
 
     // Decode the base64-encoded message data
-    const decodedData = Buffer.from(messageData.message.data, 'base64').toString('utf-8');
+    const decodedData = Buffer.from(base64Data, 'base64').toString('utf-8');
+    logger.debug('Decoded Pub/Sub message', { decodedData: decodedData.substring(0, 200) });
+
     const event: DischargeExportEvent = JSON.parse(decodedData);
 
     logger.info('Parsed discharge export event', {
@@ -141,7 +170,10 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<{
   try {
     // Step 1: Fetch binaries from FHIR API
     logger.debug('Step 1: Fetching binaries from FHIR API');
-    const binariesResponse = await fhirApiService.fetchBinaries(event.googleCompositionId);
+    const binariesResponse = await fhirApiService.fetchBinaries(
+      event.googleCompositionId,
+      event.tenantId || 'default'
+    );
 
     logger.info('Binaries fetched successfully', {
       compositionId: binariesResponse.compositionId,

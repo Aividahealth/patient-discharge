@@ -36,13 +36,15 @@ export class FHIRAPIService {
   /**
    * Fetch binaries (discharge summaries and instructions) for a composition
    * @param compositionId - The Google FHIR Composition ID
+   * @param tenantId - The tenant ID for multi-tenant API access
    * @returns Promise<FHIRBinariesResponse> - The binaries response
    */
-  async fetchBinaries(compositionId: string): Promise<FHIRBinariesResponse> {
+  async fetchBinaries(compositionId: string, tenantId: string = 'default'): Promise<FHIRBinariesResponse> {
     const url = `${this.baseUrl}/google/fhir/Composition/${compositionId}/binaries`;
 
     logger.info('Fetching binaries from FHIR API', {
       compositionId,
+      tenantId,
       url
     });
 
@@ -55,6 +57,7 @@ export class FHIRAPIService {
         headers: {
           'Accept': 'application/json',
           'Authorization': `Bearer ${idToken}`,
+          'X-Tenant-ID': tenantId,
         },
       });
 
