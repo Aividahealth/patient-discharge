@@ -105,8 +105,7 @@ temp/
 backend/.settings.dev/
 backend/.settings.prod/
 backend/.settings.staging/
-*.json
-!package.json
-!package-lock.json
-!tsconfig.json
-!tsconfig.*.json
+backend/.settings.*/
+**/*_sa.json
+**/*service-account*.json
+**/*credentials*.json
