@@ -2,9 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DischargeSummariesExportService } from './discharge-summaries-export.service';
 import { DevConfigService } from '../../config/dev-config.service';
-import { SessionService } from '../../auth/session.service';
+import { SessionService } from '../../cerner-auth/session.service';
 import { TenantContext } from '../../tenant/tenant-context';
-import { AuthType } from '../../auth/types/auth.types';
+import { AuthType } from '../../cerner-auth/types/auth.types';
 import { PubSubService } from '../../pubsub/pubsub.service';
 
 @Injectable()
@@ -77,7 +77,7 @@ export class EncounterExportScheduler {
       };
 
       // Get patient list from config
-      const patients = this.configService.getTenantCernerPatients(tenantId);
+      const patients = await this.configService.getTenantCernerPatients(tenantId);
       this.logger.log(`👥 Processing ${patients.length} patients for tenant ${tenantId}`);
 
       for (const patientId of patients) {
@@ -95,7 +95,7 @@ export class EncounterExportScheduler {
   private async processEncountersForProvider(tenantId: string, activeSessions: any[]): Promise<void> {
     try {
       // Get patient list from config
-      const patients = this.configService.getTenantCernerPatients(tenantId);
+      const patients = await this.configService.getTenantCernerPatients(tenantId);
       this.logger.log(`👥 Processing ${patients.length} patients for tenant ${tenantId} with provider app`);
 
       for (const patientId of patients) {

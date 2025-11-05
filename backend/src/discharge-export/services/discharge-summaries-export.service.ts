@@ -4,7 +4,7 @@ import { GoogleService } from '../../google/google.service';
 import { AuditService } from '../../audit/audit.service';
 import { DevConfigService } from '../../config/dev-config.service';
 import { TenantContext } from '../../tenant/tenant-context';
-import { AuthType } from '../../auth/types/auth.types';
+import { AuthType } from '../../cerner-auth/types/auth.types';
 import { EncounterExportEvent, PubSubService } from '../../pubsub/pubsub.service';
 import { DischargeExportService } from './discharge-export.service';
 

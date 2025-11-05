@@ -79,8 +79,8 @@ export class PubSubService {
   async publishDocumentExportEvent(event: DocumentExportEvent): Promise<void> {
     try {
       // Get tenant-specific configuration
-      const topicName = this.configService.getTenantPubSubTopicName(event.tenantId);
-      const serviceAccountPath = this.configService.getTenantPubSubServiceAccountPath(event.tenantId);
+      const topicName = await this.configService.getTenantPubSubTopicName(event.tenantId);
+      const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(event.tenantId);
       
       // Create tenant-specific Pub/Sub client if needed
       const pubsub = new PubSub({
@@ -129,8 +129,8 @@ export class PubSubService {
    */
   async publishEncounterExportEvent(event: EncounterExportEvent): Promise<void> {
     try {
-      const topicName = this.configService.getTenantPubSubTopicName(event.tenantId);
-      const serviceAccountPath = this.configService.getTenantPubSubServiceAccountPath(event.tenantId);
+      const topicName = await this.configService.getTenantPubSubTopicName(event.tenantId);
+      const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(event.tenantId);
 
       const pubsub = new PubSub({
         projectId: this.configService.getGcpProjectId(),
@@ -207,8 +207,8 @@ export class PubSubService {
   private async publishTenantBatchEvents(tenantId: string, events: DocumentExportEvent[]): Promise<void> {
     try {
       // Get tenant-specific configuration
-      const topicName = this.configService.getTenantPubSubTopicName(tenantId);
-      const serviceAccountPath = this.configService.getTenantPubSubServiceAccountPath(tenantId);
+      const topicName = await this.configService.getTenantPubSubTopicName(tenantId);
+      const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(tenantId);
       
       // Create tenant-specific Pub/Sub client
       const pubsub = new PubSub({
@@ -257,8 +257,8 @@ export class PubSubService {
    */
   async getTopicInfo(tenantId: string): Promise<any> {
     try {
-      const topicName = this.configService.getTenantPubSubTopicName(tenantId);
-      const serviceAccountPath = this.configService.getTenantPubSubServiceAccountPath(tenantId);
+      const topicName = await this.configService.getTenantPubSubTopicName(tenantId);
+      const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(tenantId);
       
       const pubsub = new PubSub({
         projectId: this.configService.getGcpProjectId(),
@@ -287,10 +287,11 @@ export class PubSubService {
       };
     } catch (error) {
       this.logger.error(`Failed to get topic info for tenant ${tenantId}: ${error.message}`);
+      const fallbackTopicName = await this.configService.getTenantPubSubTopicName(tenantId);
       return { 
         exists: false, 
-        name: this.configService.getTenantPubSubTopicName(tenantId), 
-        fullName: `projects/${this.configService.getGcpProjectId()}/topics/${this.configService.getTenantPubSubTopicName(tenantId)}`,
+        name: fallbackTopicName, 
+        fullName: `projects/${this.configService.getGcpProjectId()}/topics/${fallbackTopicName}`,
         tenantId,
         error: error.message 
       };

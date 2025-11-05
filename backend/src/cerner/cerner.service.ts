@@ -4,7 +4,7 @@ import * as qs from 'qs';
 import { DevConfigService } from '../config/dev-config.service';
 import { AuditService } from '../audit/audit.service';
 import { TenantContext } from '../tenant/tenant-context';
-import { AuthType } from '../auth/types/auth.types';
+import { AuthType } from '../cerner-auth/types/auth.types';
 
 @Injectable()
 export class CernerService implements OnModuleInit {
@@ -17,8 +17,8 @@ export class CernerService implements OnModuleInit {
     private readonly auditService: AuditService
   ) {}
 
-  private getBaseUrl(ctx: TenantContext): string {
-    const cernerConfig = this.configService.getTenantCernerConfig(ctx.tenantId);
+  private async getBaseUrl(ctx: TenantContext): Promise<string> {
+    const cernerConfig = await this.configService.getTenantCernerConfig(ctx.tenantId);
     if (!cernerConfig?.base_url) {
       throw new Error(`Missing Cerner base_url for tenant: ${ctx.tenantId}`);
     }
@@ -171,8 +171,9 @@ export class CernerService implements OnModuleInit {
       Accept: 'application/fhir+json',
     };
     try {
+      const baseUrl = await this.getBaseUrl(ctx);
       const response = await axios.post(
-        `${this.getBaseUrl(ctx)}/DocumentReference`,
+        `${baseUrl}/DocumentReference`,
         documentReference,
         { headers },
       );
@@ -200,7 +201,8 @@ export class CernerService implements OnModuleInit {
       return null;
     }
     
-    const url = `${this.getBaseUrl(ctx)}/${resourceType}`;
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       'Content-Type': 'application/fhir+json',
@@ -227,7 +229,8 @@ export class CernerService implements OnModuleInit {
   async fetchResource(resourceType: string, resourceId: string, ctx: TenantContext): Promise<any | null> {
     const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
-    const url = `${this.getBaseUrl(ctx)}/${resourceType}/${resourceId}`;
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}/${resourceId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       'Accept': 'application/fhir+json',
@@ -253,7 +256,8 @@ export class CernerService implements OnModuleInit {
   async updateResource(resourceType: string, resourceId: string, resource: any, ctx: TenantContext): Promise<any | null> {
     const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
-    const url = `${this.getBaseUrl(ctx)}/${resourceType}/${resourceId}`;
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}/${resourceId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       'Content-Type': 'application/fhir+json',
@@ -280,7 +284,8 @@ export class CernerService implements OnModuleInit {
   async deleteResource(resourceType: string, resourceId: string, ctx: TenantContext): Promise<boolean> {
     const ok = await this.ensureAccessToken(ctx);
     if (!ok) return false;
-    const url = `${this.getBaseUrl(ctx)}/${resourceType}/${resourceId}`;
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}/${resourceId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       Accept: 'application/fhir+json',
@@ -307,7 +312,8 @@ export class CernerService implements OnModuleInit {
     const ok = await this.ensureAccessToken(ctx, authType);
     if (!ok) return null;
     
-    const url = `${this.getBaseUrl(ctx)}/${resourceType}`;
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       Accept: 'application/fhir+json',
@@ -394,7 +400,8 @@ export class CernerService implements OnModuleInit {
     const ok = await this.ensureAccessToken(ctx);
     if (!ok) return null;
     
-    const url = `${this.getBaseUrl(ctx)}/Binary/${binaryId}`;
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/Binary/${binaryId}`;
     const headers = {
       Authorization: `Bearer ${this.accessToken}`,
       Accept: acceptType,

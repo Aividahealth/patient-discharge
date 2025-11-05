@@ -29,7 +29,7 @@ export class CernerAuthService {
   async authenticateSystemApp(ctx: TenantContext): Promise<AuthTokens> {
     this.logger.log(`Authenticating system app for tenant: ${ctx.tenantId}`);
 
-    const config = this.getSystemAppConfig(ctx.tenantId);
+    const config = await this.getSystemAppConfig(ctx.tenantId);
     if (!config) {
       throw new Error(`System app configuration not found for tenant: ${ctx.tenantId}`);
     }
@@ -71,13 +71,13 @@ export class CernerAuthService {
   ): Promise<string> {
     this.logger.log(`Initiating provider SSO for tenant: ${ctx.tenantId}`);
 
-    const config = this.getProviderAppConfig(ctx.tenantId);
+    const config = await this.getProviderAppConfig(ctx.tenantId);
     if (!config) {
       throw new Error(`Provider app configuration not found for tenant: ${ctx.tenantId}`);
     }
 
     // Get the FHIR server base URL for the audience parameter
-    const cernerConfig = this.configService.getTenantCernerConfig(ctx.tenantId);
+    const cernerConfig = await this.configService.getTenantCernerConfig(ctx.tenantId);
     const fhirBaseUrl = cernerConfig?.base_url;
     
     if (!fhirBaseUrl) {
@@ -117,7 +117,7 @@ export class CernerAuthService {
   ): Promise<UserSession> {
     this.logger.log(`Handling provider callback for tenant: ${ctx.tenantId}`);
 
-    const config = this.getProviderAppConfig(ctx.tenantId);
+    const config = await this.getProviderAppConfig(ctx.tenantId);
     if (!config) {
       throw new Error(`Provider app configuration not found for tenant: ${ctx.tenantId}`);
     }
@@ -220,7 +220,7 @@ export class CernerAuthService {
       throw new Error('No refresh token available for session');
     }
 
-    const config = this.getProviderAppConfig(session.tenantId);
+    const config = await this.getProviderAppConfig(session.tenantId);
     if (!config) {
       throw new Error(`Provider app configuration not found for tenant: ${session.tenantId}`);
     }
@@ -260,16 +260,16 @@ export class CernerAuthService {
   /**
    * Get system app configuration for tenant
    */
-  private getSystemAppConfig(tenantId: string): SystemAppConfig | null {
-    const tenantConfig = this.configService.getTenantConfig(tenantId);
+  private async getSystemAppConfig(tenantId: string): Promise<SystemAppConfig | null> {
+    const tenantConfig = await this.configService.getTenantConfig(tenantId);
     return tenantConfig?.cerner?.system_app || null;
   }
 
   /**
    * Get provider app configuration for tenant
    */
-  private getProviderAppConfig(tenantId: string): ProviderAppConfig | null {
-    const tenantConfig = this.configService.getTenantConfig(tenantId);
+  private async getProviderAppConfig(tenantId: string): Promise<ProviderAppConfig | null> {
+    const tenantConfig = await this.configService.getTenantConfig(tenantId);
     return tenantConfig?.cerner?.provider_app || null;
   }
 
@@ -309,11 +309,12 @@ export class CernerAuthService {
   /**
    * Validate that a tenant has the required configuration
    */
-  validateTenantConfig(tenantId: string, authType: AuthType): boolean {
+  async validateTenantConfig(tenantId: string, authType: AuthType): Promise<boolean> {
     if (authType === AuthType.SYSTEM) {
-      return this.getSystemAppConfig(tenantId) !== null;
+      return (await this.getSystemAppConfig(tenantId)) !== null;
     } else {
-      return this.getProviderAppConfig(tenantId) !== null;
+      return (await this.getProviderAppConfig(tenantId)) !== null;
     }
   }
 }
+

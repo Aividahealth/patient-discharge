@@ -28,8 +28,8 @@ export class GoogleService {
     let baseUrl = cfg.fhir_base_url; // Default fallback
     
     // Construct tenant-specific URL
-    const tenantDataset = this.configService.getTenantGoogleDataset(ctx.tenantId);
-    const tenantFhirStore = this.configService.getTenantGoogleFhirStore(ctx.tenantId);
+    const tenantDataset = await this.configService.getTenantGoogleDataset(ctx.tenantId);
+    const tenantFhirStore = await this.configService.getTenantGoogleFhirStore(ctx.tenantId);
     
     if (cfg.gcp) {
       baseUrl = `https://healthcare.googleapis.com/v1/projects/${cfg.gcp.project_id}/locations/${cfg.gcp.location}/datasets/${tenantDataset}/fhirStores/${tenantFhirStore}/fhir`;

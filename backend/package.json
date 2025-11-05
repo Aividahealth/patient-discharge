@@ -18,7 +18,9 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "sync-discharge-summaries": "ts-node scripts/sync-discharge-summaries.ts"
+    "sync-discharge-summaries": "ts-node scripts/sync-discharge-summaries.ts",
+    "seed-users": "ts-node scripts/seed-users.ts",
+    "seed-config": "ts-node scripts/seed-config.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",
@@ -28,8 +30,11 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.0.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/uuid": "^10.0.0",
     "axios": "^1.12.2",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "google-auth-library": "^9.15.0",

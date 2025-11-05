@@ -54,6 +54,12 @@ gcloud run deploy ${SERVICE_NAME} \
   --min-instances 0 \
   --set-env-vars "NODE_ENV=dev"
 
+# Note: If --allow-unauthenticated doesn't work, you may need a project admin to run:
+# gcloud run services add-iam-policy-binding ${SERVICE_NAME} \
+#   --region ${REGION} \
+#   --member "allUsers" \
+#   --role "roles/run.invoker"
+
 # Get the service URL
 echo ""
 echo "✅ DEV Deployment complete!"

@@ -1,0 +1,64 @@
+service_account_path: /root/patient-discharge/backend/.settings.dev/fhir_store_sa.json
+
+# The base URL for your Google Cloud Healthcare FHIR store REST API
+# Example:
+#   https://healthcare.googleapis.com/v1/projects/PROJECT_ID/locations/LOCATION/datasets/DATASET/fhirStores/STORE/fhir
+fhir_base_url: "https://healthcare.googleapis.com/v1/projects/ringed-griffin-471815-b6/locations/us-west1/datasets/aivida-dev/fhirStores/aivida/fhir"
+
+# Provided dataset-level FHIR store URL (without the fhirStores/<store>/fhir suffix)
+fhirstore_url: projects/ringed-griffin-471815-b6/locations/us-west1/datasets/aivida-dev/fhirStores/aivida
+
+# Optional: Keep these if you want to derive fhir_base_url programmatically later
+gcp:
+  project_id: ringed-griffin-471815-b6
+  location: us-west1
+  dataset: aivida-dev
+  fhir_store: aivida
+
+resource_types:
+  - "*"
+
+# Multi-tenant configuration
+tenants:
+  default:
+    google:
+      dataset: "aivida-dev"
+      fhir_store: "aivida"
+    cerner:
+      base_url: "https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d"
+      
+      # System App Configuration (for system-level operations)
+      system_app:
+        client_id: "your-system-app-client-id"
+        client_secret: "your-system-app-client-secret"
+        token_url: "https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/hosts/fhir-ehr-code.cerner.com/protocols/oauth2/profiles/smart-v1/token"
+        scopes: "system/Patient.read system/Patient.write system/Encounter.read system/Encounter.write system/Observation.read system/Observation.write system/DiagnosticReport.read system/DiagnosticReport.write system/MedicationRequest.read system/MedicationRequest.write system/Procedure.read system/Procedure.write system/Condition.read system/Condition.write system/AllergyIntolerance.read system/AllergyIntolerance.write system/Immunization.read system/Immunization.write system/CarePlan.read system/CarePlan.write system/Goal.read system/Goal.write system/ServiceRequest.read system/ServiceRequest.write system/Specimen.read system/Specimen.write system/ImagingStudy.read system/ImagingStudy.write system/DocumentReference.read system/DocumentReference.write system/Composition.read system/Composition.write system/Organization.read system/Organization.write system/Practitioner.read system/Practitioner.write system/Location.read system/Location.write system/Binary.read system/Binary.write"
+      
+      # Provider App Configuration (for SSO and user-level operations)
+      provider_app:
+        client_id: "your-provider-app-client-id"
+        client_secret: "your-provider-app-client-secret"
+        authorization_url: "https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/hosts/fhir-ehr-code.cerner.com/protocols/oauth2/profiles/smart-v1/personas/provider/authorize"
+        token_url: "https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/hosts/fhir-ehr-code.cerner.com/protocols/oauth2/profiles/smart-v1/token"
+        redirect_uri: "https://your-aivida-portal.com/auth/cerner/callback"
+        scopes: "launch/patient patient/Patient.read patient/Patient.write patient/Encounter.read patient/Encounter.write patient/Observation.read patient/Observation.write patient/DiagnosticReport.read patient/DiagnosticReport.write patient/MedicationRequest.read patient/MedicationRequest.write patient/Procedure.read patient/Procedure.write patient/Condition.read patient/Condition.write patient/AllergyIntolerance.read patient/AllergyIntolerance.write patient/Immunization.read patient/Immunization.write patient/CarePlan.read patient/CarePlan.write patient/Goal.read patient/Goal.write patient/ServiceRequest.read patient/ServiceRequest.write patient/Specimen.read patient/Specimen.write patient/ImagingStudy.read patient/ImagingStudy.write patient/DocumentReference.read patient/DocumentReference.write patient/Composition.read patient/Composition.write patient/Organization.read patient/Organization.write patient/Practitioner.read patient/Practitioner.write patient/Location.read patient/Location.write patient/Binary.read patient/Binary.write"
+  
+  # Add more tenants here as needed
+  # tenant2:
+  #   google:
+  #     dataset: "tenant2-dataset"
+  #     fhir_store: "tenant2-fhir-store"
+  #   cerner:
+  #     base_url: "https://fhir-ehr-code.cerner.com/r4/another-tenant-id"
+  #     system_app:
+  #       client_id: "another-system-client-id"
+  #       client_secret: "another-system-client-secret"
+  #       token_url: "https://authorization.cerner.com/tenants/another-tenant-id/hosts/fhir-ehr-code.cerner.com/protocols/oauth2/profiles/smart-v1/token"
+  #       scopes: "system/Patient.read system/Patient.write ..."
+  #     provider_app:
+  #       client_id: "another-provider-client-id"
+  #       client_secret: "another-provider-client-secret"
+  #       authorization_url: "https://authorization.cerner.com/tenants/another-tenant-id/hosts/fhir-ehr-code.cerner.com/protocols/oauth2/profiles/smart-v1/personas/provider/authorize"
+  #       token_url: "https://authorization.cerner.com/tenants/another-tenant-id/hosts/fhir-ehr-code.cerner.com/protocols/oauth2/profiles/smart-v1/token"
+  #       redirect_uri: "https://your-aivida-portal.com/auth/cerner/callback"
+  #       scopes: "launch/patient patient/Patient.read patient/Patient.write ..."

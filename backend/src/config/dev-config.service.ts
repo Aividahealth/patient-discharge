@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Firestore } from '@google-cloud/firestore';
 import * as fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
@@ -41,6 +42,8 @@ export type TenantConfig = {
 
 export type DevConfig = {
   service_account_path: string;
+  firestore_service_account_path?: string;
+  jwt_secret?: string;
   fhir_base_url?: string;
   fhirstore_url?: string;
   gcp?: { project_id?: string; location?: string; dataset?: string; fhir_store?: string };
@@ -53,11 +56,97 @@ export type DevConfig = {
 export class DevConfigService {
   private config: DevConfig;
   private readonly logger = new Logger(DevConfigService.name);
+  private firestore: Firestore | null = null;
+  private readonly collectionName = 'config';
+  private tenantConfigCache: Map<string, TenantConfig | null> = new Map();
 
   constructor() {
     this.logger.log(`🔧 DevConfigService initializing with NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
     // Load config from YAML file synchronously
     this.loadConfigSync();
+  }
+
+  /**
+   * Initialize Firestore client lazily
+   */
+  private getFirestore(): Firestore {
+    if (!this.firestore) {
+      let serviceAccountPath: string | undefined;
+
+      try {
+        serviceAccountPath = this.config.firestore_service_account_path || this.config.service_account_path;
+      } catch (error) {
+        this.logger.log('Config not available, using Application Default Credentials');
+      }
+
+      this.firestore = new Firestore(
+        serviceAccountPath ? { keyFilename: serviceAccountPath } : {},
+      );
+
+      this.logger.log('Firestore DevConfigService initialized');
+    }
+    return this.firestore;
+  }
+
+  /**
+   * Get tenant configuration from Firestore
+   */
+  private async getTenantConfigFromFirestore(tenantId: string): Promise<TenantConfig | null> {
+    try {
+      // Check cache first
+      if (this.tenantConfigCache.has(tenantId)) {
+        return this.tenantConfigCache.get(tenantId) || null;
+      }
+
+      const doc = await this.getFirestore()
+        .collection(this.collectionName)
+        .doc(tenantId)
+        .get();
+
+      if (!doc.exists) {
+        this.logger.debug(`Tenant config not found in Firestore: ${tenantId}`);
+        this.tenantConfigCache.set(tenantId, null);
+        return null;
+      }
+
+      const data = doc.data();
+      if (!data || !data.config) {
+        this.tenantConfigCache.set(tenantId, null);
+        return null;
+      }
+
+      // Extract the TenantConfig structure from Firestore data
+      // The config.tenantConfig field contains the actual google, cerner, pubsub structure
+      const firestoreConfig = data.config as any;
+      
+      if (!firestoreConfig.tenantConfig) {
+        this.logger.warn(`Tenant config structure not found in Firestore for: ${tenantId}`);
+        this.tenantConfigCache.set(tenantId, null);
+        return null;
+      }
+      
+      // Build TenantConfig from Firestore data
+      const tenantConfig: TenantConfig = {
+        google: firestoreConfig.tenantConfig.google || {
+          dataset: '',
+          fhir_store: '',
+        },
+        cerner: firestoreConfig.tenantConfig.cerner || {
+          base_url: '',
+        },
+        pubsub: firestoreConfig.tenantConfig.pubsub,
+      };
+
+      // Cache the result
+      this.tenantConfigCache.set(tenantId, tenantConfig);
+      this.logger.log(`✅ Loaded tenant config from Firestore: ${tenantId}`);
+      
+      return tenantConfig;
+    } catch (error) {
+      this.logger.warn(`Error getting tenant config from Firestore: ${error.message}`);
+      this.tenantConfigCache.set(tenantId, null);
+      return null;
+    }
   }
 
   private loadConfigSync() {
@@ -76,6 +165,8 @@ export class DevConfigService {
       // Fall back to environment variables if YAML fails
       this.config = {
         service_account_path: process.env.SERVICE_ACCOUNT_PATH || '',
+        firestore_service_account_path: process.env.FIRESTORE_SERVICE_ACCOUNT_PATH,
+        jwt_secret: process.env.JWT_SECRET,
         fhir_base_url: process.env.FHIR_BASE_URL,
         fhirstore_url: process.env.FHIRSTORE_URL,
         gcp: {
@@ -110,35 +201,63 @@ export class DevConfigService {
     return this.config;
   }
 
-  getTenantConfig(tenantId: string): TenantConfig | null {
+  /**
+   * Get tenant configuration - checks Firestore first, then YAML config
+   * Note: This method is async now to support Firestore lookups
+   */
+  async getTenantConfig(tenantId: string): Promise<TenantConfig | null> {
+    // Try Firestore first
+    const firestoreConfig = await this.getTenantConfigFromFirestore(tenantId);
+    if (firestoreConfig) {
+      return firestoreConfig;
+    }
+
+    // Fallback to YAML config
+    if (!this.config.tenants) {
+      return null;
+    }
+    
+    const yamlConfig = this.config.tenants[tenantId] || this.config.tenants['default'] || null;
+    if (yamlConfig) {
+      this.logger.debug(`✅ Loaded tenant config from YAML: ${tenantId}`);
+    }
+    
+    return yamlConfig;
+  }
+
+  /**
+   * Synchronous version for backward compatibility (YAML only)
+   * Use this when you need synchronous access and can't use async
+   */
+  getTenantConfigSync(tenantId: string): TenantConfig | null {
     if (!this.config.tenants) {
       return null;
     }
     return this.config.tenants[tenantId] || this.config.tenants['default'] || null;
   }
 
-  getTenantGoogleConfig(tenantId: string): TenantConfig['google'] | null {
-    const tenantConfig = this.getTenantConfig(tenantId);
+  async getTenantGoogleConfig(tenantId: string): Promise<TenantConfig['google'] | null> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
     return tenantConfig?.google || null;
   }
 
-  getTenantGoogleDataset(tenantId: string): string | null {
-    const googleConfig = this.getTenantGoogleConfig(tenantId);
+  async getTenantGoogleDataset(tenantId: string): Promise<string | null> {
+    const googleConfig = await this.getTenantGoogleConfig(tenantId);
     return googleConfig?.dataset || null;
   }
 
-  getTenantGoogleFhirStore(tenantId: string): string | null {
-    const googleConfig = this.getTenantGoogleConfig(tenantId);
+  async getTenantGoogleFhirStore(tenantId: string): Promise<string | null> {
+    const googleConfig = await this.getTenantGoogleConfig(tenantId);
     return googleConfig?.fhir_store || null;
   }
 
-  getTenantCernerConfig(tenantId: string): TenantConfig['cerner'] | null {
-    const tenantConfig = this.getTenantConfig(tenantId);
+  async getTenantCernerConfig(tenantId: string): Promise<TenantConfig['cerner'] | null> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
     return tenantConfig?.cerner || null;
   }
 
-  getTenantCernerSystemConfig(tenantId: string): TenantConfig['cerner']['system_app'] | null {
-    const cernerConfig = this.getTenantCernerConfig(tenantId);
+  async getTenantCernerSystemConfig(tenantId: string): Promise<TenantConfig['cerner']['system_app'] | null> {
+    const cernerConfig = await this.getTenantCernerConfig(tenantId);
     if (!cernerConfig) return null;
     
     // Return system_app config if available, otherwise fall back to legacy config
@@ -159,13 +278,13 @@ export class DevConfigService {
     return null;
   }
 
-  getTenantCernerProviderConfig(tenantId: string): TenantConfig['cerner']['provider_app'] | null {
-    const cernerConfig = this.getTenantCernerConfig(tenantId);
+  async getTenantCernerProviderConfig(tenantId: string): Promise<TenantConfig['cerner']['provider_app'] | null> {
+    const cernerConfig = await this.getTenantCernerConfig(tenantId);
     return cernerConfig?.provider_app || null;
   }
 
-  getTenantCernerPatients(tenantId: string): string[] {
-    const cernerConfig = this.getTenantCernerConfig(tenantId);
+  async getTenantCernerPatients(tenantId: string): Promise<string[]> {
+    const cernerConfig = await this.getTenantCernerConfig(tenantId);
     return cernerConfig?.patients || [];
   }
 
@@ -179,16 +298,16 @@ export class DevConfigService {
   /**
    * Get Pub/Sub topic name from tenant config
    */
-  getTenantPubSubTopicName(tenantId: string): string {
-    const tenantConfig = this.getTenantConfig(tenantId);
+  async getTenantPubSubTopicName(tenantId: string): Promise<string> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
     return tenantConfig?.pubsub?.topic_name || `discharge-export-events-${tenantId}`;
   }
 
   /**
    * Get Pub/Sub service account path from tenant config
    */
-  getTenantPubSubServiceAccountPath(tenantId: string): string {
-    const tenantConfig = this.getTenantConfig(tenantId);
+  async getTenantPubSubServiceAccountPath(tenantId: string): Promise<string> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
     const env = process.env.NODE_ENV || 'dev';
     const defaultPath = path.resolve(process.cwd(), `.settings.${env}/fhir_store_sa.json`);
     return tenantConfig?.pubsub?.service_account_path || this.config.service_account_path || defaultPath;

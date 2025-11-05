@@ -5,10 +5,10 @@ import { DischargeExportService } from '../../services/discharge-export.service'
 import { GoogleService } from '../../../google/google.service';
 import { CernerService } from '../../../cerner/cerner.service';
 import { DevConfigService } from '../../../config/dev-config.service';
-import { SessionService } from '../../../auth/session.service';
+import { SessionService } from '../../../cerner-auth/session.service';
 import { PubSubService } from '../../../pubsub/pubsub.service';
 import { TenantContext } from '../../../tenant/tenant-context';
-import { AuthType } from '../../../auth/types/auth.types';
+import { AuthType } from '../../../cerner-auth/types/auth.types';
 import { ExportResult, DocumentExportEvent } from '../../types/discharge-export.types';
 
 describe('DocumentExportScheduler', () => {
@@ -23,6 +23,8 @@ describe('DocumentExportScheduler', () => {
   const mockTenantContext: TenantContext = {
     tenantId: 'test-tenant',
     userId: 'test-user',
+    timestamp: new Date(),
+    requestId: 'test-request-id',
   };
 
   beforeEach(async () => {

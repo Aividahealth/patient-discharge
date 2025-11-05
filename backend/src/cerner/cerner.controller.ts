@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query, HttpException, 
 import { CernerService } from './cerner.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
-import { AuthType } from '../auth/types/auth.types';
+import { AuthType } from '../cerner-auth/types/auth.types';
 
 @Controller('cerner')
 export class CernerController {

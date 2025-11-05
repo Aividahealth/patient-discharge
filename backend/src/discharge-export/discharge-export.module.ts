@@ -10,7 +10,7 @@ import { GoogleModule } from '../google/google.module';
 import { CernerModule } from '../cerner/cerner.module';
 import { ConfigModule } from '../config/config.module';
 import { AuditModule } from '../audit/audit.module';
-import { AuthModule } from '../auth/auth.module';
+import { CernerAuthModule } from '../cerner-auth/cerner-auth.module';
 import { PubSubModule } from '../pubsub/pubsub.module';
 
 @Module({
@@ -19,7 +19,7 @@ import { PubSubModule } from '../pubsub/pubsub.module';
     CernerModule,
     ConfigModule,
     AuditModule,
-    AuthModule,
+    CernerAuthModule,
     PubSubModule,
   ],
   controllers: [

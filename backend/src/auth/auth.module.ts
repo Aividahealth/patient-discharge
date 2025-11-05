@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
-import { CernerAuthService } from './cerner-auth.service';
-import { SessionService } from './session.service';
+import { AuthService } from './auth.service';
+import { UserService } from './user.service';
 import { ConfigModule } from '../config/config.module';
 
 @Module({
   imports: [ConfigModule],
   controllers: [AuthController],
-  providers: [CernerAuthService, SessionService],
-  exports: [CernerAuthService, SessionService],
+  providers: [AuthService, UserService],
+  exports: [AuthService, UserService],
 })
 export class AuthModule {}

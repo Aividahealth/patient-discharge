@@ -4,9 +4,9 @@ import { DischargeExportService } from './discharge-export.service';
 import { GoogleService } from '../../google/google.service';
 import { CernerService } from '../../cerner/cerner.service';
 import { DevConfigService } from '../../config/dev-config.service';
-import { SessionService } from '../../auth/session.service';
+import { SessionService } from '../../cerner-auth/session.service';
 import { TenantContext } from '../../tenant/tenant-context';
-import { AuthType } from '../../auth/types/auth.types';
+import { AuthType } from '../../cerner-auth/types/auth.types';
 import { PubSubService } from '../../pubsub/pubsub.service';
 import { DocumentExportEvent } from '../types/discharge-export.types';
 
@@ -88,7 +88,7 @@ export class DocumentExportScheduler {
     };
 
     // Get the list of patients to process for this tenant
-    const patients = this.configService.getTenantCernerPatients(tenantId);
+    const patients = await this.configService.getTenantCernerPatients(tenantId);
     
     if (patients.length === 0) {
       this.logger.log(`📭 No patients configured for tenant ${tenantId}, skipping document processing`);
@@ -160,7 +160,7 @@ export class DocumentExportScheduler {
     this.logger.log(`👤 Processing documents for user: ${session.userId} in tenant: ${tenantId}`);
 
     // Get the list of patients to process for this tenant
-    const patients = this.configService.getTenantCernerPatients(tenantId);
+    const patients = await this.configService.getTenantCernerPatients(tenantId);
     
     if (patients.length === 0) {
       this.logger.log(`📭 No patients configured for tenant ${tenantId}, skipping document processing for user ${session.userId}`);

@@ -11,8 +11,9 @@ import { DischargeExportModule } from './discharge-export/discharge-export.modul
 import { ExpertModule } from './expert/expert.module';
 import { TenantModule } from './tenant/tenant.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
-import { AuthModule } from './auth/auth.module';
+import { CernerAuthModule } from './cerner-auth/cerner-auth.module';
 import { PubSubModule } from './pubsub/pubsub.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -25,8 +26,9 @@ import { PubSubModule } from './pubsub/pubsub.module';
     ExpertModule,
     TenantModule,
     SchedulerModule,
-    AuthModule,
+    CernerAuthModule,
     PubSubModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
