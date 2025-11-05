@@ -1,9 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Cerner-inspired color palette */
+  --cerner-blue: #007DB8;
+  --hover-blue: #009DE0;
+  --text-color: #333333;
+  --light-gray: #F2F2F2;
+  --footer-bg: #1F1F1F;
+
   /* Updated color palette for healthcare platform with professional gray primary and purple accent */
   --background: oklch(1 0 0); /* #ffffff - Clean white background */
   --foreground: oklch(0.205 0 0); /* #1f2937 - Dark gray text */
@@ -124,10 +132,46 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: 'Open Sans', sans-serif;
   }
   /* Added heading font class for professional typography */
   .font-heading {
     font-family: var(--font-heading), var(--font-sans);
+  }
+
+  /* Cerner-inspired utility classes */
+  .font-open-sans {
+    font-family: 'Open Sans', sans-serif;
+  }
+
+  .text-cerner-blue {
+    color: var(--cerner-blue);
+  }
+
+  .bg-cerner-blue {
+    background-color: var(--cerner-blue);
+  }
+
+  .bg-hover-blue {
+    background-color: var(--hover-blue);
+  }
+
+  .bg-light-gray {
+    background-color: var(--light-gray);
+  }
+
+  .bg-footer {
+    background-color: var(--footer-bg);
+  }
+
+  .hover\:bg-hover-blue:hover {
+    background-color: var(--hover-blue);
+    transition: background-color 0.2s ease;
+  }
+
+  .hover\:text-cerner-blue:hover {
+    color: var(--cerner-blue);
+    transition: color 0.2s ease;
   }
 }
 

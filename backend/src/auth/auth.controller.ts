@@ -19,6 +19,154 @@ export class AuthController {
   ) {}
 
   /**
+   * Simple password-based login endpoint (for demo/basic auth)
+   * POST /api/auth/login
+   */
+  @Post('login')
+  async simpleLogin(
+    @Body() body: { tenantId: string; username: string; password: string },
+  ) {
+    try {
+      this.logger.log(`🔐 Login attempt - Tenant: ${body.tenantId}, Username: ${body.username}`);
+
+      // Demo validation - in production, this would check against a database
+      const validPassword = 'Adyar2Austin';
+
+      if (body.password !== validPassword) {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'Invalid credentials',
+          },
+          HttpStatus.UNAUTHORIZED,
+        );
+      }
+
+      // Map username to role
+      const roleMap: Record<string, string> = {
+        'patient': 'patient',
+        'clinician': 'clinician',
+        'admin': 'admin',
+        'expert': 'expert',
+      };
+
+      const role = roleMap[body.username] || 'patient';
+
+      // Generate a simple JWT-like token (in production, use proper JWT library)
+      const token = Buffer.from(
+        JSON.stringify({
+          userId: `user-${body.tenantId}-${body.username}`,
+          tenantId: body.tenantId,
+          username: body.username,
+          role,
+          iat: Date.now(),
+        })
+      ).toString('base64');
+
+      // Mock user and tenant data
+      const user = {
+        id: `user-${body.tenantId}-${body.username}`,
+        tenantId: body.tenantId,
+        username: body.username,
+        name: body.username === 'patient' ? 'John Smith' :
+              body.username === 'clinician' ? 'Dr. Sarah Johnson' :
+              body.username === 'admin' ? 'System Admin' :
+              body.username === 'expert' ? 'Expert Reviewer' : 'User',
+        role,
+        linkedPatientId: role === 'patient' ? `patient-${body.tenantId}-001` : undefined,
+      };
+
+      const tenant = {
+        id: body.tenantId,
+        name: body.tenantId === 'demo' ? 'Demo Hospital' : `${body.tenantId} Hospital`,
+        branding: {
+          logo: `https://storage.googleapis.com/aivida-assets/logos/${body.tenantId}.png`,
+          primaryColor: '#3b82f6',
+          secondaryColor: '#60a5fa',
+        },
+      };
+
+      this.logger.log(`✅ Login successful - User: ${user.id}, Role: ${role}`);
+
+      return {
+        success: true,
+        token,
+        expiresIn: 86400, // 24 hours
+        user,
+        tenant,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error('💥 Login error:', error);
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Login failed',
+          message: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Get tenant configuration and branding
+   * GET /api/config
+   */
+  @Get('config')
+  async getTenantConfig(@TenantContext() ctx: TenantContextType) {
+    try {
+      this.logger.log(`⚙️ Fetching config for tenant: ${ctx.tenantId}`);
+
+      // Mock tenant configuration (in production, fetch from database)
+      const tenant = {
+        id: ctx.tenantId,
+        name: ctx.tenantId === 'demo' ? 'Demo Hospital' : `${ctx.tenantId} Hospital`,
+        status: 'active',
+        type: 'demo',
+        branding: {
+          logo: `https://storage.googleapis.com/aivida-assets/logos/${ctx.tenantId}.png`,
+          favicon: `https://storage.googleapis.com/aivida-assets/favicons/${ctx.tenantId}.ico`,
+          primaryColor: '#3b82f6',
+          secondaryColor: '#60a5fa',
+          accentColor: '#1e40af',
+        },
+        features: {
+          aiGeneration: true,
+          multiLanguage: true,
+          supportedLanguages: ['en', 'es', 'hi', 'vi', 'fr'],
+          fileUpload: true,
+          expertPortal: true,
+          clinicianPortal: true,
+          adminPortal: true,
+        },
+        config: {
+          simplificationEnabled: true,
+          translationEnabled: true,
+          defaultLanguage: 'en',
+        },
+      };
+
+      return {
+        success: true,
+        tenant,
+      };
+    } catch (error) {
+      this.logger.error('💥 Config fetch error:', error);
+      throw new HttpException(
+        {
+          success: false,
+          error: 'Failed to fetch tenant configuration',
+          message: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
    * Generate a random state parameter for OAuth
    */
   private generateState(): string {

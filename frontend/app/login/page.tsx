@@ -9,116 +9,67 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Heart, Stethoscope, Settings, Eye, EyeOff, Shield, Users, User } from "lucide-react"
+import { Heart, Stethoscope, Settings, Eye, EyeOff, Shield, Users, User, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
-import { setAuthSession } from "@/lib/auth"
+import { useTenant } from "@/contexts/tenant-context"
+import { login as loginApi } from "@/lib/api/auth"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login } = useTenant()
   const [showPassword, setShowPassword] = useState(false)
   const [loginType, setLoginType] = useState("patient")
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [accessPassword, setAccessPassword] = useState("")
-  const [passwordError, setPasswordError] = useState("")
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  // Login form state
+  const [tenantId, setTenantId] = useState("demo")
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+  const [loginError, setLoginError] = useState("")
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
+  const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (accessPassword === "Adyar2Austin") {
-      setAuthSession()
-      setIsAuthenticated(true)
-      setPasswordError("")
-    } else {
-      setPasswordError("Incorrect password. Please try again.")
+
+    console.log('[Login] Form submitted with:', { tenantId, username, password: '***' })
+
+    try {
+      setIsLoggingIn(true)
+      setLoginError("")
+
+      console.log('[Login] Calling login API...')
+
+      // Call the login API
+      const authData = await loginApi({
+        tenantId,
+        username,
+        password,
+      })
+
+      console.log('[Login] Login successful:', authData)
+      console.log('[Login] User role from backend:', authData.user.role)
+      console.log('[Login] User object:', authData.user)
+
+      // Store in tenant context (now async to fetch config)
+      await login(authData)
+
+      // Redirect based on user role
+      const portal = authData.user.role
+      console.log('[Login] Portal to redirect to:', portal)
+      console.log('[Login] Full redirect path:', `/${tenantId}/${portal}`)
+      router.push(`/${tenantId}/${portal}`)
+    } catch (error) {
+      console.error('[Login] Error:', error)
+      setLoginError(error instanceof Error ? error.message : "Login failed. Please try again.")
+    } finally {
+      setIsLoggingIn(false)
     }
   }
 
-  const handlePortalAccess = (portal: string) => {
-    setAuthSession()
-    router.push(`/${portal}`)
-  }
 
-  const demoCredentials = {
-    patient: {
-      token: "DEMO-PATIENT-2024",
-      description: "Access your discharge instructions and medication schedule",
-    },
-    clinician: {
-      email: "demo.clinician@hospital.com",
-      password: "Aivida2024",
-      description: "Review and publish patient discharge instructions",
-    },
-    admin: {
-      email: "admin@hospital.com",
-      password: "AdminCare2024",
-      description: "Manage system configuration and user access",
-    },
-  }
-
-  // Password protection gate
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <CommonHeader title="Login" />
-        <div className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6">
-          {/* Header */}
-          <div className="text-center space-y-2">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-lg">
-                <Image
-                  src="/aivida-logo.png"
-                  alt="Aivida Logo"
-                  width={80}
-                  height={80}
-                  className="rounded-lg"
-                />
-              </div>
-              <div className="text-left">
-                <h1 className="font-heading text-2xl font-bold text-foreground">Aivida</h1>
-                <p className="text-sm text-muted-foreground">Discharge Instructions Platform</p>
-              </div>
-            </div>
-            <p className="text-muted-foreground">Enter access password to continue</p>
-          </div>
-
-          {/* Password Form */}
-          <Card>
-            <CardHeader className="space-y-1">
-              <CardTitle className="font-heading text-xl text-center">Access Required</CardTitle>
-              <CardDescription className="text-center">This area is password protected</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="access-password">Password</Label>
-                  <Input
-                    id="access-password"
-                    type="password"
-                    placeholder="Enter access password"
-                    value={accessPassword}
-                    onChange={(e) => setAccessPassword(e.target.value)}
-                    className={passwordError ? "border-red-500" : ""}
-                  />
-                  {passwordError && (
-                    <p className="text-sm text-red-500">{passwordError}</p>
-                  )}
-                </div>
-                <Button type="submit" className="w-full">
-                  <Shield className="h-4 w-4 mr-2" />
-                  Access Platform
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-        </div>
-        <CommonFooter />
-      </div>
-    )
-  }
+  // Removed password gate - go directly to login form
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -152,6 +103,14 @@ export default function LoginPage() {
             <CardDescription className="text-center">Choose your account type to continue</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Login Error Display */}
+            {loginError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-red-600">{loginError}</p>
+              </div>
+            )}
+
             <Tabs value={loginType} onValueChange={setLoginType} className="space-y-4">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="patient" className="flex flex-col gap-1 py-2">
@@ -170,34 +129,83 @@ export default function LoginPage() {
 
               {/* Patient Login */}
               <TabsContent value="patient" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="patient-token">Access Token</Label>
-                  <Input
-                    id="patient-token"
-                    placeholder="Enter your discharge access token"
-                    defaultValue={demoCredentials.patient.token}
-                  />
-                  <p className="text-xs text-muted-foreground">{demoCredentials.patient.description}</p>
-                </div>
-                <Button 
-                  className="w-full"
-                  onClick={() => handlePortalAccess('patient')}
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Access Patient Portal
-                </Button>
+                <form onSubmit={handleManualLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="patient-tenant">Tenant ID</Label>
+                    <Input
+                      id="patient-tenant"
+                      placeholder="Enter tenant ID (e.g., demo)"
+                      value={tenantId}
+                      onChange={(e) => setTenantId(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Your organization identifier</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="patient-username">Username</Label>
+                    <Input
+                      id="patient-username"
+                      placeholder="Enter username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="patient-password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="patient-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isLoggingIn}
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    {isLoggingIn ? 'Logging in...' : 'Sign In'}
+                  </Button>
+                </form>
               </TabsContent>
 
               {/* Clinician Login */}
               <TabsContent value="clinician" className="space-y-4">
-                <div className="space-y-4">
+                <form onSubmit={handleManualLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="clinician-email">Email</Label>
+                    <Label htmlFor="clinician-tenant">Tenant ID</Label>
                     <Input
-                      id="clinician-email"
-                      type="email"
-                      placeholder="Enter your email"
-                      defaultValue={demoCredentials.clinician.email}
+                      id="clinician-tenant"
+                      placeholder="Enter tenant ID (e.g., demo)"
+                      value={tenantId}
+                      onChange={(e) => setTenantId(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Your organization identifier</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clinician-username">Username</Label>
+                    <Input
+                      id="clinician-username"
+                      placeholder="Enter username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -206,8 +214,10 @@ export default function LoginPage() {
                       <Input
                         id="clinician-password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        defaultValue={demoCredentials.clinician.password}
+                        placeholder="Enter password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
                       />
                       <Button
                         type="button"
@@ -220,27 +230,39 @@ export default function LoginPage() {
                       </Button>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">{demoCredentials.clinician.description}</p>
-                </div>
-                <Button 
-                  className="w-full"
-                  onClick={() => handlePortalAccess('clinician')}
-                >
-                  <Stethoscope className="h-4 w-4 mr-2" />
-                  Access Clinician Portal
-                </Button>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isLoggingIn}
+                  >
+                    <Stethoscope className="h-4 w-4 mr-2" />
+                    {isLoggingIn ? 'Logging in...' : 'Sign In'}
+                  </Button>
+                </form>
               </TabsContent>
 
               {/* Admin Login */}
               <TabsContent value="admin" className="space-y-4">
-                <div className="space-y-4">
+                <form onSubmit={handleManualLogin} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="admin-email">Email</Label>
+                    <Label htmlFor="admin-tenant">Tenant ID</Label>
                     <Input
-                      id="admin-email"
-                      type="email"
-                      placeholder="Enter your email"
-                      defaultValue={demoCredentials.admin.email}
+                      id="admin-tenant"
+                      placeholder="Enter tenant ID (e.g., demo)"
+                      value={tenantId}
+                      onChange={(e) => setTenantId(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">Your organization identifier</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="admin-username">Username</Label>
+                    <Input
+                      id="admin-username"
+                      placeholder="Enter username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -249,8 +271,10 @@ export default function LoginPage() {
                       <Input
                         id="admin-password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        defaultValue={demoCredentials.admin.password}
+                        placeholder="Enter password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
                       />
                       <Button
                         type="button"
@@ -263,15 +287,15 @@ export default function LoginPage() {
                       </Button>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">{demoCredentials.admin.description}</p>
-                </div>
-                <Button 
-                  className="w-full"
-                  onClick={() => handlePortalAccess('admin')}
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Access Admin Dashboard
-                </Button>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isLoggingIn}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    {isLoggingIn ? 'Logging in...' : 'Sign In'}
+                  </Button>
+                </form>
               </TabsContent>
             </Tabs>
 
@@ -295,33 +319,6 @@ export default function LoginPage() {
           </CardContent>
         </Card>
 
-        {/* Demo Information */}
-        <Card className="border-accent/20 bg-accent/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="font-heading text-lg flex items-center gap-2">
-              <Badge variant="secondary">Demo Mode</Badge>
-              Quick Access Credentials
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <p className="font-medium">Patient Access Token:</p>
-              <code className="text-xs bg-muted px-2 py-1 rounded">{demoCredentials.patient.token}</code>
-            </div>
-            <div>
-              <p className="font-medium">Clinician Login:</p>
-              <code className="text-xs bg-muted px-2 py-1 rounded">{demoCredentials.clinician.email}</code>
-            </div>
-            <div>
-              <p className="font-medium">Admin Login:</p>
-              <code className="text-xs bg-muted px-2 py-1 rounded">{demoCredentials.admin.email}</code>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              This is a demonstration environment. In production, secure authentication and OTP verification would be
-              required.
-            </p>
-          </CardContent>
-        </Card>
 
       </div>
       </div>

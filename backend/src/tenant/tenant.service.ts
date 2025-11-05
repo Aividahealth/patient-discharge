@@ -13,18 +13,33 @@ export class TenantService {
    */
   extractTenantId(request: Request): string {
     const headers = request.headers;
-    
+
     // Try different header variations
-    const tenantId = 
+    const tenantId =
       headers['x-tenant-id'] as string ||
       headers['X-Tenant-ID'] as string ||
       headers['tenant-id'] as string;
-    
+
     if (!tenantId) {
       throw new Error('Tenant ID is required. Please provide X-Tenant-ID, x-tenant-id, or tenant-id header.');
     }
-    
+
     return tenantId;
+  }
+
+  /**
+   * Extract tenant ID from request headers (optional - returns null if not found)
+   */
+  extractTenantIdOptional(request: Request): string | null {
+    const headers = request.headers;
+
+    // Try different header variations
+    const tenantId =
+      headers['x-tenant-id'] as string ||
+      headers['X-Tenant-ID'] as string ||
+      headers['tenant-id'] as string;
+
+    return tenantId || null;
   }
 
   /**
