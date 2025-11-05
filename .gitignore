@@ -100,3 +100,13 @@ public
 # Temporary folders
 tmp/
 temp/
+
+# Google Cloud Service Account credentials
+backend/.settings.dev/
+backend/.settings.prod/
+backend/.settings.staging/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.*.json
