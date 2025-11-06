@@ -23,6 +23,8 @@ import {
   AlertCircle,
   Loader2
 } from "lucide-react"
+import { useTenant } from "@/contexts/tenant-context"
+import { createApiClient } from "@/lib/api-client"
 
 interface FileUploadModalProps {
   isOpen: boolean
@@ -52,6 +54,7 @@ interface PatientData {
 }
 
 export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUploadModalProps) {
+  const { tenantId, token } = useTenant()
   const [selectedFiles, setSelectedFiles] = useState<UploadFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
@@ -130,6 +133,12 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
       return;
     }
 
+    // Validate tenant context
+    if (!tenantId || !token) {
+      alert('Session expired. Please log in again.');
+      return;
+    }
+
     setIsUploading(true)
 
     // Upload each file
@@ -140,7 +149,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
         setSelectedFiles((prev) =>
           prev.map((f) =>
             f.id === fileItem.id
-              ? { ...f, status: 'uploading' as const }
+              ? { ...f, status: 'uploading' as const, progress: 50 }
               : f
           )
         )
@@ -151,26 +160,30 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
           formData.append('file', fileItem.file);
           formData.append('patientData', JSON.stringify(patientFormData));
 
-          // Get auth token and tenant ID (mock for now)
-          const token = localStorage.getItem('authToken') || 'mock-token';
-          const tenantId = localStorage.getItem('tenantId') || 'default-tenant';
+          // Create API client with tenant context
+          const apiClient = createApiClient({ tenantId, token });
 
-          // Upload file
-          const response = await fetch('/api/discharge-summary/upload', {
+          // Upload file using FormData (need to use fetch directly for file uploads)
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/discharge-summary/upload`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
-              'x-tenant-id': tenantId,
+              'X-Tenant-ID': tenantId,
             },
             body: formData,
           });
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
-            throw new Error(errorData.error || 'Upload failed');
+            const errorData = await response.json().catch(() => ({
+              success: false,
+              error: `Server error: ${response.status} ${response.statusText}`
+            }));
+            throw new Error(errorData.error || errorData.message || 'Upload failed');
           }
 
           const result = await response.json();
+
+          console.log('[FileUpload] Upload successful:', result);
 
           // Update file status to success
           setSelectedFiles((prev) =>
@@ -180,25 +193,32 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
                     ...f,
                     status: 'success' as const,
                     progress: 100,
-                    patientData: result.data,
+                    patientData: result.data || result.patient,
                   }
                 : f
             )
           );
 
-          // Call success callback
-          if (onUploadSuccess && result.data) {
-            onUploadSuccess(result.data);
+          // Call success callback with the parsed data
+          if (onUploadSuccess) {
+            const patientData = result.data || result.patient;
+            if (patientData) {
+              console.log('[FileUpload] Calling onUploadSuccess with:', patientData);
+              onUploadSuccess(patientData);
+            }
           }
         } catch (error) {
-          console.error('Upload error:', error);
+          console.error('[FileUpload] Upload error:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Upload failed. Please try again.';
+
           setSelectedFiles((prev) =>
             prev.map((f) =>
               f.id === fileItem.id
                 ? {
                     ...f,
                     status: 'error' as const,
-                    error: error instanceof Error ? error.message : 'Upload failed. Please try again.',
+                    progress: 0,
+                    error: errorMessage,
                   }
                 : f
             )
