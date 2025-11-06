@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ParserFactory, initializeTenantParsers } from '@/lib/parsers';
+
+// Initialize tenant parsers on module load
+initializeTenantParsers();
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,6 +86,28 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
+    // Parse discharge summary using tenant-specific parser
+    let parsedSummary;
+    try {
+      const parser = ParserFactory.getParser(tenantId);
+      parsedSummary = await parser.parse(buffer, file.type);
+
+      // Validate parsed data
+      const validation = parser.validate(parsedSummary);
+      if (!validation.valid) {
+        console.warn('Parser validation warnings:', validation.errors);
+        // Don't fail the upload, just log warnings
+      }
+    } catch (parseError) {
+      console.error('Parser error:', parseError);
+      // Continue with upload even if parsing fails
+      parsedSummary = {
+        rawText: buffer.toString('utf-8'),
+        warnings: [`Parsing failed: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`],
+        confidence: 0,
+      };
+    }
+
     // TODO: Replace with actual API call to backend
     // For now, we'll simulate the backend processing
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
@@ -122,30 +148,42 @@ export async function POST(request: NextRequest) {
       console.error('Backend API error:', backendError);
 
       // Fallback: Return mock response for development
+      // Merge parsed summary data with provided patient data
       const mockResponse = {
         id: `patient-${Date.now()}`,
-        mrn: parsedPatientData.mrn,
-        name: parsedPatientData.name,
-        room: parsedPatientData.room || 'TBD',
-        unit: parsedPatientData.unit || 'General',
-        dischargeDate: parsedPatientData.dischargeDate || new Date().toISOString().split('T')[0],
+        mrn: parsedSummary.mrn || parsedPatientData.mrn,
+        name: parsedSummary.patientName || parsedPatientData.name,
+        room: parsedPatientData.room || parsedSummary.room || 'TBD',
+        unit: parsedPatientData.unit || parsedSummary.unit || parsedSummary.service || 'General',
+        dischargeDate: parsedSummary.dischargeDate || parsedPatientData.dischargeDate || new Date().toISOString().split('T')[0],
         rawDischargeSummary: `composition-${Date.now()}-summary`,
         rawDischargeInstructions: `composition-${Date.now()}-instructions`,
         status: 'review',
-        attendingPhysician: parsedPatientData.attendingPhysician || {
+        attendingPhysician: parsedSummary.attendingPhysician || parsedPatientData.attendingPhysician || {
           name: 'Dr. Unknown',
           id: 'physician-unknown',
         },
-        avatar: parsedPatientData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${parsedPatientData.name}`,
+        avatar: parsedPatientData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${parsedSummary.patientName || parsedPatientData.name}`,
         fileName: file.name,
         fileSize: file.size,
         uploadedAt: new Date().toISOString(),
+        // Include parsed summary data
+        parsedSummary: {
+          ...parsedSummary,
+          parserConfidence: parsedSummary.confidence,
+          parserWarnings: parsedSummary.warnings,
+        },
       };
 
       return NextResponse.json({
         success: true,
-        message: 'File uploaded successfully (mock)',
+        message: 'File uploaded and parsed successfully (mock)',
         data: mockResponse,
+        parsingMetadata: {
+          confidence: parsedSummary.confidence,
+          warnings: parsedSummary.warnings,
+          parserVersion: parsedSummary.parserVersion,
+        },
       });
     }
   } catch (error) {
