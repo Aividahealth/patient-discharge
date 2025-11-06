@@ -42,8 +42,7 @@ export default function ClinicianDashboard() {
     appointments: false,
     dietActivity: false,
   })
-
-  const patients = [
+  const [patientsList, setPatientsList] = useState([
     {
       id: "patient-1",
       name: "John Smith",
@@ -88,7 +87,27 @@ export default function ClinicianDashboard() {
       specialty: "Pulmonology Unit",
       attendingPhysician: "Dr. Emily Rodriguez, MD",
     },
-  ]
+  ])
+
+  const handleUploadSuccess = (data: any) => {
+    // Add the new patient to the list
+    const newPatient = {
+      id: data.id,
+      name: data.name,
+      mrn: data.mrn,
+      room: data.room,
+      dischargeDate: data.dischargeDate,
+      status: data.status || "pending-review",
+      diagnosis: "Pending review of uploaded discharge summary",
+      specialty: data.unit || "General",
+      attendingPhysician: data.attendingPhysician?.name || "Unknown",
+    }
+    setPatientsList((prev) => [newPatient, ...prev])
+    setSelectedPatient(newPatient.id)
+    setShowUploadModal(false)
+  }
+
+  const patients = patientsList
 
   const languages = {
     en: "English",
@@ -1409,9 +1428,10 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
       <CommonFooter />
       
       {/* File Upload Modal */}
-      <FileUploadModal 
-        isOpen={showUploadModal} 
-        onClose={() => setShowUploadModal(false)} 
+      <FileUploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onUploadSuccess={handleUploadSuccess}
       />
       </div>
     </AuthGuard>

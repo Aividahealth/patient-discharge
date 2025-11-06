@@ -5,26 +5,29 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog"
-import { 
-  Upload, 
-  FileText, 
-  X, 
-  CheckCircle, 
+import {
+  Upload,
+  FileText,
+  X,
+  CheckCircle,
   AlertCircle,
-  Loader2 
+  Loader2
 } from "lucide-react"
 
 interface FileUploadModalProps {
   isOpen: boolean
   onClose: () => void
+  onUploadSuccess?: (data: any) => void
 }
 
 interface UploadFile {
@@ -33,12 +36,36 @@ interface UploadFile {
   status: 'pending' | 'uploading' | 'success' | 'error'
   progress: number
   error?: string
+  patientData?: PatientData
 }
 
-export function FileUploadModal({ isOpen, onClose }: FileUploadModalProps) {
+interface PatientData {
+  mrn: string
+  name: string
+  room?: string
+  unit?: string
+  dischargeDate?: string
+  attendingPhysician?: {
+    name: string
+    id?: string
+  }
+}
+
+export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUploadModalProps) {
   const [selectedFiles, setSelectedFiles] = useState<UploadFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [currentFileIndex, setCurrentFileIndex] = useState<number | null>(null)
+  const [patientFormData, setPatientFormData] = useState<PatientData>({
+    mrn: '',
+    name: '',
+    room: '',
+    unit: '',
+    dischargeDate: new Date().toISOString().split('T')[0],
+    attendingPhysician: {
+      name: '',
+    },
+  })
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return
@@ -97,53 +124,107 @@ export function FileUploadModal({ isOpen, onClose }: FileUploadModalProps) {
   }
 
   const handleUpload = async () => {
+    // Validate patient data
+    if (!patientFormData.mrn || !patientFormData.name) {
+      alert('Please fill in required patient information (MRN and Name)');
+      return;
+    }
+
     setIsUploading(true)
-    
-    // Simulate upload process for each file
-    for (const fileItem of selectedFiles) {
+
+    // Upload each file
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const fileItem = selectedFiles[i];
       if (fileItem.status === 'pending') {
+        setCurrentFileIndex(i);
         setSelectedFiles((prev) =>
           prev.map((f) =>
-            f.id === fileId
+            f.id === fileItem.id
               ? { ...f, status: 'uploading' as const }
               : f
           )
         )
 
-        // Simulate upload progress
-        for (let progress = 0; progress <= 100; progress += 10) {
-          await new Promise((resolve) => setTimeout(resolve, 100))
+        try {
+          // Prepare form data
+          const formData = new FormData();
+          formData.append('file', fileItem.file);
+          formData.append('patientData', JSON.stringify(patientFormData));
+
+          // Get auth token and tenant ID (mock for now)
+          const token = localStorage.getItem('authToken') || 'mock-token';
+          const tenantId = localStorage.getItem('tenantId') || 'default-tenant';
+
+          // Upload file
+          const response = await fetch('/api/discharge-summary/upload', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'x-tenant-id': tenantId,
+            },
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+            throw new Error(errorData.error || 'Upload failed');
+          }
+
+          const result = await response.json();
+
+          // Update file status to success
           setSelectedFiles((prev) =>
             prev.map((f) =>
               f.id === fileItem.id
-                ? { ...f, progress }
+                ? {
+                    ...f,
+                    status: 'success' as const,
+                    progress: 100,
+                    patientData: result.data,
+                  }
                 : f
             )
-          )
-        }
+          );
 
-        // Simulate success (90% chance) or error (10% chance)
-        const isSuccess = Math.random() > 0.1
-        setSelectedFiles((prev) =>
-          prev.map((f) =>
-            f.id === fileItem.id
-              ? {
-                  ...f,
-                  status: isSuccess ? 'success' : 'error',
-                  error: isSuccess ? undefined : 'Upload failed. Please try again.',
-                }
-              : f
-          )
-        )
+          // Call success callback
+          if (onUploadSuccess && result.data) {
+            onUploadSuccess(result.data);
+          }
+        } catch (error) {
+          console.error('Upload error:', error);
+          setSelectedFiles((prev) =>
+            prev.map((f) =>
+              f.id === fileItem.id
+                ? {
+                    ...f,
+                    status: 'error' as const,
+                    error: error instanceof Error ? error.message : 'Upload failed. Please try again.',
+                  }
+                : f
+            )
+          );
+        }
       }
     }
 
-    setIsUploading(false)
+    setIsUploading(false);
+    setCurrentFileIndex(null);
   }
 
   const handleClose = () => {
     setSelectedFiles([])
     setIsUploading(false)
+    setCurrentFileIndex(null)
+    setPatientFormData({
+      mrn: '',
+      name: '',
+      room: '',
+      unit: '',
+      dischargeDate: new Date().toISOString().split('T')[0],
+      attendingPhysician: {
+        name: '',
+      },
+    })
     onClose()
   }
 
@@ -164,6 +245,87 @@ export function FileUploadModal({ isOpen, onClose }: FileUploadModalProps) {
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Patient Information Form */}
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader>
+              <CardTitle className="text-base">Patient Information</CardTitle>
+              <CardDescription>
+                Fill in patient details for the discharge summary
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mrn">
+                    MRN <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="mrn"
+                    placeholder="MRN-12345"
+                    value={patientFormData.mrn}
+                    onChange={(e) => setPatientFormData({ ...patientFormData, mrn: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">
+                    Patient Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="name"
+                    placeholder="John Smith"
+                    value={patientFormData.name}
+                    onChange={(e) => setPatientFormData({ ...patientFormData, name: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="room">Room</Label>
+                  <Input
+                    id="room"
+                    placeholder="302"
+                    value={patientFormData.room}
+                    onChange={(e) => setPatientFormData({ ...patientFormData, room: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="unit">Unit</Label>
+                  <Input
+                    id="unit"
+                    placeholder="Cardiology Unit"
+                    value={patientFormData.unit}
+                    onChange={(e) => setPatientFormData({ ...patientFormData, unit: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dischargeDate">Discharge Date</Label>
+                  <Input
+                    id="dischargeDate"
+                    type="date"
+                    value={patientFormData.dischargeDate}
+                    onChange={(e) => setPatientFormData({ ...patientFormData, dischargeDate: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="physician">Attending Physician</Label>
+                  <Input
+                    id="physician"
+                    placeholder="Dr. Sarah Johnson, MD"
+                    value={patientFormData.attendingPhysician?.name || ''}
+                    onChange={(e) => setPatientFormData({
+                      ...patientFormData,
+                      attendingPhysician: { name: e.target.value }
+                    })}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* File Drop Zone */}
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
