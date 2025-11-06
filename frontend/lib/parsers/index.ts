@@ -24,5 +24,6 @@
 
 export { DischargeSummaryParser, type ParsedDischargeSummary, type ParserConfig } from './base-parser';
 export { DefaultDischargeSummaryParser } from './default-parser';
+export { STEMIDischargeSummaryParser } from './stemi-parser';
 export { ParserRegistry, ParserFactory, type TenantParserConfig } from './parser-registry';
 export { initializeTenantParsers, getTenantParserInfo, listConfiguredTenants } from './tenant-configs';

@@ -6,8 +6,11 @@ import { ParserFactory } from './parser-registry';
  */
 
 export function initializeTenantParsers() {
-  // Default tenant - uses default parser
-  ParserFactory.configureTenant('default-tenant', 'default');
+  // Default tenant - uses STEMI parser for demo
+  ParserFactory.configureTenant('default-tenant', 'stemi');
+
+  // Demo tenant - uses STEMI parser
+  ParserFactory.configureTenant('demo', 'stemi');
 
   // Example: Hospital A - uses default parser with custom settings
   ParserFactory.configureTenant('hospital-a', 'default', {

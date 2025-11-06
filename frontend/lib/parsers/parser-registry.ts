@@ -1,5 +1,6 @@
 import { DischargeSummaryParser, ParserConfig } from './base-parser';
 import { DefaultDischargeSummaryParser } from './default-parser';
+import { STEMIDischargeSummaryParser } from './stemi-parser';
 
 /**
  * Type for parser constructor
@@ -27,6 +28,8 @@ export class ParserRegistry {
   private constructor() {
     // Register default parser
     this.registerParser('default', DefaultDischargeSummaryParser);
+    // Register STEMI parser
+    this.registerParser('stemi', STEMIDischargeSummaryParser);
   }
 
   /**

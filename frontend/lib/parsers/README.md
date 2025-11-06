@@ -18,7 +18,18 @@ A flexible, tenant-specific parsing system for discharge summary documents that 
    - Confidence scoring based on successfully parsed fields
    - Handles various text patterns and formats
 
-3. **Parser Registry** (`parser-registry.ts`)
+3. **STEMI Parser** (`stemi-parser.ts`)
+   - Optimized parser for STEMI discharge summary format
+   - Configured as default for demo tenant
+   - Handles specific STEMI document patterns:
+     - ICD-10 codes in diagnosis sections
+     - Detailed lab results (troponin trends, CBC, BMP, lipid panel, HbA1c)
+     - Medication sections (New, Continued, Stopped)
+     - Follow-up appointments with timeframes
+     - Diet and lifestyle instructions
+     - Return precautions
+
+4. **Parser Registry** (`parser-registry.ts`)
    - Manages multiple parser types
    - Singleton pattern for global access
    - Tenant configuration management
