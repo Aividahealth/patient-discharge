@@ -6,15 +6,16 @@ import { useTenant } from "@/contexts/tenant-context"
 
 interface CommonHeaderProps {
   title?: string
+  hideTenantInfo?: boolean // When true, always show Aivida branding
 }
 
-export function CommonHeader({ title }: CommonHeaderProps) {
+export function CommonHeader({ title, hideTenantInfo = false }: CommonHeaderProps) {
   const { tenant } = useTenant()
 
-  // Use tenant branding if available, otherwise fall back to defaults
-  const logo = tenant?.branding?.logo || "/aivida-logo.png"
-  const name = tenant?.name || "Aivida Health"
-  const primaryColor = tenant?.branding?.primaryColor
+  // Use tenant branding if available and not hidden, otherwise fall back to Aivida defaults
+  const shouldShowTenant = !hideTenantInfo && tenant
+  const logo = shouldShowTenant ? tenant.branding?.logo : "/aivida-logo.png"
+  const name = shouldShowTenant ? tenant.name : "Aivida Health"
 
   return (
     <header className="bg-white border-b border-slate-200">
@@ -33,7 +34,7 @@ export function CommonHeader({ title }: CommonHeaderProps) {
               <div>
                 <span
                   className="text-xl font-bold"
-                  style={{ color: primaryColor || '#0f172a' }}
+                  style={shouldShowTenant ? { color: 'var(--tenant-primary)' } : { color: '#0f172a' }}
                 >
                   {name}
                 </span>

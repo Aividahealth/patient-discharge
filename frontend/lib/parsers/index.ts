@@ -1,29 +1,17 @@
 /**
  * Discharge Summary Parser System
  *
- * This module provides a flexible, tenant-specific parsing system for discharge summaries.
- *
- * Features:
- * - Base parser interface for extensibility
- * - Default parser for standard formats
- * - Parser registry for managing multiple parsers
- * - Tenant-specific configuration
- * - Easy integration with API routes
+ * This module provides a tenant-specific parsing system for discharge summaries.
  *
  * Usage:
  * ```typescript
- * import { ParserFactory } from '@/lib/parsers';
+ * import { parseDischargeDocument } from '@/lib/parsers/parser-registry';
  *
- * // Get parser for a tenant
- * const parser = ParserFactory.getParser('hospital-a');
- *
- * // Parse a discharge summary
- * const result = await parser.parse(fileBuffer, 'application/pdf');
+ * // Parse discharge summary and instructions
+ * const result = parseDischargeDocument(tenantId, rawSummary, rawInstructions);
  * ```
  */
 
-export { DischargeSummaryParser, type ParsedDischargeSummary, type ParserConfig } from './base-parser';
-export { DefaultDischargeSummaryParser } from './default-parser';
-export { STEMIDischargeSummaryParser } from './stemi-parser';
-export { ParserRegistry, ParserFactory, type TenantParserConfig } from './parser-registry';
-export { initializeTenantParsers, getTenantParserInfo, listConfiguredTenants } from './tenant-configs';
+// Export the parser registry functions
+export { parseDischargeDocument } from './parser-registry';
+export type { ParsedDischargeSummary, ParsedDischargeInstructions } from './parser-registry';

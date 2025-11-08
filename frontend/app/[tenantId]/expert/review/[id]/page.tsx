@@ -14,12 +14,55 @@ import { ArrowLeft, Loader2, Star, CheckCircle } from "lucide-react"
 import { getDischargeSummaryContent, DischargeSummaryContent } from "@/lib/discharge-summaries"
 import { submitFeedback } from "@/lib/expert-api"
 import { useToast } from "@/hooks/use-toast"
+import { TenantButton } from "@/components/tenant-button"
+import { TenantBadge } from "@/components/tenant-badge"
+import { tenantColors } from "@/lib/tenant-colors"
+import { useTenant } from "@/contexts/tenant-context"
+import { ErrorBoundary } from "@/components/error-boundary"
+
+// Star Rating Component
+const StarRating = ({ value, onChange, label, required = false }: {
+  value: number;
+  onChange: (v: number) => void;
+  label?: string;
+  required?: boolean;
+}) => (
+  <div className="space-y-2">
+    {label && (
+      <Label className="text-sm font-medium">
+        {label} {required && <span className="text-red-500">*</span>}
+      </Label>
+    )}
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(star)}
+          className="focus:outline-none transition-transform hover:scale-110"
+        >
+          <Star
+            className={`h-6 w-6 ${
+              star <= value
+                ? 'fill-yellow-400 text-yellow-400'
+                : 'fill-none text-gray-300'
+            }`}
+          />
+        </button>
+      ))}
+      {value > 0 && (
+        <span className="ml-2 text-sm text-muted-foreground">({value}/5)</span>
+      )}
+    </div>
+  </div>
+)
 
 export default function ExpertReviewPage() {
   const router = useRouter()
   const params = useParams()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const { tenantId, token } = useTenant()
   const summaryId = params.id as string
 
   // Get review type from URL parameters
@@ -183,7 +226,7 @@ export default function ExpertReviewPage() {
         specificIssues,
         hasHallucination,
         hasMissingInfo,
-      })
+      }, { tenantId, token })
 
       toast({
         title: "Success",
@@ -191,7 +234,7 @@ export default function ExpertReviewPage() {
       })
 
       // Navigate back to list
-      router.push('/expert')
+      router.push(`/${tenantId}/expert`)
     } catch (error) {
       console.error('Failed to submit feedback:', error)
       toast({
@@ -204,42 +247,6 @@ export default function ExpertReviewPage() {
     }
   }
 
-  const StarRating = ({ value, onChange, label, required = false }: { 
-    value: number; 
-    onChange: (v: number) => void; 
-    label?: string;
-    required?: boolean;
-  }) => (
-    <div className="space-y-2">
-      {label && (
-        <Label className="text-sm font-medium">
-          {label} {required && <span className="text-red-500">*</span>}
-        </Label>
-      )}
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            type="button"
-            onClick={() => onChange(star)}
-            className="focus:outline-none transition-transform hover:scale-110"
-          >
-            <Star
-              className={`h-6 w-6 ${
-                star <= value
-                  ? 'fill-yellow-400 text-yellow-400'
-                  : 'fill-none text-gray-300'
-              }`}
-            />
-          </button>
-        ))}
-        {value > 0 && (
-          <span className="ml-2 text-sm text-muted-foreground">({value}/5)</span>
-        )}
-      </div>
-    </div>
-  )
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -249,7 +256,8 @@ export default function ExpertReviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
@@ -282,9 +290,9 @@ export default function ExpertReviewPage() {
               Simplified to high school reading level for patients
             </CardDescription>
             <div className="flex items-center gap-2 mt-2">
-              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+              <TenantBadge tenantVariant="light">
                 AI Generated
-              </Badge>
+              </TenantBadge>
               <span className="text-xs text-muted-foreground">
                 This content has been simplified using artificial intelligence
               </span>
@@ -317,9 +325,9 @@ export default function ExpertReviewPage() {
               </CardDescription>
               {reviewType === 'translation' && (
                 <div className="flex items-center gap-2 mt-2">
-                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                  <TenantBadge tenantVariant="light">
                     AI Generated
-                  </Badge>
+                  </TenantBadge>
                   <span className="text-xs text-muted-foreground">
                     This content has been translated using artificial intelligence
                   </span>
@@ -634,6 +642,7 @@ export default function ExpertReviewPage() {
           </CardContent>
         </Card>
       </main>
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }

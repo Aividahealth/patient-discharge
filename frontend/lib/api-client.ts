@@ -1,6 +1,23 @@
 'use client'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
+// Get API base URL from environment with proper fallbacks
+function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL
+  }
+
+  if (process.env.API_URL) {
+    return process.env.API_URL
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000'
+  }
+
+  return 'https://patient-discharge-backend-647433528821.us-central1.run.app'
+}
+
+const API_BASE_URL = getApiBaseUrl()
 
 export interface ApiClientConfig {
   tenantId?: string | null
@@ -53,10 +70,36 @@ export class ApiClient {
   }
 
   /**
+   * Build URL with query parameters
+   */
+  private buildUrl(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined | null>
+  ): string {
+    const url = `${this.baseUrl}${endpoint}`
+
+    if (!params) return url
+
+    const queryParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, String(value))
+      }
+    })
+
+    const queryString = queryParams.toString()
+    return queryString ? `${url}?${queryString}` : url
+  }
+
+  /**
    * Make a GET request
    */
-  async get<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`
+  async get<T>(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined | null>,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = this.buildUrl(endpoint, params)
     const headers = this.getHeaders(options.headers)
 
     const response = await fetch(url, {
@@ -67,6 +110,11 @@ export class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: response.statusText }))
+      console.error(`[ApiClient] GET ${endpoint} failed:`, {
+        status: response.status,
+        statusText: response.statusText,
+        error
+      })
       throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`)
     }
 

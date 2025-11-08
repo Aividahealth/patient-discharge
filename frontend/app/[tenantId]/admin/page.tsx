@@ -15,6 +15,9 @@ import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
+import { ErrorBoundary } from "@/components/error-boundary"
+import { TenantButton } from "@/components/tenant-button"
+import { tenantColors } from "@/lib/tenant-colors"
 import {
   Settings,
   Database,
@@ -76,8 +79,9 @@ export default function AdminDashboard() {
   }
 
   return (
-    <AuthGuard>
-      <div className="min-h-screen bg-background flex flex-col">
+    <ErrorBoundary>
+      <AuthGuard>
+        <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Admin Portal" />
       
       {/* Admin Portal Header */}
@@ -277,7 +281,7 @@ export default function AdminDashboard() {
                     <span className="text-xs text-muted-foreground ml-auto">2 min ago</span>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div className="w-2 h-2 rounded-full" style={tenantColors.bgPrimary}></div>
                     <span className="text-muted-foreground">New FHIR integration configured</span>
                     <span className="text-xs text-muted-foreground ml-auto">1 hour ago</span>
                   </div>
@@ -497,7 +501,7 @@ export default function AdminDashboard() {
                     <span className="text-sm">Patients</span>
                     <div className="flex items-center gap-2">
                       <div className="w-24 bg-muted rounded-full h-2">
-                        <div className="bg-blue-500 h-2 rounded-full" style={{ width: "92%" }}></div>
+                        <div className="h-2 rounded-full" style={{ ...tenantColors.bgPrimary, width: "92%" }}></div>
                       </div>
                       <span className="text-sm font-medium">4.6/5</span>
                     </div>
@@ -568,11 +572,22 @@ export default function AdminDashboard() {
                   ].map((feedback, index) => (
                     <div key={index} className="flex items-start gap-4 p-4 border border-border rounded-lg">
                       <div className="flex flex-col items-center gap-1">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                          feedback.userType === 'Patient' ? 'bg-blue-100 text-blue-700' :
-                          feedback.userType === 'Clinician' ? 'bg-green-100 text-green-700' :
-                          'bg-purple-100 text-purple-700'
-                        }`}>
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium relative overflow-hidden ${
+                            feedback.userType === 'Clinician' ? 'bg-green-100 text-green-700' :
+                            feedback.userType === 'Expert' ? 'bg-purple-100 text-purple-700' : ''
+                          }`}
+                          style={feedback.userType === 'Patient' ? { color: 'var(--tenant-primary)' } : {}}
+                        >
+                          {feedback.userType === 'Patient' && (
+                            <span
+                              className="absolute inset-0 -z-10"
+                              style={{
+                                backgroundColor: 'var(--tenant-primary)',
+                                opacity: 0.15,
+                              }}
+                            />
+                          )}
                           {feedback.userType.charAt(0)}
                         </div>
                         <div className="text-2xl">
@@ -1118,6 +1133,7 @@ export default function AdminDashboard() {
       
       <CommonFooter />
       </div>
-    </AuthGuard>
+      </AuthGuard>
+    </ErrorBoundary>
   )
 }

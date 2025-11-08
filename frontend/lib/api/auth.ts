@@ -3,6 +3,31 @@
 import { ApiClient } from '../api-client'
 import type { AuthData } from '../../contexts/tenant-context'
 
+/**
+ * Extract filename from logo path and prepend /tenant/
+ * Handles various path formats:
+ * - "/public/tenant/Rainbow_Healing_logo.png" -> "/tenant/Rainbow_Healing_logo.png"
+ * - "Rainbow_Healing_logo.png" -> "/tenant/Rainbow_Healing_logo.png"
+ * - "/tenant/Rainbow_Healing_logo.png" -> "/tenant/Rainbow_Healing_logo.png"
+ *
+ * For favicon, if the path doesn't have a valid image extension, return default
+ */
+function normalizeTenantLogoPath(logoPath: string, isFavicon: boolean = false): string {
+  if (!logoPath) return '/aivida-logo.png';
+
+  // Extract just the filename from the path
+  const filename = logoPath.split('/').pop() || logoPath;
+
+  // For favicons, check if it has a valid image extension
+  if (isFavicon && !filename.match(/\.(png|jpg|jpeg|ico|svg)$/i)) {
+    // If no valid extension, use the logo as favicon
+    return '/aivida-logo.png';
+  }
+
+  // Return path pointing to /public/tenant/ folder
+  return `/tenant/${filename}`;
+}
+
 export interface LoginRequest {
   tenantId: string
   username: string
@@ -85,8 +110,8 @@ export async function login(request: LoginRequest): Promise<AuthData> {
       status: 'active',
       type: 'demo',
       branding: {
-        logo: response.tenant.branding.logo,
-        favicon: response.tenant.branding.logo,
+        logo: normalizeTenantLogoPath(response.tenant.branding.logo, false),
+        favicon: normalizeTenantLogoPath(response.tenant.branding.logo, true),
         primaryColor: response.tenant.branding.primaryColor,
         secondaryColor: response.tenant.branding.secondaryColor,
         accentColor: response.tenant.branding.primaryColor,
@@ -119,6 +144,12 @@ export async function getTenantConfig(tenantId: string, token: string): Promise<
 
   if (!response.success) {
     throw new Error('Failed to fetch tenant configuration')
+  }
+
+  // Normalize logo paths to use /tenant/ folder
+  if (response.tenant?.branding) {
+    response.tenant.branding.logo = normalizeTenantLogoPath(response.tenant.branding.logo, false);
+    response.tenant.branding.favicon = normalizeTenantLogoPath(response.tenant.branding.favicon, true);
   }
 
   return response

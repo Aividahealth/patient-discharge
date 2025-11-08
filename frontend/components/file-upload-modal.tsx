@@ -25,6 +25,95 @@ import {
 } from "lucide-react"
 import { useTenant } from "@/contexts/tenant-context"
 import { createApiClient } from "@/lib/api-client"
+import { parseDischargeDocument } from "@/lib/parsers/parser-registry"
+
+/**
+ * Load PDF.js library from CDN
+ */
+async function loadPDFJS() {
+  // Check if already loaded
+  if ((window as any).pdfjsLib) {
+    return (window as any).pdfjsLib
+  }
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
+    script.async = true
+    script.onload = () => {
+      const pdfjsLib = (window as any).pdfjsLib
+      if (pdfjsLib) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+        resolve(pdfjsLib)
+      } else {
+        reject(new Error('PDF.js failed to load'))
+      }
+    }
+    script.onerror = () => reject(new Error('Failed to load PDF.js script'))
+    document.head.appendChild(script)
+  })
+}
+
+/**
+ * Extract text from PDF file
+ */
+async function extractTextFromPDF(file: File): Promise<string> {
+  try {
+    const pdfjsLib = await loadPDFJS()
+    const arrayBuffer = await file.arrayBuffer()
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+
+    let fullText = ''
+
+    // Extract text from each page
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ')
+      fullText += pageText + '\n\n'
+    }
+
+    return fullText.trim()
+  } catch (error) {
+    console.error('[PDF Extraction] Error:', error)
+    throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+/**
+ * Extract text content from various file types
+ */
+async function extractTextFromFile(file: File): Promise<string> {
+  const fileName = file.name.toLowerCase()
+
+  console.log('[FileUpload] Extracting text from:', fileName)
+
+  // Handle text files
+  if (fileName.endsWith('.txt')) {
+    const text = await file.text()
+    console.log('[FileUpload] Extracted from TXT:', { length: text.length })
+    return text
+  }
+
+  // Handle markdown files
+  if (fileName.endsWith('.md')) {
+    const text = await file.text()
+    console.log('[FileUpload] Extracted from Markdown:', { length: text.length })
+    return text
+  }
+
+  // Handle PDF files
+  if (fileName.endsWith('.pdf')) {
+    const text = await extractTextFromPDF(file)
+    console.log('[FileUpload] Extracted from PDF:', { length: text.length, pages: text.split('\n\n').length })
+    return text
+  }
+
+  // Unsupported file type
+  throw new Error(`Unsupported file type. Please upload .txt, .md, or .pdf files only.`)
+}
 
 interface FileUploadModalProps {
   isOpen: boolean
@@ -71,16 +160,20 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
   })
 
   const handleFileSelect = (files: FileList | null) => {
-    if (!files) return
+    if (!files || files.length === 0) return
 
-    const newFiles: UploadFile[] = Array.from(files).map((file) => ({
+    // Only allow one file at a time
+    const file = files[0]
+
+    const newFile: UploadFile = {
       id: Math.random().toString(36).substr(2, 9),
       file,
       status: 'pending',
       progress: 0,
-    }))
+    }
 
-    setSelectedFiles((prev) => [...prev, ...newFiles])
+    // Replace any existing file with the new one
+    setSelectedFiles([newFile])
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -139,6 +232,13 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
       return;
     }
 
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📤 FILE UPLOAD - Starting Upload');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('👤 Patient Form Data:', JSON.stringify(patientFormData, null, 2));
+    console.log('📁 Files to upload:', selectedFiles.length);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     setIsUploading(true)
 
     // Upload each file
@@ -155,22 +255,67 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
         )
 
         try {
-          // Prepare form data
-          const formData = new FormData();
-          formData.append('file', fileItem.file);
-          formData.append('patientData', JSON.stringify(patientFormData));
+          // Extract text from file
+          const fileText = await extractTextFromFile(fileItem.file);
 
-          // Create API client with tenant context
-          const apiClient = createApiClient({ tenantId, token });
+          if (!fileText || fileText.trim().length === 0) {
+            throw new Error('Could not extract text from file. Please ensure the file contains readable text.');
+          }
 
-          // Upload file using FormData (need to use fetch directly for file uploads)
+          console.log('[FileUpload] Extracted text from file:', {
+            fileName: fileItem.file.name,
+            textLength: fileText.length,
+            preview: fileText.substring(0, 200) + '...'
+          });
+
+          // Parse the document using tenant-specific parser
+          console.log('[FileUpload] Parsing document using tenant parser...');
+          const parseResult = parseDischargeDocument(tenantId || 'demo', fileText, fileText);
+
+          // Prepare request body matching API spec
+          const requestBody = {
+            id: `patient-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            mrn: patientFormData.mrn,
+            name: patientFormData.name,
+            room: patientFormData.room || undefined,
+            unit: patientFormData.unit || undefined,
+            dischargeDate: patientFormData.dischargeDate,
+            rawDischargeSummary: fileText,
+            rawDischargeInstructions: fileText, // Using same text for now
+            // Add parsed data if parser was successful
+            parsedDischargeSummary: parseResult.parserUsed ? parseResult.parsedSummary : null,
+            parsedDischargeInstructions: parseResult.parserUsed ? parseResult.parsedInstructions : null,
+            status: 'review',
+            attendingPhysician: {
+              name: patientFormData.attendingPhysician?.name || '',
+              id: patientFormData.attendingPhysician?.id || `physician-${Date.now()}`
+            },
+            avatar: undefined // Optional field
+          };
+
+          console.log('[FileUpload] Sending request:', {
+            url: `${process.env.NEXT_PUBLIC_API_URL}/api/discharge-summary/upload`,
+            body: {
+              ...requestBody,
+              rawDischargeSummary: `${requestBody.rawDischargeSummary.substring(0, 100)}... (${requestBody.rawDischargeSummary.length} chars)`,
+              rawDischargeInstructions: `${requestBody.rawDischargeInstructions.substring(0, 100)}... (${requestBody.rawDischargeInstructions.length} chars)`
+            },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer [REDACTED]',
+              'X-Tenant-ID': tenantId
+            }
+          });
+
+          // Upload with JSON body
           const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/discharge-summary/upload`, {
             method: 'POST',
             headers: {
+              'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
               'X-Tenant-ID': tenantId,
             },
-            body: formData,
+            body: JSON.stringify(requestBody),
           });
 
           if (!response.ok) {
@@ -178,12 +323,19 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
               success: false,
               error: `Server error: ${response.status} ${response.statusText}`
             }));
+            console.error('[FileUpload] Upload failed:', {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorData
+            });
             throw new Error(errorData.error || errorData.message || 'Upload failed');
           }
 
           const result = await response.json();
 
-          console.log('[FileUpload] Upload successful:', result);
+          if (!result.parserUsed) {
+            console.warn('[FileUpload] Parser could not detect document format. The document may not have the expected section headers.');
+          }
 
           // Update file status to success
           setSelectedFiles((prev) =>
@@ -199,12 +351,57 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
             )
           );
 
-          // Call success callback with the parsed data
-          if (onUploadSuccess) {
-            const patientData = result.data || result.patient;
-            if (patientData) {
-              console.log('[FileUpload] Calling onUploadSuccess with:', patientData);
-              onUploadSuccess(patientData);
+          // Fetch composition data with the binaries
+          try {
+            const compositionResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/google/fhir/Composition/${result.compositionId}/binaries`,
+              {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                  'X-Tenant-ID': tenantId,
+                },
+              }
+            );
+
+            if (compositionResponse.ok) {
+              const compositionData = await compositionResponse.json();
+
+              // Call success callback with composition data
+              if (onUploadSuccess) {
+                const enrichedData = {
+                  patientId: result.patientId,
+                  compositionId: result.compositionId,
+                  patientInfo: patientFormData,
+                  composition: compositionData,
+                  rawText: fileText,
+                };
+
+                onUploadSuccess(enrichedData);
+              }
+            } else {
+              console.warn('[FileUpload] Failed to fetch composition data:', compositionResponse.status);
+              // Still call success callback with basic data
+              if (onUploadSuccess) {
+                onUploadSuccess({
+                  patientId: result.patientId,
+                  compositionId: result.compositionId,
+                  patientInfo: patientFormData,
+                  rawText: fileText,
+                });
+              }
+            }
+          } catch (compositionError) {
+            console.error('[FileUpload] Error fetching composition:', compositionError);
+            // Still call success callback with basic data
+            if (onUploadSuccess) {
+              onUploadSuccess({
+                patientId: result.patientId,
+                compositionId: result.compositionId,
+                patientInfo: patientFormData,
+                rawText: fileText,
+              });
             }
           }
         } catch (error) {
@@ -260,13 +457,14 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
             Upload Discharge Summaries
           </DialogTitle>
           <DialogDescription>
-            Select one or more discharge summary files to upload. Supported formats: PDF, DOC, DOCX, TXT
+            Select one or more discharge summary files to upload. Supported formats: PDF, TXT
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Patient Information Form */}
-          <Card className="border-blue-200 bg-blue-50/50">
+          <Card className="border-opacity-50 relative overflow-hidden" style={{ borderColor: 'var(--tenant-primary)' }}>
+            <span className="absolute inset-0 -z-10" style={{ backgroundColor: 'var(--tenant-primary)', opacity: 0.1 }} />
             <CardHeader>
               <CardTitle className="text-base">Patient Information</CardTitle>
               <CardDescription>
@@ -358,14 +556,13 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
             onDragLeave={handleDragLeave}
           >
             <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Drop files here or click to browse</h3>
+            <h3 className="text-lg font-medium mb-2">Drop file here or click to browse</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Select multiple files to upload discharge summaries
+              Select one discharge summary file to upload
             </p>
             <input
               type="file"
-              multiple
-              accept=".pdf,.doc,.docx,.txt"
+              accept=".pdf,.txt,.md"
               onChange={(e) => handleFileSelect(e.target.files)}
               className="hidden"
               id="file-upload"
@@ -379,10 +576,10 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
             </Button>
           </div>
 
-          {/* Selected Files List */}
+          {/* Selected File */}
           {selectedFiles.length > 0 && (
             <div className="space-y-3">
-              <h4 className="font-medium">Selected Files ({selectedFiles.length})</h4>
+              <h4 className="font-medium">Selected File</h4>
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {selectedFiles.map((fileItem) => (
                   <Card key={fileItem.id} className="p-3">
@@ -448,10 +645,8 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
           {/* Upload Actions */}
           <div className="flex items-center justify-between pt-4 border-t">
             <div className="text-sm text-muted-foreground">
-              {selectedFiles.length > 0 && (
-                <span>
-                  {selectedFiles.filter(f => f.status === 'success').length} of {selectedFiles.length} files uploaded
-                </span>
+              {selectedFiles.length > 0 && selectedFiles[0].status === 'success' && (
+                <span>File uploaded successfully</span>
               )}
             </div>
             
@@ -490,7 +685,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
                   <span className="font-medium">Upload Complete!</span>
                 </div>
                 <p className="text-sm text-green-700 mt-1">
-                  All files have been successfully uploaded. The discharge summaries will be processed and available for review shortly.
+                  The discharge summary has been successfully uploaded and is being processed. You can now review it in the main panel.
                 </p>
               </CardContent>
             </Card>

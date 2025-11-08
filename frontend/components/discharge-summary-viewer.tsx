@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { TenantBadge } from "@/components/tenant-badge"
 import { FileText, User, RefreshCw, Download, Loader2 } from "lucide-react"
 import {
   getDischargeSummaryContent,
@@ -203,9 +204,9 @@ export function DischargeSummaryViewer({
               Simplified to a high school reading level for better patient understanding
             </CardDescription>
             <div className="flex items-center gap-2 mt-2">
-              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+              <TenantBadge tenantVariant="light">
                 AI Generated
-              </Badge>
+              </TenantBadge>
               <span className="text-xs text-muted-foreground">
                 This content has been simplified using artificial intelligence
               </span>

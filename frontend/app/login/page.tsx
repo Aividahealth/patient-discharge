@@ -33,13 +33,9 @@ export default function LoginPage() {
   const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    console.log('[Login] Form submitted with:', { tenantId, username, password: '***' })
-
     try {
       setIsLoggingIn(true)
       setLoginError("")
-
-      console.log('[Login] Calling login API...')
 
       // Call the login API
       const authData = await loginApi({
@@ -48,17 +44,11 @@ export default function LoginPage() {
         password,
       })
 
-      console.log('[Login] Login successful:', authData)
-      console.log('[Login] User role from backend:', authData.user.role)
-      console.log('[Login] User object:', authData.user)
-
       // Store in tenant context (now async to fetch config)
       await login(authData)
 
       // Redirect based on user role
       const portal = authData.user.role
-      console.log('[Login] Portal to redirect to:', portal)
-      console.log('[Login] Full redirect path:', `/${tenantId}/${portal}`)
       router.push(`/${tenantId}/${portal}`)
     } catch (error) {
       console.error('[Login] Error:', error)
@@ -73,7 +63,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <CommonHeader title="Login" />
+      <CommonHeader title="Login" hideTenantInfo={true} />
       <div className="flex-1 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         {/* Header */}

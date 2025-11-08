@@ -1,233 +1,261 @@
 # Discharge Summary Parser System
 
-A flexible, tenant-specific parsing system for discharge summary documents that supports multiple formats and can be extended for different hospital systems.
+A tenant-specific parsing system for discharge summary documents. Each tenant can have its own parser implementation that understands their specific document format.
 
 ## Architecture
 
 ### Components
 
-1. **Base Parser** (`base-parser.ts`)
-   - Abstract class defining the parser interface
-   - Common parsing utilities (text extraction, section parsing, list parsing)
-   - Validation framework
-   - Support for PDF, DOC, DOCX, and TXT files
+1. **Parser Registry** (`parser-registry.ts`)
+   - Central registry that manages tenant-specific parsers
+   - Auto-detects which parser can handle a given document
+   - Provides the main `parseDischargeDocument()` function
+   - Supports multiple parsers per tenant (tries each until one succeeds)
 
-2. **Default Parser** (`default-parser.ts`)
-   - Implementation for standard discharge summary formats
-   - Parses all common sections (patient info, diagnoses, medications, etc.)
-   - Confidence scoring based on successfully parsed fields
-   - Handles various text patterns and formats
+2. **Tenant Parsers** (`tenants/{tenantId}/`)
+   - Each tenant has its own parser implementation
+   - Parsers are organized in tenant-specific folders
+   - Example: `tenants/demo/demo-parser.ts` for the demo tenant
 
-3. **STEMI Parser** (`stemi-parser.ts`)
-   - Optimized parser for STEMI discharge summary format
-   - Configured as default for demo tenant
-   - Handles specific STEMI document patterns:
-     - ICD-10 codes in diagnosis sections
-     - Detailed lab results (troponin trends, CBC, BMP, lipid panel, HbA1c)
-     - Medication sections (New, Continued, Stopped)
-     - Follow-up appointments with timeframes
-     - Diet and lifestyle instructions
-     - Return precautions
-
-4. **Parser Registry** (`parser-registry.ts`)
-   - Manages multiple parser types
-   - Singleton pattern for global access
-   - Tenant configuration management
-   - Parser factory for easy instantiation
-
-4. **Tenant Configuration** (`tenant-configs.ts`)
-   - Central configuration for all tenants
-   - Maps tenants to parser types
-   - Custom settings per tenant
+3. **Demo Parser** (`tenants/demo/demo-parser.ts`)
+   - Implementation for the demo tenant
+   - Parses standard discharge summary format with sections:
+     - Admitting Diagnosis
+     - Discharge Diagnosis
+     - Hospital Course
+     - Pertinent Results
+     - Condition at Discharge
+   - Also parses discharge instructions:
+     - Discharge Medications (new, continued, stopped)
+     - Follow-Up Appointments
+     - Diet and Lifestyle
+     - Patient Instructions
+     - Return Precautions
 
 ## Usage
 
 ### Basic Usage
 
 ```typescript
-import { ParserFactory } from '@/lib/parsers';
+import { parseDischargeDocument } from '@/lib/parsers/parser-registry';
 
-// Get parser for a specific tenant
-const parser = ParserFactory.getParser('hospital-a');
+// Parse discharge summary and instructions
+const result = parseDischargeDocument(
+  tenantId,        // e.g., 'demo'
+  rawSummary,      // Raw text from discharge summary document
+  rawInstructions  // Raw text from discharge instructions document
+);
 
-// Parse a discharge summary
-const result = await parser.parse(fileBuffer, 'application/pdf');
-
-// Access parsed data
-console.log(result.patientName);
-console.log(result.medications);
-console.log(result.confidence); // 0-1 score
+if (result.parserUsed) {
+  console.log('Parsed summary:', result.parsedSummary);
+  console.log('Parsed instructions:', result.parsedInstructions);
+} else {
+  console.log('No parser could handle this document');
+}
 ```
 
-### API Integration
-
-The upload API route automatically uses tenant-specific parsers:
+### In Components
 
 ```typescript
-// In /api/discharge-summary/upload/route.ts
-const parser = ParserFactory.getParser(tenantId);
-const parsedSummary = await parser.parse(buffer, file.type);
+// Example: In a file upload handler
+import { parseDischargeDocument } from '@/lib/parsers/parser-registry';
+
+const handleFileUpload = async (file: File, tenantId: string) => {
+  // Extract text from file (PDF, DOC, etc.)
+  const fileText = await extractTextFromFile(file);
+  
+  // Parse both summary and instructions (using same text for both if needed)
+  const parseResult = parseDischargeDocument(tenantId, fileText, fileText);
+  
+  if (parseResult.parserUsed && parseResult.parsedSummary) {
+    // Use parsed data
+    const { admittingDiagnosis, dischargeDiagnosis, hospitalCourse } = parseResult.parsedSummary;
+    // ... process parsed data
+  }
+};
 ```
 
 ## Adding a Custom Parser for a New Tenant
 
-### Option 1: Use Default Parser with Custom Settings
+### Step 1: Create Parser Directory
 
-```typescript
-// In tenant-configs.ts
-ParserFactory.configureTenant('my-hospital', 'default', {
-  dateFormat: 'MM/DD/YYYY',
-  strictValidation: true,
-  requireMedications: true,
-});
+Create a new folder for your tenant:
+```
+lib/parsers/tenants/{tenantId}/
 ```
 
-### Option 2: Create a Custom Parser
+### Step 2: Create Parser Class
 
-1. **Create a new parser class:**
+Create a parser file (e.g., `{tenantId}-parser.ts`):
 
 ```typescript
-// lib/parsers/epic-parser.ts
-import { DischargeSummaryParser, ParsedDischargeSummary, ParserConfig } from './base-parser';
+// lib/parsers/tenants/stanford/stanford-parser.ts
 
-export class EpicDischargeSummaryParser extends DischargeSummaryParser {
-  constructor(config: ParserConfig) {
-    super({
-      ...config,
-      parserType: 'epic',
-      version: '1.0.0',
-    });
+export interface ParsedDischargeSummary {
+  // Define your tenant-specific structure
+  patientName?: string;
+  mrn?: string;
+  diagnoses?: string[];
+  medications?: string[];
+  // ... other fields
+}
+
+export interface ParsedDischargeInstructions {
+  // Define your tenant-specific structure
+  medications?: string[];
+  followUp?: string[];
+  // ... other fields
+}
+
+export class StanfordParser {
+  /**
+   * Detect if this parser can handle the given text
+   * Return true if the document matches this tenant's format
+   */
+  canParse(text: string): boolean {
+    // Check for Stanford-specific markers
+    return /Stanford.*Hospital/i.test(text) || 
+           /STANFORD.*DISCHARGE/i.test(text);
   }
 
-  async parse(file: Buffer, fileType: string): Promise<ParsedDischargeSummary> {
-    // Custom parsing logic for Epic format
-    const text = await this.extractTextFromPDF(file);
-
-    // Use Epic-specific patterns
-    const result: ParsedDischargeSummary = {
-      patientName: this.parseEpicPatientName(text),
-      medications: this.parseEpicMedications(text),
-      // ... other Epic-specific parsing
+  /**
+   * Parse the raw discharge summary text
+   */
+  parseDischargeSummary(text: string): ParsedDischargeSummary {
+    // Implement parsing logic for Stanford format
+    return {
+      patientName: this.extractPatientName(text),
+      mrn: this.extractMRN(text),
+      diagnoses: this.extractDiagnoses(text),
+      // ... parse other fields
     };
-
-    return result;
   }
 
-  private parseEpicPatientName(text: string): string | undefined {
-    // Epic-specific patient name pattern
-    const match = text.match(/Patient:\s*([^\n]+)/);
-    return match ? match[1].trim() : undefined;
+  /**
+   * Parse the raw discharge instructions text
+   */
+  parseDischargeInstructions(text: string): ParsedDischargeInstructions {
+    // Implement parsing logic for Stanford instructions
+    return {
+      medications: this.extractMedications(text),
+      followUp: this.extractFollowUp(text),
+      // ... parse other fields
+    };
   }
 
-  private parseEpicMedications(text: string): ParsedDischargeSummary['medications'] {
-    // Epic-specific medication parsing
-    // ...
+  // Helper methods
+  private extractPatientName(text: string): string | undefined {
+    const match = text.match(/Patient:\s*([^\n]+)/i);
+    return match?.[1]?.trim();
   }
+
+  // ... other helper methods
 }
 ```
 
-2. **Register the parser:**
+### Step 3: Register Parser in Registry
+
+Update `parser-registry.ts` to include your new parser:
 
 ```typescript
-// In parser-registry.ts or tenant-configs.ts
-import { EpicDischargeSummaryParser } from './epic-parser';
+// In parser-registry.ts
+import { StanfordParser, ParsedDischargeSummary, ParsedDischargeInstructions } from './tenants/stanford/stanford-parser';
 
-ParserRegistry.getInstance().registerParser('epic', EpicDischargeSummaryParser);
+function getTenantParsers(tenantId: string): DischargeParser[] {
+  const parsers: DischargeParser[] = [];
+
+  if (tenantId === 'demo') {
+    parsers.push(new DemoParser());
+  }
+
+  // Add your new tenant parser
+  if (tenantId === 'stanford') {
+    parsers.push(new StanfordParser());
+  }
+
+  return parsers;
+}
 ```
 
-3. **Configure tenant to use it:**
+## Parser Interface
+
+All parsers must implement the `DischargeParser` interface:
 
 ```typescript
-// In tenant-configs.ts
-ParserFactory.configureTenant('epic-hospital', 'epic', {
-  // Epic-specific settings
-});
+export interface DischargeParser {
+  /**
+   * Check if this parser can handle the given document
+   * @param text - Raw text from the document
+   * @returns true if this parser can parse the document
+   */
+  canParse(text: string): boolean;
+
+  /**
+   * Parse the discharge summary section
+   * @param text - Raw text from discharge summary
+   * @returns Parsed discharge summary data
+   */
+  parseDischargeSummary(text: string): ParsedDischargeSummary;
+
+  /**
+   * Parse the discharge instructions section
+   * @param text - Raw text from discharge instructions
+   * @returns Parsed discharge instructions data
+   */
+  parseDischargeInstructions(text: string): ParsedDischargeInstructions;
+}
 ```
 
-### Option 3: Use a Completely Custom Parser Instance
+## Parse Result Structure
+
+The `parseDischargeDocument()` function returns:
 
 ```typescript
-// For one-off custom implementations
-import { MyCustomParser } from './my-custom-parser';
+export interface ParseResult {
+  /**
+   * Whether a parser successfully handled the document
+   */
+  parserUsed: boolean;
 
-ParserFactory.registerCustomParser('special-hospital', MyCustomParser, {
-  customSetting: 'value',
-});
+  /**
+   * Parsed discharge summary data (null if parsing failed)
+   */
+  parsedSummary: ParsedDischargeSummary | null;
+
+  /**
+   * Parsed discharge instructions data (null if parsing failed)
+   */
+  parsedInstructions: ParsedDischargeInstructions | null;
+}
 ```
 
-## Parsed Data Structure
+## Demo Parser Data Structures
+
+### ParsedDischargeSummary
 
 ```typescript
 interface ParsedDischargeSummary {
-  // Patient Information
-  patientName?: string;
-  mrn?: string;
-  dob?: string;
-  admitDate?: string;
-  dischargeDate?: string;
-  attendingPhysician?: { name: string; id?: string };
-  service?: string;
-  unit?: string;
-  room?: string;
-
-  // Clinical Information
-  admittingDiagnosis?: string[];
-  dischargeDiagnosis?: string[];
-  hospitalCourse?: string;
-  procedures?: string[];
-
-  // Results
-  labResults?: Array<{ name: string; value: string; unit?: string; date?: string }>;
-  imagingResults?: string[];
-  vitalSigns?: {
-    temperature?: string;
-    heartRate?: string;
-    bloodPressure?: string;
-    respiratoryRate?: string;
-    oxygenSaturation?: string;
-  };
-
-  // Discharge Information
-  conditionAtDischarge?: string;
-  medications?: Array<{
-    name: string;
-    dose: string;
-    frequency: string;
-    instructions?: string;
-    isNew?: boolean;
-    isStopped?: boolean;
-  }>;
-  followUpAppointments?: Array<{
-    provider: string;
-    specialty?: string;
-    timeframe: string;
-    notes?: string;
-  }>;
-  dietInstructions?: string;
-  activityRestrictions?: string;
-  patientInstructions?: string;
-  returnPrecautions?: string[];
-
-  // Metadata
-  rawText?: string;
-  confidence?: number; // 0-1 score
-  warnings?: string[];
-  parserVersion?: string;
+  admittingDiagnosis: string[];
+  dischargeDiagnosis: string[];
+  hospitalCourse: string[];
+  pertinentResults: string[];
+  conditionAtDischarge: string[];
 }
 ```
 
-## Validation
-
-Each parser includes automatic validation:
+### ParsedDischargeInstructions
 
 ```typescript
-const parser = ParserFactory.getParser(tenantId);
-const result = await parser.parse(buffer, fileType);
-
-// Validate parsed data
-const validation = parser.validate(result);
-if (!validation.valid) {
-  console.warn('Validation errors:', validation.errors);
+interface ParsedDischargeInstructions {
+  dischargeMedications: {
+    new: string[];
+    continued: string[];
+    stopped: string[];
+  };
+  followUpAppointments: string[];
+  dietAndLifestyle: string[];
+  patientInstructions: string[];
+  returnPrecautions: string[];
 }
 ```
 
@@ -235,21 +263,25 @@ if (!validation.valid) {
 
 The parser system is designed to be fault-tolerant:
 
-- Parsing errors are caught and logged
-- Partial data is still returned
-- Confidence score reflects parsing success
-- Warnings array contains any issues encountered
+- If no parser can handle the document, `parserUsed` will be `false`
+- Parsers should handle errors gracefully and return partial data when possible
+- The registry tries each registered parser until one succeeds
+- Console logging provides detailed information about parsing attempts
 
 ```typescript
-try {
-  const result = await parser.parse(buffer, fileType);
+const result = parseDischargeDocument(tenantId, summaryText, instructionsText);
 
-  if (result.confidence < 0.5) {
-    console.warn('Low confidence parsing:', result.warnings);
+if (!result.parserUsed) {
+  console.warn('No parser could handle this document');
+  // Handle fallback case
+} else {
+  // Use parsed data
+  if (result.parsedSummary) {
+    // Process summary
   }
-} catch (error) {
-  // Parser initialization failed
-  console.error('Parser error:', error);
+  if (result.parsedInstructions) {
+    // Process instructions
+  }
 }
 ```
 
@@ -258,59 +290,33 @@ try {
 To test a parser with your discharge summary:
 
 ```typescript
-import { ParserFactory } from '@/lib/parsers';
+import { parseDischargeDocument } from '@/lib/parsers/parser-registry';
 import fs from 'fs';
 
 // Read your test file
-const buffer = fs.readFileSync('path/to/test-discharge-summary.pdf');
+const summaryText = fs.readFileSync('path/to/test-summary.txt', 'utf-8');
+const instructionsText = fs.readFileSync('path/to/test-instructions.txt', 'utf-8');
 
 // Parse it
-const parser = ParserFactory.getParser('your-tenant-id');
-const result = await parser.parse(buffer, 'application/pdf');
+const result = parseDischargeDocument('demo', summaryText, instructionsText);
 
 // Inspect results
-console.log('Patient:', result.patientName);
-console.log('Medications:', result.medications);
-console.log('Confidence:', result.confidence);
-console.log('Warnings:', result.warnings);
+if (result.parserUsed) {
+  console.log('Summary:', result.parsedSummary);
+  console.log('Instructions:', result.parsedInstructions);
+} else {
+  console.log('Parser could not handle this document');
+}
 ```
 
-## Extending Base Parser Utilities
+## Best Practices
 
-The base parser provides helpful utilities you can use in custom parsers:
-
-```typescript
-// Extract section by header
-const medicationsText = this.extractSection(
-  fullText,
-  /Medications:/i,
-  [/Follow-Up:/i, /Diet:/i]
-);
-
-// Parse bullet lists
-const items = this.parseList(medicationsText);
-
-// Clean text
-const cleaned = this.cleanText(rawText);
-```
-
-## Configuration Management
-
-View current configurations:
-
-```typescript
-import { getTenantParserInfo, listConfiguredTenants } from '@/lib/parsers';
-
-// Get info for specific tenant
-const info = getTenantParserInfo('hospital-a');
-console.log(info);
-// { tenantId: 'hospital-a', parserType: 'default', hasCustomParser: false, settings: {...} }
-
-// List all configured tenants
-const tenants = listConfiguredTenants();
-console.log(tenants);
-// ['default-tenant', 'hospital-a', 'hospital-b', ...]
-```
+1. **Auto-Detection**: Implement robust `canParse()` methods that accurately detect your tenant's format
+2. **Error Handling**: Handle edge cases and malformed documents gracefully
+3. **Logging**: Use console logging to help debug parsing issues
+4. **Text Cleaning**: Clean up extracted text (remove file paths, normalize whitespace, etc.)
+5. **Flexible Patterns**: Use regex patterns that handle variations in formatting
+6. **Documentation**: Document your parser's expected format and any special handling
 
 ## Future Enhancements
 
@@ -322,3 +328,4 @@ console.log(tenants);
 - [ ] Admin UI for parser configuration
 - [ ] Parser testing framework
 - [ ] Automatic parser selection based on document format detection
+- [ ] Support for multiple file formats (PDF, DOCX, TXT) with automatic text extraction

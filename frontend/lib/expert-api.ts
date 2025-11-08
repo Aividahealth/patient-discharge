@@ -65,6 +65,8 @@ export async function getReviewList(params?: {
   filter?: 'all' | 'no_reviews' | 'low_rating';
   limit?: number;
   offset?: number;
+  tenantId?: string;
+  token?: string;
 }): Promise<ReviewListResponse> {
   const queryParams = new URLSearchParams();
   if (params?.type) queryParams.append('type', params.type);
@@ -72,12 +74,30 @@ export async function getReviewList(params?: {
   if (params?.limit) queryParams.append('limit', params.limit.toString());
   if (params?.offset) queryParams.append('offset', params.offset.toString());
 
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (params?.token) {
+    headers['Authorization'] = `Bearer ${params.token}`;
+  }
+  if (params?.tenantId) {
+    headers['X-Tenant-ID'] = params.tenantId;
+  }
+
   const response = await fetch(
-    `${API_BASE_URL}/expert/list?${queryParams.toString()}`
+    `${API_BASE_URL}/expert/list?${queryParams.toString()}`,
+    { headers }
   );
 
   if (!response.ok) {
-    throw new Error('Failed to fetch review list');
+    const errorText = await response.text().catch(() => 'Unknown error');
+    console.error('[ExpertAPI] getReviewList failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      error: errorText
+    });
+    throw new Error(`Failed to fetch review list: ${response.status} ${response.statusText}`);
   }
 
   return response.json();
@@ -87,13 +107,23 @@ export async function getReviewList(params?: {
  * Submit expert feedback
  */
 export async function submitFeedback(
-  feedback: SubmitFeedbackRequest
+  feedback: SubmitFeedbackRequest,
+  auth?: { tenantId?: string; token?: string }
 ): Promise<{ success: boolean; id: string; message: string }> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (auth?.token) {
+    headers['Authorization'] = `Bearer ${auth.token}`;
+  }
+  if (auth?.tenantId) {
+    headers['X-Tenant-ID'] = auth.tenantId;
+  }
+
   const response = await fetch(`${API_BASE_URL}/expert/feedback`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(feedback),
   });
 
@@ -109,13 +139,26 @@ export async function submitFeedback(
  */
 export async function getFeedbackForSummary(
   summaryId: string,
-  reviewType?: ReviewType
+  reviewType?: ReviewType,
+  auth?: { tenantId?: string; token?: string }
 ): Promise<ExpertFeedback[]> {
   const queryParams = new URLSearchParams({ summaryId });
   if (reviewType) queryParams.append('reviewType', reviewType);
 
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (auth?.token) {
+    headers['Authorization'] = `Bearer ${auth.token}`;
+  }
+  if (auth?.tenantId) {
+    headers['X-Tenant-ID'] = auth.tenantId;
+  }
+
   const response = await fetch(
-    `${API_BASE_URL}/expert/feedback/${summaryId}?${queryParams.toString()}`
+    `${API_BASE_URL}/expert/feedback/${summaryId}?${queryParams.toString()}`,
+    { headers }
   );
 
   if (!response.ok) {

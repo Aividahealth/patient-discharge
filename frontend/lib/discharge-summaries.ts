@@ -27,9 +27,6 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-// Log API URL for debugging
-console.log('Discharge Summaries API Base URL:', API_BASE_URL);
-
 export interface DischargeSummaryMetadata {
   id: string;
   patientId?: string;
@@ -263,4 +260,172 @@ export async function deleteDischargeSummary(
   }
 
   return response.json();
+}
+
+/**
+ * Discharge Queue Patient Interface
+ */
+export interface DischargeQueuePatient {
+  id: string;
+  mrn: string;
+  name: string;
+  room: string;
+  unit: string;
+  dischargeDate: string;
+  compositionId: string;
+  status: 'review' | 'approved' | 'pending';
+  attendingPhysician: {
+    name: string;
+    id: string;
+  };
+  avatar: string | null;
+}
+
+export interface DischargeQueueResponse {
+  patients: DischargeQueuePatient[];
+  meta: {
+    total: number;
+    pending: number;
+    review: number;
+    approved: number;
+  };
+}
+
+/**
+ * Get discharge queue - list of patients ready for discharge review
+ */
+export async function getDischargeQueue(
+  token: string,
+  tenantId: string
+): Promise<DischargeQueueResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/patients/discharge-queue`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'x-tenant-id': tenantId,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch discharge queue: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Get patient details including original summary and patient-friendly version
+ */
+export interface PatientDetailsResponse {
+  patientId: string;
+  compositionId: string;
+  rawSummary?: {
+    text: string;
+    parsedData?: any;
+  };
+  rawInstructions?: {
+    text: string;
+    parsedData?: any;
+  };
+  simplifiedSummary?: {
+    text: string;
+  };
+  simplifiedInstructions?: {
+    text: string;
+  };
+}
+
+export async function getPatientDetails(
+  patientId: string,
+  compositionId: string,
+  token: string,
+  tenantId: string
+): Promise<PatientDetailsResponse> {
+  // Get API URL - use environment variable or fallback
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || API_BASE_URL;
+  
+  // Fetch composition data - use the same endpoint structure as refreshComposition
+  // First get the binaries (raw content)
+  const binariesResponse = await fetch(
+    `${apiUrl}/google/fhir/Composition/${compositionId}/binaries`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'X-Tenant-ID': tenantId,
+      },
+    }
+  );
+
+  if (!binariesResponse.ok) {
+    throw new Error(`Failed to fetch composition binaries: ${binariesResponse.statusText}`);
+  }
+
+  const compositionData = await binariesResponse.json();
+
+  // Find raw and simplified content
+  const rawSummary = compositionData.dischargeSummaries?.find((summary: any) =>
+    !summary.tags?.some((tag: any) => tag.code === 'simplified-content')
+  );
+  const rawInstructions = compositionData.dischargeInstructions?.find((instr: any) =>
+    !instr.tags?.some((tag: any) => tag.code === 'simplified-content')
+  );
+  const simplifiedSummary = compositionData.dischargeSummaries?.find((summary: any) =>
+    summary.tags?.some((tag: any) => tag.code === 'simplified-content')
+  );
+  const simplifiedInstructions = compositionData.dischargeInstructions?.find((instr: any) =>
+    instr.tags?.some((tag: any) => tag.code === 'simplified-content')
+  );
+
+  // Try to fetch AI-simplified content
+  let aiSimplifiedSummary = null;
+  let aiSimplifiedInstructions = null;
+
+  try {
+    const simplifiedResponse = await fetch(
+      `${apiUrl}/google/fhir/Composition/${compositionId}/simplified`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      }
+    );
+
+    if (simplifiedResponse.ok) {
+      const simplifiedData = await simplifiedResponse.json();
+      aiSimplifiedSummary = simplifiedData.dischargeSummaries?.find((summary: any) =>
+        summary.tags?.some((tag: any) => tag.code === 'discharge-summary-simplified')
+      );
+      aiSimplifiedInstructions = simplifiedData.dischargeInstructions?.find((instr: any) =>
+        instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
+      );
+    }
+  } catch (error) {
+    // Ignore errors fetching simplified content
+    console.warn('Failed to fetch AI-simplified content:', error);
+  }
+
+  return {
+    patientId,
+    compositionId,
+    rawSummary: rawSummary ? {
+      text: rawSummary.text,
+      parsedData: rawSummary.parsedData
+    } : undefined,
+    rawInstructions: rawInstructions ? {
+      text: rawInstructions.text,
+      parsedData: rawInstructions.parsedData
+    } : undefined,
+    simplifiedSummary: (aiSimplifiedSummary || simplifiedSummary) ? {
+      text: (aiSimplifiedSummary || simplifiedSummary)?.text
+    } : undefined,
+    simplifiedInstructions: (aiSimplifiedInstructions || simplifiedInstructions) ? {
+      text: (aiSimplifiedInstructions || simplifiedInstructions)?.text
+    } : undefined,
+  };
 }
