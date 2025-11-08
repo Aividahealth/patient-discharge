@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Firestore } from '@google-cloud/firestore';
 import { DevConfigService } from './dev-config.service';
+import { resolveServiceAccountPath } from '../utils/path.helper';
 
 export interface TenantConfigResponse {
   id: string;
@@ -47,7 +48,11 @@ export class ConfigService {
 
       try {
         const config = this.devConfigService.get();
-        serviceAccountPath = config.firestore_service_account_path || config.service_account_path;
+        const configPath = config.firestore_service_account_path || config.service_account_path;
+        if (configPath) {
+          // Resolve the path - handles both full paths and filenames
+          serviceAccountPath = resolveServiceAccountPath(configPath);
+        }
       } catch (error) {
         this.logger.log('Config not available, using Application Default Credentials');
       }
@@ -123,6 +128,7 @@ export class ConfigService {
   async getTenantConfigWithFallback(tenantId: string): Promise<TenantConfigResponse | null> {
     // Try Firestore first
     const firestoreConfig = await this.getTenantConfig(tenantId);
+    this.logger.debug(`🔍 Firestore config: ${JSON.stringify(firestoreConfig)}`);
     if (firestoreConfig) {
       return firestoreConfig;
     }

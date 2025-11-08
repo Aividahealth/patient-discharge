@@ -3,6 +3,7 @@ import { Storage } from '@google-cloud/storage';
 import { GoogleService } from './google.service';
 import { DevConfigService } from '../config/dev-config.service';
 import { TenantContext } from '../tenant/tenant-context';
+import { resolveServiceAccountPath } from '../utils/path.helper';
 
 interface SimplifiedContentRequest {
   dischargeSummary?: {
@@ -34,7 +35,10 @@ export class SimplifiedContentService {
 
       try {
         const config = this.configService.get();
-        serviceAccountPath = config.service_account_path;
+        if (config.service_account_path) {
+          // Resolve the path - handles both full paths and filenames
+          serviceAccountPath = resolveServiceAccountPath(config.service_account_path);
+        }
       } catch (error) {
         this.logger.log('Config not available, using Application Default Credentials');
       }

@@ -2,6 +2,7 @@ import { Firestore } from '@google-cloud/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
+import { resolveServiceAccountPath } from '../src/utils/path.helper';
 
 interface TenantConfigSeed {
   id: string;
@@ -58,13 +59,23 @@ function getServiceAccountPath(): string | undefined {
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, 'utf8');
       const config = YAML.parse(raw);
-      return config.firestore_service_account_path || config.service_account_path;
+      const pathOrFilename = config.firestore_service_account_path || config.service_account_path;
+      if (pathOrFilename) {
+        // Use the path helper to resolve the path dynamically (handles Docker vs local)
+        return resolveServiceAccountPath(pathOrFilename);
+      }
     }
   } catch (error) {
     console.log('Could not load config, using environment variable or default');
   }
   
-  return process.env.FIRESTORE_SERVICE_ACCOUNT_PATH || process.env.SERVICE_ACCOUNT_PATH;
+  // Fallback to environment variable if provided
+  const envPath = process.env.FIRESTORE_SERVICE_ACCOUNT_PATH || process.env.SERVICE_ACCOUNT_PATH;
+  if (envPath) {
+    return resolveServiceAccountPath(envPath);
+  }
+  
+  return undefined;
 }
 
 /**

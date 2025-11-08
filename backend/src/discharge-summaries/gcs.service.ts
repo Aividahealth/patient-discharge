@@ -6,6 +6,7 @@ import {
   DischargeSummaryLanguage,
   DischargeSummaryContent,
 } from './discharge-summary.types';
+import { resolveServiceAccountPath } from '../utils/path.helper';
 
 @Injectable()
 export class GcsService {
@@ -28,7 +29,10 @@ export class GcsService {
 
       try {
         const config = this.configService.get();
-        serviceAccountPath = config.service_account_path;
+        if (config.service_account_path) {
+          // Resolve the path - handles both full paths and filenames
+          serviceAccountPath = resolveServiceAccountPath(config.service_account_path);
+        }
       } catch (error) {
         // Config not loaded yet or running in Cloud Run with ADC
         this.logger.log('Config not available, using Application Default Credentials');

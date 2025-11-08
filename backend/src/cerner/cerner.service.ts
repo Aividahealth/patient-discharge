@@ -49,7 +49,7 @@ export class CernerService implements OnModuleInit {
 
     let cernerConfig;
     try {
-      cernerConfig = this.configService.getTenantCernerSystemConfig(ctx.tenantId);
+      cernerConfig = await this.configService.getTenantCernerSystemConfig(ctx.tenantId);
     } catch (error) {
       this.logger.warn('Config not loaded yet, skipping authentication');
       return false;

@@ -33,7 +33,7 @@ export class ConfigController {
 
       this.logger.log(`📋 Retrieving config for tenant: ${tenantId}`);
 
-      const tenantConfig = await this.configService.getTenantConfigWithFallback(tenantId);
+      const tenantConfig = await this.configService.getTenantConfig(tenantId);
 
       if (!tenantConfig) {
         throw new HttpException(

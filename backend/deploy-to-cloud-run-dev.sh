@@ -37,7 +37,10 @@ gcloud artifacts repositories create ${REPOSITORY} \
 
 # Build the container image
 echo "🏗️  Building container image..."
-gcloud builds submit --tag ${IMAGE_NAME}
+# Change to backend directory (where script is located) to ensure correct build context
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}" || exit 1
+gcloud builds submit . --tag ${IMAGE_NAME}
 
 # Deploy to Cloud Run with DEV environment
 echo "🚀 Deploying to Cloud Run (DEV)..."

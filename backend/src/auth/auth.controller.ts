@@ -1,6 +1,7 @@
 import { Controller, Post, Body, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import type { LoginRequest, LoginResponse } from './types/user.types';
+import { Public } from './auth.guard';
 
 @Controller('api/auth')
 export class AuthController {
@@ -12,6 +13,7 @@ export class AuthController {
    * POST /api/auth/login
    * Simple password-based login for any user
    */
+  @Public()
   @Post('login')
   async login(@Body() request: LoginRequest): Promise<LoginResponse> {
     try {

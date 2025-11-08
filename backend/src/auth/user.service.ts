@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Firestore } from '@google-cloud/firestore';
 import { DevConfigService } from '../config/dev-config.service';
 import { User } from './types/user.types';
+import { resolveServiceAccountPath } from '../utils/path.helper';
 
 @Injectable()
 export class UserService {
@@ -20,7 +21,10 @@ export class UserService {
 
       try {
         const config = this.configService.get();
-        serviceAccountPath = config.firestore_service_account_path;
+        if (config.firestore_service_account_path) {
+          // Resolve the path - handles both full paths and filenames
+          serviceAccountPath = resolveServiceAccountPath(config.firestore_service_account_path);
+        }
       } catch (error) {
         this.logger.log('Config not available, using Application Default Credentials');
       }

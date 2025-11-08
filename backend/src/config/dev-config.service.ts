@@ -3,6 +3,7 @@ import { Firestore } from '@google-cloud/firestore';
 import * as fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
+import { resolveServiceAccountPath } from '../utils/path.helper';
 
 export type TenantConfig = {
   google: {
@@ -74,7 +75,11 @@ export class DevConfigService {
       let serviceAccountPath: string | undefined;
 
       try {
-        serviceAccountPath = this.config.firestore_service_account_path || this.config.service_account_path;
+        const configPath = this.config.firestore_service_account_path || this.config.service_account_path;
+        if (configPath) {
+          // Resolve the path - handles both full paths and filenames
+          serviceAccountPath = resolveServiceAccountPath(configPath);
+        }
       } catch (error) {
         this.logger.log('Config not available, using Application Default Credentials');
       }
@@ -212,6 +217,7 @@ export class DevConfigService {
       return firestoreConfig;
     }
 
+    this.logger.debug(`🔍 No Firestore config found for tenant: ${tenantId}, falling back to YAML config ${this.config.tenants ? 'with tenants' : 'without tenants'}`);
     // Fallback to YAML config
     if (!this.config.tenants) {
       return null;
@@ -308,9 +314,13 @@ export class DevConfigService {
    */
   async getTenantPubSubServiceAccountPath(tenantId: string): Promise<string> {
     const tenantConfig = await this.getTenantConfig(tenantId);
+    const pathOrFilename = tenantConfig?.pubsub?.service_account_path || this.config.service_account_path;
+    if (pathOrFilename) {
+      return resolveServiceAccountPath(pathOrFilename);
+    }
+    // Default fallback
     const env = process.env.NODE_ENV || 'dev';
-    const defaultPath = path.resolve(process.cwd(), `.settings.${env}/fhir_store_sa.json`);
-    return tenantConfig?.pubsub?.service_account_path || this.config.service_account_path || defaultPath;
+    return resolveServiceAccountPath('fhir_store_sa.json', env);
   }
 
   /**
