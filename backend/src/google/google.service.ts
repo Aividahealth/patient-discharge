@@ -89,8 +89,18 @@ export class GoogleService {
   async fhirUpdate(resourceType: string, id: string, body: unknown, ctx: TenantContext) {
     this.assertAllowed(resourceType);
     const client = await this.getFhirClient(ctx);
-    const { data } = await client.put(`/${resourceType}/${id}`, body);
-    return data;
+    try {
+      const { data } = await client.put(`/${resourceType}/${id}`, body);
+      return data;
+    } catch (error) {
+      console.error(`Google FHIR Update Error for ${resourceType}/${id} (tenant: ${ctx.tenantId}):`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        requestData: JSON.stringify(body)
+      });
+      throw error;
+    }
   }
 
   async fhirDelete(resourceType: string, id: string, ctx: TenantContext) {

@@ -485,5 +485,329 @@ export class DischargeUploadService {
       throw error;
     }
   }
+
+  /**
+   * Get discharge queue - list of patients ready for discharge review
+   */
+  async getDischargeQueue(ctx: TenantContext): Promise<{
+    patients: Array<{
+      id: string;
+      mrn: string;
+      name: string;
+      room: string;
+      unit: string;
+      dischargeDate: string;
+      compositionId: string;
+      status: string;
+      attendingPhysician: {
+        name: string;
+        id: string;
+      };
+      avatar: string | null;
+    }>;
+    meta: {
+      total: number;
+      pending: number;
+      review: number;
+      approved: number;
+    };
+  }> {
+    try {
+      this.logger.log(`📋 Retrieving discharge queue for tenant: ${ctx.tenantId}`);
+
+      // Search for Composition resources with discharge summary type
+      const compositionsResult = await this.googleService.fhirSearch(
+        'Composition',
+        {
+          type: 'http://loinc.org|18842-5',
+          _count: 100,
+        },
+        ctx,
+      );
+
+      if (!compositionsResult?.entry || compositionsResult.entry.length === 0) {
+        return {
+          patients: [],
+          meta: {
+            total: 0,
+            pending: 0,
+            review: 0,
+            approved: 0,
+          },
+        };
+      }
+
+      const patients: Array<{
+        id: string;
+        mrn: string;
+        name: string;
+        room: string;
+        unit: string;
+        dischargeDate: string;
+        compositionId: string;
+        status: string;
+        attendingPhysician: {
+          name: string;
+          id: string;
+        };
+        avatar: string | null;
+      }> = [];
+      const statusCounts = { pending: 0, review: 0, approved: 0 };
+
+      // Process each Composition
+      for (const entry of compositionsResult.entry) {
+        try {
+          const composition = entry.resource;
+          const compositionId = composition.id;
+
+          // Extract Patient and Encounter references
+          const patientRef = composition.subject?.reference; // Patient/patient-id
+          const encounterRef = composition.encounter?.reference; // Encounter/encounter-id
+
+          if (!patientRef || !encounterRef) {
+            this.logger.warn(`Composition ${compositionId} missing Patient or Encounter reference`);
+            continue;
+          }
+
+          const patientId = patientRef.replace('Patient/', '');
+          const encounterId = encounterRef.replace('Encounter/', '');
+
+          // Fetch Patient resource
+          const patient = await this.googleService.fhirRead('Patient', patientId, ctx);
+          const mrn = patient.identifier?.find(
+            (id: any) => id.type?.coding?.[0]?.code === 'MR'
+          )?.value || '';
+          const name = patient.name?.[0]?.text || 
+            `${patient.name?.[0]?.given?.join(' ') || ''} ${patient.name?.[0]?.family || ''}`.trim() || 'Unknown';
+          const avatar = patient.photo?.[0]?.url || null;
+
+          // Fetch Encounter resource
+          const encounter = await this.googleService.fhirRead('Encounter', encounterId, ctx);
+          
+          // Extract room and unit from location.display format: "Cardiology Unit - Room 302"
+          const locationDisplay = encounter.location?.[0]?.location?.display || '';
+          let unit = '';
+          let room = '';
+          if (locationDisplay) {
+            const parts = locationDisplay.split(' - Room ');
+            unit = parts[0] || '';
+            room = parts[1] || '';
+          }
+
+          const dischargeDate = encounter.period?.end || '';
+
+          // Map Encounter status to discharge status
+          // in-progress -> review, finished/completed -> approved
+          let status = 'review'; // default
+          const encounterStatus = encounter.status?.trim(); // Handle any whitespace
+          if (encounterStatus === 'in-progress') {
+            status = 'review';
+          } else if (encounterStatus === 'finished' || encounterStatus === 'completed') {
+            status = 'approved';
+          } else if (encounterStatus === 'planned') {
+            status = 'pending';
+          }
+
+          // Extract attending physician from Encounter.participant.individual.display
+          // Format: "Dr. Sarah Johnson, MD - physician-uuid-1"
+          let physicianName = 'Unknown';
+          let physicianId = '';
+          if (encounter.participant?.[0]?.individual?.display) {
+            const physicianDisplay = encounter.participant[0].individual.display;
+            const parts = physicianDisplay.split(' - ');
+            physicianName = parts[0] || 'Unknown';
+            physicianId = parts[1] || '';
+          }
+
+          patients.push({
+            id: patientId,
+            mrn,
+            name,
+            room,
+            unit,
+            dischargeDate,
+            compositionId,
+            status,
+            attendingPhysician: {
+              name: physicianName,
+              id: physicianId,
+            },
+            avatar,
+          });
+
+          // Count statuses
+          if (status === 'pending') statusCounts.pending++;
+          else if (status === 'review') statusCounts.review++;
+          else if (status === 'approved') statusCounts.approved++;
+
+        } catch (error) {
+          this.logger.error(`❌ Error processing Composition entry: ${error.message}`);
+          // Continue with next entry
+          continue;
+        }
+      }
+
+      this.logger.log(`✅ Retrieved ${patients.length} patients from discharge queue`);
+
+      return {
+        patients,
+        meta: {
+          total: patients.length,
+          ...statusCounts,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`❌ Error retrieving discharge queue: ${error.message}`);
+      throw new HttpException(
+        {
+          message: 'Failed to retrieve discharge queue',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Mark discharge as completed by updating Encounter status
+   */
+  async markDischargeCompleted(
+    compositionId: string,
+    ctx: TenantContext,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    compositionId: string;
+    encounterId: string;
+  }> {
+    try {
+      this.logger.log(`📝 Marking discharge as completed for Composition: ${compositionId}`);
+
+      // Step 1: Get Composition to extract Encounter reference
+      const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
+
+      if (!composition) {
+        throw new HttpException(
+          {
+            message: 'Composition not found',
+            error: `Composition ${compositionId} does not exist`,
+            compositionId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      const encounterRef = composition.encounter?.reference;
+
+      if (!encounterRef) {
+        throw new HttpException(
+          {
+            message: 'Encounter reference not found',
+            error: 'Composition does not have an Encounter reference',
+            compositionId,
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const encounterId = encounterRef.replace('Encounter/', '');
+
+      // Step 2: Get current Encounter
+      const encounter = await this.googleService.fhirRead('Encounter', encounterId, ctx);
+
+      if (!encounter) {
+        throw new HttpException(
+          {
+            message: 'Encounter not found',
+            error: `Encounter ${encounterId} does not exist`,
+            encounterId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Step 3: Update Encounter status to "finished"
+      encounter.status = 'finished';
+
+      try {
+        const updatedEncounter = await this.googleService.fhirUpdate(
+          'Encounter',
+          encounterId,
+          encounter,
+          ctx,
+        );
+
+        this.logger.log(`✅ Successfully marked discharge as completed. Encounter ID: ${encounterId}`);
+
+        return {
+          success: true,
+          message: 'Discharge marked as completed',
+          compositionId,
+          encounterId,
+        };
+      } catch (updateError: any) {
+        this.logger.error(`❌ Failed to update Encounter: ${updateError.message}`);
+        this.logger.error(`Update error details:`, {
+          status: updateError.response?.status,
+          statusText: updateError.response?.statusText,
+          data: updateError.response?.data,
+        });
+
+        // Check if it's a specific HTTP error
+        if (updateError.response?.status === 404) {
+          throw new HttpException(
+            {
+              message: 'Encounter not found',
+              error: `Encounter ${encounterId} does not exist or was deleted`,
+              encounterId,
+            },
+            HttpStatus.NOT_FOUND,
+          );
+        } else if (updateError.response?.status === 400) {
+          throw new HttpException(
+            {
+              message: 'Invalid Encounter update request',
+              error: updateError.response?.data?.message || updateError.message,
+              encounterId,
+            },
+            HttpStatus.BAD_REQUEST,
+          );
+        } else if (updateError.response?.status === 403) {
+          throw new HttpException(
+            {
+              message: 'Permission denied',
+              error: 'Insufficient permissions to update Encounter',
+              encounterId,
+            },
+            HttpStatus.FORBIDDEN,
+          );
+        }
+
+        // Generic error
+        throw new HttpException(
+          {
+            message: 'Failed to update Encounter',
+            error: updateError.response?.data?.message || updateError.message,
+            encounterId,
+            status: updateError.response?.status,
+          },
+          updateError.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`❌ Failed to mark discharge as completed: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          message: 'Failed to mark discharge as completed',
+          error: error.message,
+          compositionId,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
 

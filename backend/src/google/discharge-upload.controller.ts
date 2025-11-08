@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Post, Body, Param, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { DischargeUploadService } from './discharge-upload.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
@@ -65,6 +65,42 @@ export class DischargeUploadController {
         {
           message: 'Failed to upload discharge summary',
           error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * POST /api/discharge-summary/:compositionId/completed
+   * Move patient from discharge queue to discharged (mark as completed)
+   */
+  @Post(':compositionId/completed')
+  async markCompleted(
+    @Param('compositionId') compositionId: string,
+    @TenantContext() ctx: TenantContextType,
+    @CurrentUser() user: any,
+  ) {
+    try {
+      this.logger.log(
+        `📝 Marking discharge as completed for Composition: ${compositionId} by user: ${user?.username}`,
+      );
+
+      const result = await this.dischargeUploadService.markDischargeCompleted(compositionId, ctx);
+
+      this.logger.log(`✅ Successfully marked discharge as completed. Composition ID: ${compositionId}`);
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error(`❌ Failed to mark discharge as completed: ${error.message}`);
+      throw new HttpException(
+        {
+          message: 'Failed to mark discharge as completed',
+          error: error.message,
+          compositionId,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
