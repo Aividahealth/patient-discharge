@@ -69,6 +69,22 @@ else
     echo -e "${GREEN}Using Pub/Sub topic: ${PUBSUB_TOPIC}${NC}"
 fi
 
+# Check if BACKEND_API_URL is set (optional)
+if [ -z "$BACKEND_API_URL" ]; then
+    BACKEND_API_URL=""
+    echo -e "${YELLOW}BACKEND_API_URL not set, will use default tenant config${NC}"
+else
+    echo -e "${GREEN}Using Backend API URL: ${BACKEND_API_URL}${NC}"
+fi
+
+# Check if FHIR_API_BASE_URL is set (optional)
+if [ -z "$FHIR_API_BASE_URL" ]; then
+    FHIR_API_BASE_URL=""
+    echo -e "${YELLOW}FHIR_API_BASE_URL not set${NC}"
+else
+    echo -e "${GREEN}Using FHIR API URL: ${FHIR_API_BASE_URL}${NC}"
+fi
+
 echo -e "${GREEN}Configuration:${NC}"
 echo "  Project ID: $PROJECT_ID"
 echo "  Region: $REGION"
@@ -185,37 +201,58 @@ fi
 echo -e "${GREEN}✓ Build successful${NC}"
 echo ""
 
-# Check if buckets exist
-echo -e "${GREEN}Step 2: Verifying GCS buckets...${NC}"
+# Check if buckets exist (for default tenant)
+echo -e "${GREEN}Step 2: Verifying GCS buckets for default tenant...${NC}"
 
-if ! gsutil ls -b "gs://${GCS_TRIGGER_BUCKET}" &> /dev/null; then
-    echo -e "${YELLOW}Warning: Input bucket gs://${GCS_TRIGGER_BUCKET} does not exist${NC}"
+# Tenant-specific bucket names
+RAW_BUCKET="discharge-summaries-raw-default"
+SIMPLIFIED_BUCKET="discharge-summaries-simplified-default"
+TRANSLATED_BUCKET="discharge-summaries-translated-default"
+
+if ! gsutil ls -b "gs://${RAW_BUCKET}" &> /dev/null; then
+    echo -e "${YELLOW}Warning: Raw bucket gs://${RAW_BUCKET} does not exist${NC}"
     echo "Creating bucket..."
-    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${GCS_TRIGGER_BUCKET}"
+    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${RAW_BUCKET}"
 fi
 
-OUTPUT_BUCKET="discharge-summaries-simplified"
-if ! gsutil ls -b "gs://${OUTPUT_BUCKET}" &> /dev/null; then
-    echo -e "${YELLOW}Warning: Output bucket gs://${OUTPUT_BUCKET} does not exist${NC}"
+if ! gsutil ls -b "gs://${SIMPLIFIED_BUCKET}" &> /dev/null; then
+    echo -e "${YELLOW}Warning: Simplified bucket gs://${SIMPLIFIED_BUCKET} does not exist${NC}"
     echo "Creating bucket..."
-    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${OUTPUT_BUCKET}"
+    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${SIMPLIFIED_BUCKET}"
+fi
+
+if ! gsutil ls -b "gs://${TRANSLATED_BUCKET}" &> /dev/null; then
+    echo -e "${YELLOW}Warning: Translated bucket gs://${TRANSLATED_BUCKET} does not exist${NC}"
+    echo "Creating bucket..."
+    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${TRANSLATED_BUCKET}"
 fi
 
 echo -e "${GREEN}✓ Buckets verified${NC}"
 echo ""
 
-# Check/create Pub/Sub topic if needed
+# Check/create Pub/Sub topics if needed
 if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
-    echo -e "${GREEN}Step 2b: Verifying Pub/Sub topic...${NC}"
+    echo -e "${GREEN}Step 2b: Verifying Pub/Sub topics...${NC}"
 
+    # Verify input topic (discharge-export-events)
     FULL_TOPIC_NAME="projects/${PROJECT_ID}/topics/${PUBSUB_TOPIC}"
     if ! gcloud pubsub topics describe "$PUBSUB_TOPIC" --project="$PROJECT_ID" &> /dev/null; then
         echo -e "${YELLOW}Warning: Pub/Sub topic ${PUBSUB_TOPIC} does not exist${NC}"
         echo "Creating topic..."
         gcloud pubsub topics create "$PUBSUB_TOPIC" --project="$PROJECT_ID"
     fi
+    echo "✓ Input topic verified: ${PUBSUB_TOPIC}"
 
-    echo -e "${GREEN}✓ Pub/Sub topic verified${NC}"
+    # Verify output topic (discharge-simplification-completed)
+    OUTPUT_TOPIC="discharge-simplification-completed"
+    if ! gcloud pubsub topics describe "$OUTPUT_TOPIC" --project="$PROJECT_ID" &> /dev/null; then
+        echo -e "${YELLOW}Warning: Pub/Sub topic ${OUTPUT_TOPIC} does not exist${NC}"
+        echo "Creating topic..."
+        gcloud pubsub topics create "$OUTPUT_TOPIC" --project="$PROJECT_ID"
+    fi
+    echo "✓ Output topic verified: ${OUTPUT_TOPIC}"
+
+    echo -e "${GREEN}✓ Pub/Sub topics verified${NC}"
     echo ""
 fi
 
@@ -283,9 +320,6 @@ examples/
 translation/
 EOF
 
-# Get FHIR API base URL from environment or use default
-FHIR_API_BASE_URL="${FHIR_API_BASE_URL:-http://localhost:3000}"
-
 DEPLOY_STATUS=0
 
 # Deploy GCS-triggered function
@@ -300,7 +334,7 @@ if [ "$DEPLOY_MODE" == "gcs" ] || [ "$DEPLOY_MODE" == "all" ]; then
         --trigger-bucket="$GCS_TRIGGER_BUCKET" \
         --memory="$MEMORY" \
         --timeout="$TIMEOUT" \
-        --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},INPUT_BUCKET=discharge-summaries-raw,OUTPUT_BUCKET=discharge-summaries-simplified" \
+        --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},FHIR_API_BASE_URL=${FHIR_API_BASE_URL},BACKEND_API_URL=${BACKEND_API_URL}" \
         --project="$PROJECT_ID"
 
     GCS_DEPLOY_STATUS=$?
@@ -322,7 +356,7 @@ if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
         --trigger-topic="$PUBSUB_TOPIC" \
         --memory="$MEMORY" \
         --timeout="$TIMEOUT" \
-        --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},INPUT_BUCKET=discharge-summaries-raw,OUTPUT_BUCKET=discharge-summaries-simplified,FHIR_API_BASE_URL=${FHIR_API_BASE_URL}" \
+        --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},FHIR_API_BASE_URL=${FHIR_API_BASE_URL},BACKEND_API_URL=${BACKEND_API_URL}" \
         --project="$PROJECT_ID"
 
     PUBSUB_DEPLOY_STATUS=$?
@@ -374,7 +408,10 @@ if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
     echo "  Name: $PUBSUB_FUNCTION_NAME"
     echo "  Region: $REGION"
     echo "  Trigger Topic: projects/${PROJECT_ID}/topics/${PUBSUB_TOPIC}"
-    echo "  Output: gs://${OUTPUT_BUCKET}"
+    echo "  Output Topic: projects/${PROJECT_ID}/topics/discharge-simplification-completed"
+    echo "  Raw Bucket: gs://${RAW_BUCKET}"
+    echo "  Simplified Bucket: gs://${SIMPLIFIED_BUCKET}"
+    echo "  Translated Bucket: gs://${TRANSLATED_BUCKET}"
     echo ""
     echo -e "${GREEN}To test:${NC}"
     echo '  gcloud pubsub topics publish '"$PUBSUB_TOPIC"' --message='"'"'{"tenantId":"default","patientId":"","exportTimestamp":"2025-10-27T15:15:45.925Z","status":"success","cernerEncounterId":"97996600","googleEncounterId":"94562854-4223-43a2-af83-747c3794ce12","googleCompositionId":"22036570-3dc8-4f2f-bf03-43b561af09b9"}'"'"' --project='"$PROJECT_ID"

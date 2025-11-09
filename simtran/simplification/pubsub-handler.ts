@@ -1,37 +1,41 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { DischargeExportEvent, FHIRAPIError, ValidationError, SimplificationResult } from './common/types';
+import { DischargeExportEvent, FHIRAPIError, ValidationError } from './common/types';
 import { FHIRAPIService } from './fhir-api.service';
-import { GCSService } from './gcs.service';
 import { SimplificationService } from './simplification.service';
-import { FirestoreService } from './firestore.service';
-import { getConfig } from './common/utils/config';
+import { BackendClientService } from './backend-client.service';
+import { StorageService } from './storage.service';
+import { PubSubPublisherService } from './pubsub-publisher.service';
 import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('PubSubHandler');
 
 // Initialize services
 let fhirApiService: FHIRAPIService;
-let gcsService: GCSService;
 let simplificationService: SimplificationService;
-let firestoreService: FirestoreService;
+let backendClient: BackendClientService;
+let storageService: StorageService;
+let pubsubPublisher: PubSubPublisherService;
 
 /**
  * Initialize services lazily (on first invocation)
  */
 function initializeServices(): void {
   if (!fhirApiService) {
-    // Get API base URL from environment variable or use default
-    const apiBaseUrl = process.env.FHIR_API_BASE_URL || 'http://localhost:3000';
+    const apiBaseUrl = process.env.FHIR_API_BASE_URL || process.env.BACKEND_API_URL || 'http://localhost:3000';
     fhirApiService = new FHIRAPIService(apiBaseUrl);
-  }
-  if (!gcsService) {
-    gcsService = new GCSService();
   }
   if (!simplificationService) {
     simplificationService = new SimplificationService();
   }
-  if (!firestoreService) {
-    firestoreService = new FirestoreService();
+  if (!backendClient) {
+    const apiBaseUrl = process.env.BACKEND_API_URL || process.env.FHIR_API_BASE_URL || 'http://localhost:3000';
+    backendClient = new BackendClientService(apiBaseUrl);
+  }
+  if (!storageService) {
+    storageService = new StorageService();
+  }
+  if (!pubsubPublisher) {
+    pubsubPublisher = new PubSubPublisherService();
   }
 }
 
@@ -113,12 +117,13 @@ export async function processDischargeExportEvent(cloudEvent: CloudEvent<unknown
     }
 
     // Process the discharge export
-    const result = await processDischargeExport(event);
+    await processDischargeExport(event);
 
     const totalTime = Date.now() - startTime;
 
     logger.info('Discharge export processing completed successfully', {
-      ...result,
+      googleCompositionId: event.googleCompositionId,
+      tenantId: event.tenantId,
       totalProcessingTimeMs: totalTime,
     });
   } catch (error) {
@@ -154,25 +159,40 @@ export async function processDischargeExportEvent(cloudEvent: CloudEvent<unknown
 }
 
 /**
- * Process a discharge export event: fetch binaries, write to files, and simplify
+ * Process a discharge export event: fetch binaries, simplify, write back to FHIR, and publish to translation
  */
-async function processDischargeExport(event: DischargeExportEvent): Promise<{
-  dischargeSummaryResults: SimplificationResult[];
-  dischargeInstructionResults: SimplificationResult[];
-}> {
+async function processDischargeExport(event: DischargeExportEvent): Promise<void> {
   const processingStartTime = Date.now();
-  const config = getConfig();
+  const tenantId = event.tenantId || 'default';
 
   logger.info('Starting discharge export processing', {
     googleCompositionId: event.googleCompositionId,
+    tenantId,
   });
 
   try {
-    // Step 1: Fetch binaries from FHIR API
-    logger.debug('Step 1: Fetching binaries from FHIR API');
+    // Step 1: Get tenant configuration from Backend
+    logger.debug('Step 1: Fetching tenant configuration from Backend');
+    const tenantConfig = await backendClient.getTenantConfig(tenantId);
+
+    logger.info('Tenant configuration fetched', {
+      tenantId,
+      rawBucket: tenantConfig.buckets.rawBucket,
+      simplifiedBucket: tenantConfig.buckets.simplifiedBucket,
+      simplificationEnabled: tenantConfig.simplificationConfig.enabled,
+    });
+
+    // Check if simplification is enabled for this tenant
+    if (!tenantConfig.simplificationConfig.enabled) {
+      logger.info('Simplification disabled for tenant, skipping processing', { tenantId });
+      return;
+    }
+
+    // Step 2: Fetch binaries from FHIR API
+    logger.debug('Step 2: Fetching binaries from FHIR API');
     const binariesResponse = await fhirApiService.fetchBinaries(
       event.googleCompositionId,
-      event.tenantId || 'default'
+      tenantId
     );
 
     logger.info('Binaries fetched successfully', {
@@ -186,177 +206,186 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<{
       throw new ValidationError('FHIR API response missing required binaries');
     }
 
-    // Step 2: Process discharge summaries (if available)
-    logger.debug('Step 2: Processing discharge summaries');
-    const dischargeSummaryResults: SimplificationResult[] = [];
+    // Step 3: Write raw files to tenant-specific raw bucket
+    logger.debug('Step 3: Writing raw files to GCS');
+    await storageService.writeRawFiles(
+      tenantConfig.buckets.rawBucket,
+      event.googleCompositionId,
+      binariesResponse.dischargeSummaries,
+      binariesResponse.dischargeInstructions
+    );
 
-    if (binariesResponse.dischargeSummaries && binariesResponse.dischargeSummaries.length > 0) {
-      for (const summary of binariesResponse.dischargeSummaries) {
-        const fileName = `${event.googleCompositionId}-discharge-summary.txt`;
+    logger.info('Raw files written to GCS', {
+      bucket: tenantConfig.buckets.rawBucket,
+      compositionId: event.googleCompositionId,
+    });
 
-        // Write original content to input bucket
-        await gcsService.writeFile(config.inputBucket, fileName, summary.text);
+    // Step 4: Simplify discharge summaries and instructions
+    logger.debug('Step 4: Simplifying content');
+    const simplifiedResults = await simplifyBinaries(
+      binariesResponse.dischargeSummaries,
+      binariesResponse.dischargeInstructions
+    );
 
-        logger.info('Wrote discharge summary to file', {
-          fileName,
-          contentLength: summary.text.length,
-        });
+    logger.info('Content simplified successfully', {
+      dischargeSummarySimplified: !!simplifiedResults.dischargeSummary,
+      dischargeInstructionsSimplified: !!simplifiedResults.dischargeInstructions,
+    });
 
-        // Process through simplification pipeline
-        const result = await processBinary(fileName, summary.text, 'discharge-summary');
-        dischargeSummaryResults.push(result);
+    // Step 5: Write simplified files to tenant-specific simplified bucket
+    logger.debug('Step 5: Writing simplified files to GCS');
+    const simplifiedFiles = await storageService.writeSimplifiedFiles(
+      tenantConfig.buckets.simplifiedBucket,
+      event.googleCompositionId,
+      simplifiedResults
+    );
+
+    logger.info('Simplified files written to GCS', {
+      bucket: tenantConfig.buckets.simplifiedBucket,
+      filesCount: simplifiedFiles.length,
+    });
+
+    // Step 6: Write simplified content back to FHIR via Backend API
+    logger.debug('Step 6: Writing simplified content back to FHIR');
+    await backendClient.writeSimplifiedToFhir(
+      event.googleCompositionId,
+      tenantId,
+      {
+        dischargeSummary: simplifiedResults.dischargeSummary ? {
+          content: simplifiedResults.dischargeSummary.content,
+          gcsPath: simplifiedFiles.find(f => f.type === 'discharge-summary')?.simplifiedPath || '',
+        } : undefined,
+        dischargeInstructions: simplifiedResults.dischargeInstructions ? {
+          content: simplifiedResults.dischargeInstructions.content,
+          gcsPath: simplifiedFiles.find(f => f.type === 'discharge-instructions')?.simplifiedPath || '',
+        } : undefined,
       }
-    } else {
-      logger.info('Skipping discharge summaries - none available', {
-        compositionId: event.googleCompositionId,
-      });
-    }
+    );
 
-    // Step 3: Process discharge instructions (if available)
-    logger.debug('Step 3: Processing discharge instructions');
-    const dischargeInstructionResults: SimplificationResult[] = [];
+    logger.info('Simplified content written back to FHIR', {
+      compositionId: event.googleCompositionId,
+    });
 
-    if (binariesResponse.dischargeInstructions && binariesResponse.dischargeInstructions.length > 0) {
-      for (const instruction of binariesResponse.dischargeInstructions) {
-        const fileName = `${event.googleCompositionId}-discharge-instructions.txt`;
+    // Step 7: Publish to discharge-simplification-completed topic (triggers Translation service)
+    logger.debug('Step 7: Publishing to discharge-simplification-completed topic');
+    const totalTokens = (simplifiedResults.dischargeSummary?.tokensUsed || 0) +
+                       (simplifiedResults.dischargeInstructions?.tokensUsed || 0);
 
-        // Write original content to input bucket
-        await gcsService.writeFile(config.inputBucket, fileName, instruction.text);
+    const messageId = await pubsubPublisher.publishSimplificationCompleted({
+      tenantId,
+      compositionId: event.googleCompositionId,
+      simplifiedFiles,
+      processingTimeMs: Date.now() - processingStartTime,
+      tokensUsed: totalTokens,
+      timestamp: new Date().toISOString(),
+    });
 
-        logger.info('Wrote discharge instructions to file', {
-          fileName,
-          contentLength: instruction.text.length,
-        });
-
-        // Process through simplification pipeline
-        const result = await processBinary(fileName, instruction.text, 'discharge-instructions');
-        dischargeInstructionResults.push(result);
-      }
-    } else {
-      logger.info('Skipping discharge instructions - none available', {
-        compositionId: event.googleCompositionId,
-      });
-    }
+    logger.info('Published to discharge-simplification-completed topic', {
+      messageId,
+      compositionId: event.googleCompositionId,
+    });
 
     const processingTime = Date.now() - processingStartTime;
 
     logger.info('Discharge export processing completed', {
       compositionId: event.googleCompositionId,
-      summariesProcessed: dischargeSummaryResults.length,
-      instructionsProcessed: dischargeInstructionResults.length,
+      tenantId,
+      filesProcessed: simplifiedFiles.length,
       processingTimeMs: processingTime,
+      tokensUsed: totalTokens,
     });
-
-    return {
-      dischargeSummaryResults,
-      dischargeInstructionResults,
-    };
   } catch (error) {
     logger.error('Discharge export processing failed', error as Error, {
       compositionId: event.googleCompositionId,
+      tenantId,
     });
     throw error;
   }
 }
 
 /**
- * Process a single binary: simplify and write output
+ * Simplify discharge summaries and instructions
  */
-async function processBinary(
-  fileName: string,
-  content: string,
-  category: string
-): Promise<SimplificationResult> {
-  const processingStartTime = Date.now();
-  const config = getConfig();
+async function simplifyBinaries(
+  dischargeSummaries: Array<{ id: string; text: string }>,
+  dischargeInstructions: Array<{ id: string; text: string }>
+): Promise<{
+  dischargeSummary?: { content: string; tokensUsed: number };
+  dischargeInstructions?: { content: string; tokensUsed: number };
+}> {
+  const results: {
+    dischargeSummary?: { content: string; tokensUsed: number };
+    dischargeInstructions?: { content: string; tokensUsed: number };
+  } = {};
 
-  logger.info('Starting binary processing', {
-    fileName,
-    category,
-    contentLength: content.length,
-  });
-
-  try {
-    const originalSize = Buffer.byteLength(content, 'utf-8');
-
-    // Step 1: Validate content
-    logger.debug('Step 1: Validating medical content');
-    const isValidMedicalContent = simplificationService.validateMedicalContent(content);
-
-    if (!isValidMedicalContent) {
-      logger.warning('Content validation failed, but continuing processing', {
-        fileName,
-        category,
-      });
-    }
-
-    // Step 2: Simplify using Vertex AI
-    logger.debug('Step 2: Simplifying content with Vertex AI');
-    const simplificationResult = await simplificationService.simplify({
-      content,
-      fileName,
+  // Simplify discharge summary (if available)
+  if (dischargeSummaries && dischargeSummaries.length > 0) {
+    logger.debug('Simplifying discharge summary', {
+      summariesCount: dischargeSummaries.length,
     });
 
-    logger.info('Content simplified successfully', {
-      fileName,
-      category,
-      originalLength: content.length,
+    // Take first summary if multiple exist
+    const summary = dischargeSummaries[0];
+
+    // Validate content
+    const isValidMedicalContent = simplificationService.validateMedicalContent(summary.text);
+    if (!isValidMedicalContent) {
+      logger.warning('Discharge summary validation failed, but continuing processing');
+    }
+
+    // Simplify using Vertex AI
+    const simplificationResult = await simplificationService.simplify({
+      content: summary.text,
+      fileName: 'discharge-summary',
+    });
+
+    results.dischargeSummary = {
+      content: simplificationResult.simplifiedContent,
+      tokensUsed: simplificationResult.tokensUsed || 0,
+    };
+
+    logger.info('Discharge summary simplified', {
+      originalLength: summary.text.length,
       simplifiedLength: simplificationResult.simplifiedContent.length,
       tokensUsed: simplificationResult.tokensUsed,
     });
+  }
 
-    // Step 3: Generate output filename
-    const outputFileName = gcsService.generateOutputFileName(fileName);
-
-    logger.debug('Step 3: Writing simplified content to GCS', {
-      outputFileName,
+  // Simplify discharge instructions (if available)
+  if (dischargeInstructions && dischargeInstructions.length > 0) {
+    logger.debug('Simplifying discharge instructions', {
+      instructionsCount: dischargeInstructions.length,
     });
 
-    // Step 4: Write simplified content to output bucket
-    await gcsService.writeFile(
-      config.outputBucket,
-      outputFileName,
-      simplificationResult.simplifiedContent
-    );
+    // Take first instructions if multiple exist
+    const instruction = dischargeInstructions[0];
 
-    // Step 5: Update Firestore metadata
-    logger.debug('Step 5: Updating Firestore metadata');
-    await firestoreService.upsertDischargeSummary(fileName, outputFileName);
-    logger.info('Firestore metadata updated', { fileName, outputFileName });
+    // Validate content
+    const isValidMedicalContent = simplificationService.validateMedicalContent(instruction.text);
+    if (!isValidMedicalContent) {
+      logger.warning('Discharge instructions validation failed, but continuing processing');
+    }
 
-    const simplifiedSize = Buffer.byteLength(simplificationResult.simplifiedContent, 'utf-8');
-    const processingTime = Date.now() - processingStartTime;
+    // Simplify using Vertex AI
+    const simplificationResult = await simplificationService.simplify({
+      content: instruction.text,
+      fileName: 'discharge-instructions',
+    });
 
-    const result: SimplificationResult = {
-      success: true,
-      originalFileName: fileName,
-      simplifiedFileName: outputFileName,
-      originalSize,
-      simplifiedSize,
-      processingTimeMs: processingTime,
+    results.dischargeInstructions = {
+      content: simplificationResult.simplifiedContent,
+      tokensUsed: simplificationResult.tokensUsed || 0,
     };
 
-    logger.info('Binary processing completed', { ...result, category });
-
-    return result;
-  } catch (error) {
-    const processingTime = Date.now() - processingStartTime;
-
-    const result: SimplificationResult = {
-      success: false,
-      originalFileName: fileName,
-      simplifiedFileName: '',
-      originalSize: 0,
-      simplifiedSize: 0,
-      processingTimeMs: processingTime,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
-
-    logger.error('Binary processing failed', error as Error, { ...result, category });
-
-    throw error;
+    logger.info('Discharge instructions simplified', {
+      originalLength: instruction.text.length,
+      simplifiedLength: simplificationResult.simplifiedContent.length,
+      tokensUsed: simplificationResult.tokensUsed,
+    });
   }
+
+  return results;
 }
 
 // Export services for testing
-export { fhirApiService, gcsService, simplificationService, firestoreService };
+export { fhirApiService, simplificationService, backendClient, storageService, pubsubPublisher };
