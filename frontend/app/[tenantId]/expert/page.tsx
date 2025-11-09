@@ -52,8 +52,9 @@ export default function ExpertPortalPage() {
     }
   }
 
-  const handleReview = (summaryId: string, reviewType: ReviewType) => {
-    router.push(`/${tenantId}/expert/review/${summaryId}?type=${reviewType}`)
+  const handleReview = (summary: ReviewSummary, reviewType: ReviewType) => {
+    // Use compositionId for fetching content
+    router.push(`/${tenantId}/expert/review/${summary.compositionId}?type=${reviewType}`)
   }
 
   return (
@@ -158,12 +159,22 @@ export default function ExpertPortalPage() {
               <ReviewTable
                 columns={[
                   {
-                    key: 'fileName',
-                    header: 'File Name',
+                    key: 'patientName',
+                    header: 'Patient',
                     render: (summary: ReviewSummary) => (
-                      <div className="font-medium text-sm">
-                        {summary.fileName || summary.summaryTitle || `Summary-${summary.id.slice(-8)}`}
+                      <div>
+                        <div className="font-medium text-sm">{summary.patientName}</div>
+                        {summary.unit && (
+                          <div className="text-xs text-muted-foreground">{summary.unit}</div>
+                        )}
                       </div>
+                    )
+                  },
+                  {
+                    key: 'mrn',
+                    header: 'MRN',
+                    render: (summary: ReviewSummary) => (
+                      <div className="text-sm font-mono">{summary.mrn}</div>
                     )
                   },
                   {
@@ -174,19 +185,19 @@ export default function ExpertPortalPage() {
                   {
                     key: 'reviewCount',
                     header: 'Reviews',
-                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount)
+                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount || 0)
                   },
                   {
                     key: 'rating',
                     header: 'Rating',
                     render: (summary: ReviewSummary) =>
-                      ColumnRenderers.rating(summary.reviewCount, summary.avgRating)
+                      ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
                   },
                   {
                     key: 'status',
                     header: 'Status',
                     render: (summary: ReviewSummary) =>
-                      ColumnRenderers.status(summary.reviewCount, summary.avgRating)
+                      ColumnRenderers.status(summary.reviewCount || 0, summary.avgRating)
                   },
                   {
                     key: 'latestReviewDate',
@@ -202,7 +213,7 @@ export default function ExpertPortalPage() {
                   }
                 ]}
                 data={medicalSummaries}
-                onAction={(summary) => handleReview(summary.id, 'simplification')}
+                onAction={(summary) => handleReview(summary, 'simplification')}
                 actionLabel="Review →"
                 emptyMessage="No medical summaries found. Try adjusting your filters or check back later."
                 keyExtractor={(summary) => summary.id}
@@ -263,12 +274,22 @@ export default function ExpertPortalPage() {
               <ReviewTable
                 columns={[
                   {
-                    key: 'fileName',
-                    header: 'File Name',
+                    key: 'patientName',
+                    header: 'Patient',
                     render: (summary: ReviewSummary) => (
-                      <div className="font-medium text-sm">
-                        {summary.fileName || summary.summaryTitle || `Summary-${summary.id.slice(-8)}`}
+                      <div>
+                        <div className="font-medium text-sm">{summary.patientName}</div>
+                        {summary.unit && (
+                          <div className="text-xs text-muted-foreground">{summary.unit}</div>
+                        )}
                       </div>
+                    )
+                  },
+                  {
+                    key: 'mrn',
+                    header: 'MRN',
+                    render: (summary: ReviewSummary) => (
+                      <div className="text-sm font-mono">{summary.mrn}</div>
                     )
                   },
                   {
@@ -288,19 +309,19 @@ export default function ExpertPortalPage() {
                   {
                     key: 'reviewCount',
                     header: 'Reviews',
-                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount)
+                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount || 0)
                   },
                   {
                     key: 'rating',
                     header: 'Rating',
                     render: (summary: ReviewSummary) =>
-                      ColumnRenderers.rating(summary.reviewCount, summary.avgRating)
+                      ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
                   },
                   {
                     key: 'status',
                     header: 'Status',
                     render: (summary: ReviewSummary) =>
-                      ColumnRenderers.status(summary.reviewCount, summary.avgRating)
+                      ColumnRenderers.status(summary.reviewCount || 0, summary.avgRating)
                   },
                   {
                     key: 'latestReviewDate',
@@ -316,7 +337,7 @@ export default function ExpertPortalPage() {
                   }
                 ]}
                 data={languageSummaries}
-                onAction={(summary) => handleReview(summary.id, 'translation')}
+                onAction={(summary) => handleReview(summary, 'translation')}
                 actionLabel="Review →"
                 emptyMessage="No language summaries found. Try adjusting your filters or check back later."
                 keyExtractor={(summary) => summary.id}

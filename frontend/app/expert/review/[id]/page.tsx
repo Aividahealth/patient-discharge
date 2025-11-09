@@ -171,6 +171,7 @@ export default function ExpertReviewPage() {
     try {
       setSubmitting(true)
 
+      // Generic portal does NOT pass auth context - backend will handle all summaries
       await submitFeedback({
         dischargeSummaryId: summaryId,
         reviewType,

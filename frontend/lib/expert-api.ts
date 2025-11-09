@@ -23,24 +23,36 @@ export interface ExpertFeedback {
 }
 
 export interface ReviewSummary {
-  id: string;
-  patientName?: string;
-  mrn?: string;
-  summaryTitle?: string; // New field for discharge summary title
-  fileName?: string; // Unique file name for each summary
-  language?: string; // Language for translation reviews
+  id: string;                      // Patient ID
+  compositionId: string;           // Composition ID for fetching content
+  mrn: string;
+  patientName: string;             // From name field
+  room?: string;
+  unit?: string;
   dischargeDate?: Date;
-  admissionDate?: Date;
-  simplifiedAt?: Date;
-  translatedAt?: Date;
-  reviewCount: number;
+  status?: 'review' | 'approved' | 'pending';
+  attendingPhysician?: {
+    name: string;
+    id: string;
+  };
+  avatar?: string | null;
+  // Review stats (to be added by backend)
+  reviewCount?: number;
   avgRating?: number;
   latestReviewDate?: Date;
+  fileName?: string;               // For display purposes
+  language?: string;               // Language for translation reviews
 }
 
 export interface ReviewListResponse {
   summaries: ReviewSummary[];
   total: number;
+  meta?: {
+    total: number;
+    pending: number;
+    review: number;
+    approved: number;
+  };
 }
 
 export interface SubmitFeedbackRequest {
@@ -59,6 +71,7 @@ export interface SubmitFeedbackRequest {
 
 /**
  * Get list of discharge summaries for review
+ * Uses the discharge-queue endpoint
  */
 export async function getReviewList(params?: {
   type?: ReviewType;
@@ -69,7 +82,9 @@ export async function getReviewList(params?: {
   token?: string;
 }): Promise<ReviewListResponse> {
   const queryParams = new URLSearchParams();
-  if (params?.type) queryParams.append('type', params.type);
+
+  // Add expert-specific query params
+  if (params?.type) queryParams.append('reviewType', params.type);
   if (params?.filter) queryParams.append('filter', params.filter);
   if (params?.limit) queryParams.append('limit', params.limit.toString());
   if (params?.offset) queryParams.append('offset', params.offset.toString());
@@ -78,15 +93,16 @@ export async function getReviewList(params?: {
     'Content-Type': 'application/json',
   };
 
+  // For tenant-specific requests
   if (params?.token) {
     headers['Authorization'] = `Bearer ${params.token}`;
   }
   if (params?.tenantId) {
-    headers['X-Tenant-ID'] = params.tenantId;
+    headers['x-tenant-id'] = params.tenantId;
   }
 
   const response = await fetch(
-    `${API_BASE_URL}/expert/list?${queryParams.toString()}`,
+    `${API_BASE_URL}/api/patients/discharge-queue?${queryParams.toString()}`,
     { headers }
   );
 
@@ -100,7 +116,30 @@ export async function getReviewList(params?: {
     throw new Error(`Failed to fetch review list: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+
+  // Transform discharge-queue response to ReviewListResponse
+  return {
+    summaries: data.patients?.map((patient: any) => ({
+      id: patient.id,
+      compositionId: patient.compositionId,
+      mrn: patient.mrn,
+      patientName: patient.name,
+      room: patient.room,
+      unit: patient.unit,
+      dischargeDate: patient.dischargeDate ? new Date(patient.dischargeDate) : undefined,
+      status: patient.status,
+      attendingPhysician: patient.attendingPhysician,
+      avatar: patient.avatar,
+      // Review stats - backend should add these
+      reviewCount: patient.reviewCount || 0,
+      avgRating: patient.avgRating,
+      latestReviewDate: patient.latestReviewDate ? new Date(patient.latestReviewDate) : undefined,
+      fileName: patient.fileName || `${patient.mrn}-discharge-summary`,
+    })) || [],
+    total: data.meta?.total || 0,
+    meta: data.meta
+  };
 }
 
 /**

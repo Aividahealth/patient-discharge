@@ -25,6 +25,7 @@ export default function ExpertPortalPage() {
   const loadSummaries = async () => {
     try {
       setLoading(true)
+      // Generic portal does NOT pass tenantId or token - backend will return all summaries
       const [medicalResponse, languageResponse] = await Promise.all([
         getReviewList({ type: 'simplification', filter, limit: 50 }),
         getReviewList({ type: 'translation', filter, limit: 50 })
@@ -32,14 +33,15 @@ export default function ExpertPortalPage() {
       setMedicalSummaries(medicalResponse.summaries)
       setLanguageSummaries(languageResponse.summaries)
     } catch (error) {
-      console.error('Failed to load summaries:', error)
+      console.error('[ExpertPortal] Failed to load summaries:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleReview = (summaryId: string, reviewType: ReviewType) => {
-    router.push(`/expert/review/${summaryId}?type=${reviewType}`)
+  const handleReview = (summary: ReviewSummary, reviewType: ReviewType) => {
+    // Use compositionId for fetching content
+    router.push(`/expert/review/${summary.compositionId}?type=${reviewType}`)
   }
 
   return (
@@ -132,7 +134,8 @@ export default function ExpertPortalPage() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">File Name</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">Patient</th>
+                    <th className="text-left p-3 text-sm font-medium text-muted-foreground">MRN</th>
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">Discharge Date</th>
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">Reviews</th>
                     <th className="text-left p-3 text-sm font-medium text-muted-foreground">Rating</th>
@@ -149,17 +152,27 @@ export default function ExpertPortalPage() {
                         index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
                       }`}
                     >
-                      {/* File Name */}
+                      {/* Patient Name */}
                       <td className="p-3">
                         <div className="font-medium text-sm">
-                          {summary.fileName || summary.summaryTitle || `Summary-${summary.id.slice(-8)}`}
+                          {summary.patientName}
+                        </div>
+                        {summary.unit && (
+                          <div className="text-xs text-muted-foreground">{summary.unit}</div>
+                        )}
+                      </td>
+
+                      {/* MRN */}
+                      <td className="p-3">
+                        <div className="text-sm font-mono">
+                          {summary.mrn}
                         </div>
                       </td>
-                      
+
                       {/* Discharge Date */}
                       <td className="p-3">
                         <div className="text-sm">
-                          {summary.dischargeDate 
+                          {summary.dischargeDate
                             ? new Date(summary.dischargeDate).toLocaleDateString()
                             : 'N/A'
                           }
@@ -169,14 +182,14 @@ export default function ExpertPortalPage() {
                       {/* Reviews Count */}
                       <td className="p-3">
                         <div className="text-sm font-medium">
-                          {summary.reviewCount}
+                          {summary.reviewCount || 0}
                         </div>
                       </td>
                       
                       {/* Rating */}
                       <td className="p-3">
                         <div className="flex items-center gap-1">
-                          {summary.reviewCount > 0 && summary.avgRating ? (
+                          {(summary.reviewCount || 0) > 0 && summary.avgRating ? (
                             <>
                               <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                               <span className="text-sm font-medium">
@@ -188,11 +201,11 @@ export default function ExpertPortalPage() {
                           )}
                         </div>
                       </td>
-                      
+
                       {/* Status */}
                       <td className="p-3">
                         <div className="flex gap-1">
-                          {summary.reviewCount === 0 ? (
+                          {(summary.reviewCount || 0) === 0 ? (
                             <Badge variant="secondary" className="text-xs">
                               Needs Review
                             </Badge>
@@ -220,8 +233,8 @@ export default function ExpertPortalPage() {
                       
                       {/* Action */}
                       <td className="p-3">
-                        <Button 
-                          onClick={() => handleReview(summary.id, 'simplification')}
+                        <Button
+                          onClick={() => handleReview(summary, 'simplification')}
                           size="sm"
                           className="w-full"
                         >
@@ -279,7 +292,8 @@ export default function ExpertPortalPage() {
                   <table className="w-full">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="text-left p-3 text-sm font-medium text-muted-foreground">File Name</th>
+                        <th className="text-left p-3 text-sm font-medium text-muted-foreground">Patient</th>
+                        <th className="text-left p-3 text-sm font-medium text-muted-foreground">MRN</th>
                         <th className="text-left p-3 text-sm font-medium text-muted-foreground">Language</th>
                         <th className="text-left p-3 text-sm font-medium text-muted-foreground">Discharge Date</th>
                         <th className="text-left p-3 text-sm font-medium text-muted-foreground">Reviews</th>
@@ -297,41 +311,51 @@ export default function ExpertPortalPage() {
                             index % 2 === 0 ? 'bg-background' : 'bg-muted/10'
                           }`}
                         >
-                          {/* File Name */}
+                          {/* Patient Name */}
                           <td className="p-3">
                             <div className="font-medium text-sm">
-                              {summary.fileName || summary.summaryTitle || `Summary-${summary.id.slice(-8)}`}
+                              {summary.patientName}
+                            </div>
+                            {summary.unit && (
+                              <div className="text-xs text-muted-foreground">{summary.unit}</div>
+                            )}
+                          </td>
+
+                          {/* MRN */}
+                          <td className="p-3">
+                            <div className="text-sm font-mono">
+                              {summary.mrn}
                             </div>
                           </td>
-                          
+
                           {/* Language */}
                           <td className="p-3">
                             <div className="text-sm">
                               {summary.language || 'English'}
                             </div>
                           </td>
-                          
+
                           {/* Discharge Date */}
                           <td className="p-3">
                             <div className="text-sm">
-                              {summary.dischargeDate 
+                              {summary.dischargeDate
                                 ? new Date(summary.dischargeDate).toLocaleDateString()
                                 : 'N/A'
                               }
                             </div>
                           </td>
-                          
+
                           {/* Reviews Count */}
                           <td className="p-3">
                             <div className="text-sm font-medium">
-                              {summary.reviewCount}
+                              {summary.reviewCount || 0}
                             </div>
                           </td>
-                          
+
                           {/* Rating */}
                           <td className="p-3">
                             <div className="flex items-center gap-1">
-                              {summary.reviewCount > 0 && summary.avgRating ? (
+                              {(summary.reviewCount || 0) > 0 && summary.avgRating ? (
                                 <>
                                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                                   <span className="text-sm font-medium">
@@ -343,11 +367,11 @@ export default function ExpertPortalPage() {
                               )}
                             </div>
                           </td>
-                          
+
                           {/* Status */}
                           <td className="p-3">
                             <div className="flex gap-1">
-                              {summary.reviewCount === 0 ? (
+                              {(summary.reviewCount || 0) === 0 ? (
                                 <Badge variant="secondary" className="text-xs">
                                   Needs Review
                                 </Badge>
@@ -362,21 +386,21 @@ export default function ExpertPortalPage() {
                               )}
                             </div>
                           </td>
-                          
+
                           {/* Last Review */}
                           <td className="p-3">
                             <div className="text-sm text-muted-foreground">
-                              {summary.latestReviewDate 
+                              {summary.latestReviewDate
                                 ? new Date(summary.latestReviewDate).toLocaleDateString()
                                 : 'Never'
                               }
                             </div>
                           </td>
-                          
+
                           {/* Action */}
                           <td className="p-3">
-                            <Button 
-                              onClick={() => handleReview(summary.id, 'translation')}
+                            <Button
+                              onClick={() => handleReview(summary, 'translation')}
                               size="sm"
                               className="w-full"
                             >
