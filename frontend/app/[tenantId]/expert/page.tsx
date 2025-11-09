@@ -23,6 +23,13 @@ export default function ExpertPortalPage() {
   const [filter, setFilter] = useState<'all' | 'no_reviews' | 'low_rating'>('all')
   const [activeTab, setActiveTab] = useState<'medical' | 'language'>('medical')
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!token && tenantId) {
+      router.push(`/${tenantId}/login`)
+    }
+  }, [token, tenantId, router])
+
   useEffect(() => {
     if (tenantId && token) {
       loadSummaries()

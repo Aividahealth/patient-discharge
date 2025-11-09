@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,6 +40,7 @@ import {
 export default function ClinicianDashboard() {
   const { tenant, tenantId, token } = useTenant()
   const { exportToPDF } = usePDFExport()
+  const router = useRouter()
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [language, setLanguage] = useState("en")
@@ -690,6 +692,13 @@ export default function ClinicianDashboard() {
   };
 
   // Load discharge queue on mount
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!token && tenantId) {
+      router.push(`/${tenantId}/login`)
+    }
+  }, [token, tenantId, router])
+
   useEffect(() => {
     if (token && tenantId) {
       loadDischargeQueue();

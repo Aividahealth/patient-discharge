@@ -103,6 +103,13 @@ export default function ExpertReviewPage() {
   const [hasMedicalTermErrors, setHasMedicalTermErrors] = useState(false)
   const [isOverlyLiteral, setIsOverlyLiteral] = useState(false)
 
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!token && tenantId) {
+      router.push(`/${tenantId}/login`)
+    }
+  }, [token, tenantId, router])
+
   useEffect(() => {
     loadContent()
   }, [summaryId])
