@@ -71,6 +71,54 @@ export const patientTranslations = {
     nonEmergency: "For non-emergency questions",
     cardiologyOffice: "Cardiology Office",
     callNow: "Call Now",
+
+    // Medication Instructions
+    medInstructionTakeWithFood: "Take with food. Do not stop suddenly.",
+    medInstructionBedtimeGrapefruit: "Take at bedtime. Avoid grapefruit.",
+    medInstructionTakeWithFoodStomach: "Take with food to prevent stomach upset.",
+
+    // Appointment Preparation Notes
+    appointmentPrepMedicationList: "Bring your medication list and blood pressure log",
+    appointmentPrepFasting: "Fasting required - no food or drink after midnight",
+
+    // Diet & Activity - Foods to Include
+    foodIncludeFreshFruits: "Fresh fruits and vegetables",
+    foodIncludeWholeGrains: "Whole grains (brown rice, oats)",
+    foodIncludeLeanProteins: "Lean proteins (fish, chicken, beans)",
+    foodIncludeLowFatDairy: "Low-fat dairy products",
+    foodIncludeNutsSeeds: "Nuts and seeds (unsalted)",
+
+    // Diet & Activity - Foods to Limit
+    foodLimitHighSodium: "High-sodium foods (processed meats, canned soups)",
+    foodLimitFriedFast: "Fried and fast foods",
+    foodLimitSugaryDrinks: "Sugary drinks and desserts",
+    foodLimitAlcohol: "Excessive alcohol",
+
+    // Diet & Activity - Recommended Activities
+    activityRecommendedWalking: "Walking 20-30 minutes daily",
+    activityRecommendedStretching: "Light stretching or yoga",
+    activityRecommendedSwimming: "Swimming (after incision heals)",
+    activityRecommendedChores: "Household chores (light cleaning)",
+
+    // Diet & Activity - Activities to Avoid
+    activityAvoidHeavyLifting: "Heavy lifting (over 10 pounds)",
+    activityAvoidIntenseExercise: "Intense exercise or running",
+    activityAvoidDriving: "Driving for 2 weeks",
+    activityAvoidContactSports: "Contact sports",
+
+    // Warning Signs - Call 911
+    warning911ChestPain: "Severe chest pain or pressure",
+    warning911Breathing: "Difficulty breathing or shortness of breath",
+    warning911Weakness: "Sudden weakness or numbness",
+    warning911Consciousness: "Loss of consciousness",
+
+    // Warning Signs - Call Doctor
+    warningDoctorSwelling: "Increased swelling in legs or feet",
+    warningDoctorWeightGain: "Rapid weight gain (3+ pounds in 2 days)",
+    warningDoctorCough: "Persistent cough or wheezing",
+    warningDoctorDizziness: "Dizziness or lightheadedness",
+    warningDoctorFatigue: "Unusual fatigue or weakness",
+    warningDoctorInfection: "Signs of infection at incision site",
   },
   es: {
     // Header
@@ -140,6 +188,54 @@ export const patientTranslations = {
     nonEmergency: "Para preguntas no urgentes",
     cardiologyOffice: "Oficina de Cardiología",
     callNow: "Llamar Ahora",
+
+    // Medication Instructions
+    medInstructionTakeWithFood: "Tome con comida. No deje de tomarlo repentinamente.",
+    medInstructionBedtimeGrapefruit: "Tome a la hora de acostarse. Evite la toronja.",
+    medInstructionTakeWithFoodStomach: "Tome con comida para prevenir malestar estomacal.",
+
+    // Appointment Preparation Notes
+    appointmentPrepMedicationList: "Traiga su lista de medicamentos y registro de presión arterial",
+    appointmentPrepFasting: "Ayuno requerido - no comer ni beber después de medianoche",
+
+    // Diet & Activity - Foods to Include
+    foodIncludeFreshFruits: "Frutas y verduras frescas",
+    foodIncludeWholeGrains: "Granos integrales (arroz integral, avena)",
+    foodIncludeLeanProteins: "Proteínas magras (pescado, pollo, frijoles)",
+    foodIncludeLowFatDairy: "Productos lácteos bajos en grasa",
+    foodIncludeNutsSeeds: "Nueces y semillas (sin sal)",
+
+    // Diet & Activity - Foods to Limit
+    foodLimitHighSodium: "Alimentos con alto contenido de sodio (carnes procesadas, sopas enlatadas)",
+    foodLimitFriedFast: "Alimentos fritos y comida rápida",
+    foodLimitSugaryDrinks: "Bebidas azucaradas y postres",
+    foodLimitAlcohol: "Alcohol en exceso",
+
+    // Diet & Activity - Recommended Activities
+    activityRecommendedWalking: "Caminar 20-30 minutos diarios",
+    activityRecommendedStretching: "Estiramiento ligero o yoga",
+    activityRecommendedSwimming: "Natación (después de que cicatrice la incisión)",
+    activityRecommendedChores: "Tareas domésticas (limpieza ligera)",
+
+    // Diet & Activity - Activities to Avoid
+    activityAvoidHeavyLifting: "Levantar objetos pesados (más de 10 libras)",
+    activityAvoidIntenseExercise: "Ejercicio intenso o correr",
+    activityAvoidDriving: "Conducir durante 2 semanas",
+    activityAvoidContactSports: "Deportes de contacto",
+
+    // Warning Signs - Call 911
+    warning911ChestPain: "Dolor o presión severa en el pecho",
+    warning911Breathing: "Dificultad para respirar o falta de aliento",
+    warning911Weakness: "Debilidad o entumecimiento repentino",
+    warning911Consciousness: "Pérdida del conocimiento",
+
+    // Warning Signs - Call Doctor
+    warningDoctorSwelling: "Aumento de hinchazón en piernas o pies",
+    warningDoctorWeightGain: "Aumento rápido de peso (3+ libras en 2 días)",
+    warningDoctorCough: "Tos persistente o sibilancias",
+    warningDoctorDizziness: "Mareos o aturdimiento",
+    warningDoctorFatigue: "Fatiga o debilidad inusual",
+    warningDoctorInfection: "Signos de infección en el sitio de la incisión",
   },
   hi: {
     // Header
@@ -209,6 +305,54 @@ export const patientTranslations = {
     nonEmergency: "गैर-आपातकालीन प्रश्नों के लिए",
     cardiologyOffice: "कार्डियोलॉजी कार्यालय",
     callNow: "अभी कॉल करें",
+
+    // Medication Instructions
+    medInstructionTakeWithFood: "भोजन के साथ लें। अचानक बंद न करें।",
+    medInstructionBedtimeGrapefruit: "सोने से पहले लें। अंगूर से बचें।",
+    medInstructionTakeWithFoodStomach: "पेट की परेशानी को रोकने के लिए भोजन के साथ लें।",
+
+    // Appointment Preparation Notes
+    appointmentPrepMedicationList: "अपनी दवाओं की सूची और रक्तचाप लॉग लाएं",
+    appointmentPrepFasting: "उपवास आवश्यक - आधी रात के बाद कोई भोजन या पेय नहीं",
+
+    // Diet & Activity - Foods to Include
+    foodIncludeFreshFruits: "ताजे फल और सब्जियां",
+    foodIncludeWholeGrains: "साबुत अनाज (ब्राउन राइस, ओट्स)",
+    foodIncludeLeanProteins: "दुबला प्रोटीन (मछली, चिकन, बीन्स)",
+    foodIncludeLowFatDairy: "कम वसा वाले डेयरी उत्पाद",
+    foodIncludeNutsSeeds: "नट्स और बीज (बिना नमक के)",
+
+    // Diet & Activity - Foods to Limit
+    foodLimitHighSodium: "उच्च सोडियम वाले खाद्य पदार्थ (प्रसंस्कृत मांस, डिब्बाबंद सूप)",
+    foodLimitFriedFast: "तले हुए और फास्ट फूड",
+    foodLimitSugaryDrinks: "मीठे पेय और मिठाई",
+    foodLimitAlcohol: "अत्यधिक शराब",
+
+    // Diet & Activity - Recommended Activities
+    activityRecommendedWalking: "दैनिक 20-30 मिनट चलना",
+    activityRecommendedStretching: "हल्का स्ट्रेचिंग या योग",
+    activityRecommendedSwimming: "तैराकी (चीरे के ठीक होने के बाद)",
+    activityRecommendedChores: "घरेलू काम (हल्की सफाई)",
+
+    // Diet & Activity - Activities to Avoid
+    activityAvoidHeavyLifting: "भारी वजन उठाना (10 पाउंड से अधिक)",
+    activityAvoidIntenseExercise: "तीव्र व्यायाम या दौड़ना",
+    activityAvoidDriving: "2 सप्ताह तक गाड़ी चलाना",
+    activityAvoidContactSports: "संपर्क खेल",
+
+    // Warning Signs - Call 911
+    warning911ChestPain: "गंभीर सीने में दर्द या दबाव",
+    warning911Breathing: "सांस लेने में कठिनाई या सांस की तकलीफ",
+    warning911Weakness: "अचानक कमजोरी या सुन्नता",
+    warning911Consciousness: "चेतना की हानि",
+
+    // Warning Signs - Call Doctor
+    warningDoctorSwelling: "पैरों या पैरों में सूजन बढ़ना",
+    warningDoctorWeightGain: "तेजी से वजन बढ़ना (2 दिनों में 3+ पाउंड)",
+    warningDoctorCough: "लगातार खांसी या घरघराहट",
+    warningDoctorDizziness: "चक्कर आना या हल्कापन",
+    warningDoctorFatigue: "असामान्य थकान या कमजोरी",
+    warningDoctorInfection: "चीरे के स्थान पर संक्रमण के संकेत",
   },
   vi: {
     // Header
@@ -278,6 +422,54 @@ export const patientTranslations = {
     nonEmergency: "Cho các câu hỏi không khẩn cấp",
     cardiologyOffice: "Văn phòng Tim mạch",
     callNow: "Gọi Ngay",
+
+    // Medication Instructions
+    medInstructionTakeWithFood: "Uống với thức ăn. Không ngừng đột ngột.",
+    medInstructionBedtimeGrapefruit: "Uống trước khi đi ngủ. Tránh bưởi.",
+    medInstructionTakeWithFoodStomach: "Uống với thức ăn để tránh khó chịu dạ dày.",
+
+    // Appointment Preparation Notes
+    appointmentPrepMedicationList: "Mang theo danh sách thuốc và nhật ký huyết áp",
+    appointmentPrepFasting: "Cần nhịn ăn - không ăn uống sau nửa đêm",
+
+    // Diet & Activity - Foods to Include
+    foodIncludeFreshFruits: "Trái cây và rau tươi",
+    foodIncludeWholeGrains: "Ngũ cốc nguyên hạt (gạo lứt, yến mạch)",
+    foodIncludeLeanProteins: "Chất đạm nạc (cá, gà, đậu)",
+    foodIncludeLowFatDairy: "Sản phẩm sữa ít béo",
+    foodIncludeNutsSeeds: "Hạt và quả hạch (không muối)",
+
+    // Diet & Activity - Foods to Limit
+    foodLimitHighSodium: "Thực phẩm nhiều natri (thịt chế biến, súp đóng hộp)",
+    foodLimitFriedFast: "Thực phẩm chiên và thức ăn nhanh",
+    foodLimitSugaryDrinks: "Đồ uống có đường và món tráng miệng",
+    foodLimitAlcohol: "Rượu quá mức",
+
+    // Diet & Activity - Recommended Activities
+    activityRecommendedWalking: "Đi bộ 20-30 phút mỗi ngày",
+    activityRecommendedStretching: "Kéo giãn nhẹ hoặc yoga",
+    activityRecommendedSwimming: "Bơi lội (sau khi vết mổ lành)",
+    activityRecommendedChores: "Việc nhà (dọn dẹp nhẹ)",
+
+    // Diet & Activity - Activities to Avoid
+    activityAvoidHeavyLifting: "Nâng vật nặng (trên 10 pound)",
+    activityAvoidIntenseExercise: "Tập thể dục cường độ cao hoặc chạy",
+    activityAvoidDriving: "Lái xe trong 2 tuần",
+    activityAvoidContactSports: "Thể thao tiếp xúc",
+
+    // Warning Signs - Call 911
+    warning911ChestPain: "Đau ngực hoặc áp lực nghiêm trọng",
+    warning911Breathing: "Khó thở hoặc thở gấp",
+    warning911Weakness: "Yếu đột ngột hoặc tê",
+    warning911Consciousness: "Mất ý thức",
+
+    // Warning Signs - Call Doctor
+    warningDoctorSwelling: "Sưng tăng ở chân hoặc bàn chân",
+    warningDoctorWeightGain: "Tăng cân nhanh (3+ pound trong 2 ngày)",
+    warningDoctorCough: "Ho dai dẳng hoặc thở khò khè",
+    warningDoctorDizziness: "Chóng mặt hoặc choáng váng",
+    warningDoctorFatigue: "Mệt mỏi hoặc yếu bất thường",
+    warningDoctorInfection: "Dấu hiệu nhiễm trùng tại vị trí vết mổ",
   },
   fr: {
     // Header
@@ -347,6 +539,54 @@ export const patientTranslations = {
     nonEmergency: "Pour les questions non urgentes",
     cardiologyOffice: "Bureau de Cardiologie",
     callNow: "Appeler Maintenant",
+
+    // Medication Instructions
+    medInstructionTakeWithFood: "Prendre avec de la nourriture. Ne pas arrêter brusquement.",
+    medInstructionBedtimeGrapefruit: "Prendre au coucher. Éviter le pamplemousse.",
+    medInstructionTakeWithFoodStomach: "Prendre avec de la nourriture pour éviter les maux d'estomac.",
+
+    // Appointment Preparation Notes
+    appointmentPrepMedicationList: "Apportez votre liste de médicaments et votre journal de tension artérielle",
+    appointmentPrepFasting: "Jeûne requis - pas de nourriture ni de boisson après minuit",
+
+    // Diet & Activity - Foods to Include
+    foodIncludeFreshFruits: "Fruits et légumes frais",
+    foodIncludeWholeGrains: "Céréales complètes (riz brun, avoine)",
+    foodIncludeLeanProteins: "Protéines maigres (poisson, poulet, haricots)",
+    foodIncludeLowFatDairy: "Produits laitiers allégés",
+    foodIncludeNutsSeeds: "Noix et graines (non salées)",
+
+    // Diet & Activity - Foods to Limit
+    foodLimitHighSodium: "Aliments riches en sodium (viandes transformées, soupes en conserve)",
+    foodLimitFriedFast: "Aliments frits et restauration rapide",
+    foodLimitSugaryDrinks: "Boissons sucrées et desserts",
+    foodLimitAlcohol: "Alcool excessif",
+
+    // Diet & Activity - Recommended Activities
+    activityRecommendedWalking: "Marcher 20-30 minutes par jour",
+    activityRecommendedStretching: "Étirements légers ou yoga",
+    activityRecommendedSwimming: "Natation (après la guérison de l'incision)",
+    activityRecommendedChores: "Tâches ménagères (nettoyage léger)",
+
+    // Diet & Activity - Activities to Avoid
+    activityAvoidHeavyLifting: "Soulever des charges lourdes (plus de 10 livres)",
+    activityAvoidIntenseExercise: "Exercice intense ou course",
+    activityAvoidDriving: "Conduire pendant 2 semaines",
+    activityAvoidContactSports: "Sports de contact",
+
+    // Warning Signs - Call 911
+    warning911ChestPain: "Douleur thoracique ou pression sévère",
+    warning911Breathing: "Difficulté à respirer ou essoufflement",
+    warning911Weakness: "Faiblesse ou engourdissement soudain",
+    warning911Consciousness: "Perte de conscience",
+
+    // Warning Signs - Call Doctor
+    warningDoctorSwelling: "Augmentation du gonflement dans les jambes ou les pieds",
+    warningDoctorWeightGain: "Prise de poids rapide (3+ livres en 2 jours)",
+    warningDoctorCough: "Toux persistante ou respiration sifflante",
+    warningDoctorDizziness: "Vertiges ou étourdissements",
+    warningDoctorFatigue: "Fatigue ou faiblesse inhabituelle",
+    warningDoctorInfection: "Signes d'infection au site d'incision",
   },
 }
 

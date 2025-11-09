@@ -569,7 +569,7 @@ EMERGENCY CONTACTS:
                   dose: "25mg",
                   frequency: t.twiceDaily,
                   timing: t.morningEvening,
-                  instructions: "Take with food. Do not stop suddenly.",
+                  instructions: t.medInstructionTakeWithFood,
                   morning: true,
                   evening: true,
                 },
@@ -579,7 +579,7 @@ EMERGENCY CONTACTS:
                   dose: "20mg",
                   frequency: t.onceDaily,
                   timing: t.evening,
-                  instructions: "Take at bedtime. Avoid grapefruit.",
+                  instructions: t.medInstructionBedtimeGrapefruit,
                   evening: true,
                 },
                 {
@@ -588,7 +588,7 @@ EMERGENCY CONTACTS:
                   dose: "81mg",
                   frequency: t.onceDaily,
                   timing: t.morning,
-                  instructions: "Take with food to prevent stomach upset.",
+                  instructions: t.medInstructionTakeWithFoodStomach,
                   morning: true,
                 },
               ].map((med) => (
@@ -671,7 +671,7 @@ EMERGENCY CONTACTS:
                   specialty: "Cardiology Follow-up",
                   location: "General Hospital - Cardiology Clinic",
                   address: "123 Medical Center Dr, Suite 200",
-                  preparation: "Bring your medication list and blood pressure log",
+                  preparation: t.appointmentPrepMedicationList,
                 },
                 {
                   date: "April 5, 2024",
@@ -680,7 +680,7 @@ EMERGENCY CONTACTS:
                   specialty: "Primary Care Check-up",
                   location: "Family Medicine Clinic",
                   address: "456 Health Plaza, Building A",
-                  preparation: "Fasting required - no food or drink after midnight",
+                  preparation: t.appointmentPrepFasting,
                 },
               ].map((apt, index) => (
                 <Card key={index}>
@@ -750,11 +750,11 @@ EMERGENCY CONTACTS:
                       {t.foodsToInclude}
                     </h4>
                     <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• Fresh fruits and vegetables</li>
-                      <li>• Whole grains (brown rice, oats)</li>
-                      <li>• Lean proteins (fish, chicken, beans)</li>
-                      <li>• Low-fat dairy products</li>
-                      <li>• Nuts and seeds (unsalted)</li>
+                      <li>• {t.foodIncludeFreshFruits}</li>
+                      <li>• {t.foodIncludeWholeGrains}</li>
+                      <li>• {t.foodIncludeLeanProteins}</li>
+                      <li>• {t.foodIncludeLowFatDairy}</li>
+                      <li>• {t.foodIncludeNutsSeeds}</li>
                     </ul>
                   </div>
 
@@ -764,10 +764,10 @@ EMERGENCY CONTACTS:
                       {t.foodsToLimit}
                     </h4>
                     <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• High-sodium foods (processed meats, canned soups)</li>
-                      <li>• Fried and fast foods</li>
-                      <li>• Sugary drinks and desserts</li>
-                      <li>• Excessive alcohol</li>
+                      <li>• {t.foodLimitHighSodium}</li>
+                      <li>• {t.foodLimitFriedFast}</li>
+                      <li>• {t.foodLimitSugaryDrinks}</li>
+                      <li>• {t.foodLimitAlcohol}</li>
                     </ul>
                   </div>
                 </CardContent>
@@ -788,10 +788,10 @@ EMERGENCY CONTACTS:
                       {t.recommendedActivities}
                     </h4>
                     <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• Walking 20-30 minutes daily</li>
-                      <li>• Light stretching or yoga</li>
-                      <li>• Swimming (after incision heals)</li>
-                      <li>• Household chores (light cleaning)</li>
+                      <li>• {t.activityRecommendedWalking}</li>
+                      <li>• {t.activityRecommendedStretching}</li>
+                      <li>• {t.activityRecommendedSwimming}</li>
+                      <li>• {t.activityRecommendedChores}</li>
                     </ul>
                   </div>
 
@@ -801,10 +801,10 @@ EMERGENCY CONTACTS:
                       {t.activitiesToAvoid}
                     </h4>
                     <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• Heavy lifting (over 10 pounds)</li>
-                      <li>• Intense exercise or running</li>
-                      <li>• Driving for 2 weeks</li>
-                      <li>• Contact sports</li>
+                      <li>• {t.activityAvoidHeavyLifting}</li>
+                      <li>• {t.activityAvoidIntenseExercise}</li>
+                      <li>• {t.activityAvoidDriving}</li>
+                      <li>• {t.activityAvoidContactSports}</li>
                     </ul>
                   </div>
                 </CardContent>
@@ -827,19 +827,19 @@ EMERGENCY CONTACTS:
                 <ul className="space-y-2 text-red-700">
                   <li className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Severe chest pain or pressure</span>
+                    <span>{t.warning911ChestPain}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Difficulty breathing or shortness of breath</span>
+                    <span>{t.warning911Breathing}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Sudden weakness or numbness</span>
+                    <span>{t.warning911Weakness}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>Loss of consciousness</span>
+                    <span>{t.warning911Consciousness}</span>
                   </li>
                 </ul>
               </CardContent>
@@ -854,12 +854,12 @@ EMERGENCY CONTACTS:
               </CardHeader>
               <CardContent>
                 <ul className="space-y-2 text-orange-700">
-                  <li>• Increased swelling in legs or feet</li>
-                  <li>• Rapid weight gain (3+ pounds in 2 days)</li>
-                  <li>• Persistent cough or wheezing</li>
-                  <li>• Dizziness or lightheadedness</li>
-                  <li>• Unusual fatigue or weakness</li>
-                  <li>• Signs of infection at incision site</li>
+                  <li>• {t.warningDoctorSwelling}</li>
+                  <li>• {t.warningDoctorWeightGain}</li>
+                  <li>• {t.warningDoctorCough}</li>
+                  <li>• {t.warningDoctorDizziness}</li>
+                  <li>• {t.warningDoctorFatigue}</li>
+                  <li>• {t.warningDoctorInfection}</li>
                 </ul>
               </CardContent>
             </Card>
