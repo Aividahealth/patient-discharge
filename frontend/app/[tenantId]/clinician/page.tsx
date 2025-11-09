@@ -38,7 +38,7 @@ import {
 } from "lucide-react"
 
 export default function ClinicianDashboard() {
-  const { tenant, tenantId, token } = useTenant()
+  const { tenant, tenantId, token, isLoading, isAuthenticated } = useTenant()
   const { exportToPDF } = usePDFExport()
   const router = useRouter()
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
@@ -691,14 +691,14 @@ export default function ClinicianDashboard() {
     }
   };
 
-  // Load discharge queue on mount
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!token && tenantId) {
+    if (!isLoading && !isAuthenticated && tenantId) {
       router.push(`/${tenantId}/login`)
     }
-  }, [token, tenantId, router])
+  }, [isLoading, isAuthenticated, tenantId, router])
 
+  // Load discharge queue on mount
   useEffect(() => {
     if (token && tenantId) {
       loadDischargeQueue();
@@ -952,6 +952,20 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
       footer: 'The patient-friendly content has been simplified using artificial intelligence for better patient understanding.',
       filename: `discharge-summary-${currentPatient.name.replace(' ', '-').toLowerCase()}.pdf`
     })
+  }
+
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // Don't render anything if not authenticated (redirect is happening)
+  if (!isAuthenticated) {
+    return null
   }
 
   return (

@@ -62,7 +62,7 @@ export default function ExpertReviewPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const { tenantId, token } = useTenant()
+  const { tenantId, token, isLoading, isAuthenticated } = useTenant()
   const summaryId = params.id as string
 
   // Get review type from URL parameters
@@ -105,10 +105,10 @@ export default function ExpertReviewPage() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!token && tenantId) {
+    if (!isLoading && !isAuthenticated && tenantId) {
       router.push(`/${tenantId}/login`)
     }
-  }, [token, tenantId, router])
+  }, [isLoading, isAuthenticated, tenantId, router])
 
   useEffect(() => {
     loadContent()
@@ -252,6 +252,20 @@ export default function ExpertReviewPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // Don't render anything if not authenticated (redirect is happening)
+  if (!isAuthenticated) {
+    return null
   }
 
   if (loading) {

@@ -16,7 +16,7 @@ import { ReviewTable, ColumnRenderers } from "@/components/review-table"
 
 export default function ExpertPortalPage() {
   const router = useRouter()
-  const { tenantId, token } = useTenant()
+  const { tenantId, token, isLoading, isAuthenticated } = useTenant()
   const [medicalSummaries, setMedicalSummaries] = useState<ReviewSummary[]>([])
   const [languageSummaries, setLanguageSummaries] = useState<ReviewSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -25,10 +25,10 @@ export default function ExpertPortalPage() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!token && tenantId) {
+    if (!isLoading && !isAuthenticated && tenantId) {
       router.push(`/${tenantId}/login`)
     }
-  }, [token, tenantId, router])
+  }, [isLoading, isAuthenticated, tenantId, router])
 
   useEffect(() => {
     if (tenantId && token) {
@@ -62,6 +62,20 @@ export default function ExpertPortalPage() {
   const handleReview = (summary: ReviewSummary, reviewType: ReviewType) => {
     // Use compositionId for fetching content
     router.push(`/${tenantId}/expert/review/${summary.compositionId}?type=${reviewType}`)
+  }
+
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // Don't render anything if not authenticated (redirect is happening)
+  if (!isAuthenticated) {
+    return null
   }
 
   return (
