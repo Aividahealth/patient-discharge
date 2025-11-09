@@ -140,6 +140,22 @@ export interface DischargeExportEvent {
   googleCompositionId: string;
 }
 
+export interface SimplifiedFile {
+  type: 'discharge-summary' | 'discharge-instructions';
+  originalPath: string;
+  simplifiedPath: string;
+  language: string;
+}
+
+export interface SimplificationCompletedEvent {
+  tenantId: string;
+  compositionId: string;
+  simplifiedFiles: SimplifiedFile[];
+  processingTimeMs: number;
+  tokensUsed: number;
+  timestamp: string;
+}
+
 /**
  * FHIR API Response Types
  */

@@ -1,0 +1,119 @@
+import { createLogger } from '../common/utils/logger';
+
+const logger = createLogger('BackendClientService');
+
+export interface TenantConfig {
+  tenantId: string;
+  buckets: {
+    rawBucket: string;
+    simplifiedBucket: string;
+    translatedBucket: string;
+  };
+  translationConfig: {
+    enabled: boolean;
+    supportedLanguages: string[];
+  };
+}
+
+/**
+ * Service for interacting with the Backend API
+ */
+export class BackendClientService {
+  private apiBaseUrl: string;
+
+  constructor(apiBaseUrl: string) {
+    this.apiBaseUrl = apiBaseUrl;
+    logger.info('BackendClientService initialized', { apiBaseUrl });
+  }
+
+  /**
+   * Get tenant configuration from Backend API
+   */
+  async getTenantConfig(tenantId: string): Promise<TenantConfig> {
+    logger.info('Fetching tenant configuration', { tenantId });
+
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/api/tenants/${tenantId}/config`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch tenant config: ${response.statusText}`);
+      }
+
+      const config = await response.json();
+
+      logger.info('Tenant configuration fetched successfully', {
+        tenantId,
+        translationEnabled: config.translationConfig?.enabled,
+      });
+
+      return config;
+    } catch (error) {
+      logger.error('Failed to fetch tenant configuration', error as Error, { tenantId });
+      throw error;
+    }
+  }
+
+  /**
+   * Write translated content back to FHIR via Backend API
+   */
+  async writeTranslatedToFhir(
+    compositionId: string,
+    tenantId: string,
+    translatedContent: {
+      dischargeSummary?: {
+        content: string;
+        language: string;
+        gcsPath: string;
+      };
+      dischargeInstructions?: {
+        content: string;
+        language: string;
+        gcsPath: string;
+      };
+    }
+  ): Promise<void> {
+    logger.info('Writing translated content to FHIR', {
+      compositionId,
+      tenantId,
+      hasDischargeSummary: !!translatedContent.dischargeSummary,
+      hasDischargeInstructions: !!translatedContent.dischargeInstructions,
+    });
+
+    try {
+      const response = await fetch(
+        `${this.apiBaseUrl}/api/compositions/${compositionId}/translated`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tenantId,
+            ...translatedContent,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to write translated content to FHIR: ${response.statusText} - ${errorText}`);
+      }
+
+      logger.info('Translated content written to FHIR successfully', {
+        compositionId,
+        tenantId,
+      });
+    } catch (error) {
+      logger.error('Failed to write translated content to FHIR', error as Error, {
+        compositionId,
+        tenantId,
+      });
+      throw error;
+    }
+  }
+}
