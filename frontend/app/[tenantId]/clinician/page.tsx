@@ -426,6 +426,75 @@ export default function ClinicianDashboard() {
 
   const [patientMedicalData, setPatientMedicalData] = useState<Record<string, any>>({})
 
+  // Helper function to parse simplified instructions text into sections
+  const parseSimplifiedInstructions = (instructionsText: string) => {
+    if (!instructionsText) {
+      return {
+        medications: '',
+        appointments: '',
+        activity: ''
+      };
+    }
+
+    // Try to parse sections based on common headers (case-insensitive, flexible matching)
+    // Match "Your medications:" or "Medications:" followed by content until next section
+    const medicationsMatch = instructionsText.match(/(?:Your\s+medications|Medications|Medication):?\s*\n?\s*(.*?)(?=\n?\s*(?:Your\s+appointments|Appointments|Follow-up|Activity|Activity\s+guidelines|$))/is);
+    
+    // Match "Your appointments:" or "Appointments:" followed by content until activity section
+    const appointmentsMatch = instructionsText.match(/(?:Your\s+appointments|Appointments|Follow-up\s+appointments|Follow-up):?\s*\n?\s*(.*?)(?=\n?\s*(?:Activity|Activity\s+guidelines|Diet|$))/is);
+    
+    // Match "Activity guidelines:" or "Activity:" followed by content until end
+    const activityMatch = instructionsText.match(/(?:Activity\s+guidelines|Activity|Diet\s+and\s+activity|Activity\s+restrictions):?\s*\n?\s*(.*?)$/is);
+
+    return {
+      medications: medicationsMatch ? medicationsMatch[1].trim() : '',
+      appointments: appointmentsMatch ? appointmentsMatch[1].trim() : '',
+      activity: activityMatch ? activityMatch[1].trim() : ''
+    };
+  };
+
+  // Helper function to fetch simplified content from the API
+  const fetchSimplifiedContent = async (compositionId: string, token: string, tenantId: string) => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://patient-discharge-backend-dev-qnzythtpnq-uc.a.run.app';
+      const simplifiedResponse = await fetch(
+        `${apiUrl}/google/fhir/Composition/${compositionId}/simplified`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-Tenant-ID': tenantId,
+          },
+        }
+      );
+
+      if (simplifiedResponse.ok) {
+        const simplifiedData = await simplifiedResponse.json();
+        
+        const simplifiedSummary = simplifiedData.dischargeSummaries?.find((summary: any) =>
+          summary.tags?.some((tag: any) => tag.code === 'discharge-summary-simplified')
+        );
+
+        const simplifiedInstructions = simplifiedData.dischargeInstructions?.find((instr: any) =>
+          instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
+        );
+
+        return {
+          summary: simplifiedSummary?.text || '',
+          instructions: simplifiedInstructions?.text || ''
+        };
+      }
+    } catch (error) {
+      console.error('[ClinicianPortal] Failed to fetch simplified content:', error);
+    }
+    
+    return {
+      summary: '',
+      instructions: ''
+    };
+  };
+
   // Helper function to transform API patient data to component format (reused from file upload)
   const transformPatientData = async (
     queuePatient: DischargeQueuePatient,
@@ -434,8 +503,16 @@ export default function ClinicianDashboard() {
   ) => {
     const rawSummary = patientDetails?.rawSummary;
     const rawInstructions = patientDetails?.rawInstructions;
-    const simplifiedSummary = patientDetails?.simplifiedSummary;
-    const simplifiedInstructions = patientDetails?.simplifiedInstructions;
+    
+    // Fetch simplified content from the new API endpoint
+    const simplifiedContent = await fetchSimplifiedContent(
+      queuePatient.compositionId,
+      token || '',
+      tenantId
+    );
+    
+    const simplifiedSummaryText = simplifiedContent.summary;
+    const simplifiedInstructionsText = simplifiedContent.instructions;
 
     // Parse raw text on frontend if parsedData not available from backend
     let parsedSummaryData = rawSummary?.parsedData || null;
@@ -470,8 +547,8 @@ export default function ClinicianDashboard() {
       originalSummaryParsed: parsedSummaryData,
       originalInstructionsParsed: parsedInstructionsData,
       // Store AI-simplified content
-      aiSimplifiedSummary: simplifiedSummary?.text || null,
-      aiSimplifiedInstructions: simplifiedInstructions?.text || null,
+      aiSimplifiedSummary: simplifiedSummaryText || null,
+      aiSimplifiedInstructions: simplifiedInstructionsText || null,
       originalSummary: {
         diagnosis: { en: rawSummary?.text || 'Processing...' },
         diagnosisText: { en: rawSummary?.text || 'Processing...' },
@@ -479,12 +556,15 @@ export default function ClinicianDashboard() {
         followUp: { en: 'Processing...' },
         activity: { en: 'Processing...' }
       },
-      patientFriendly: simplifiedSummary ? {
-        overview: { en: simplifiedSummary.text },
-        medications: { en: simplifiedInstructions?.text || 'Processing...' },
-        appointments: { en: 'Processing...' },
-        activity: { en: 'Processing...' }
-      } : undefined
+      patientFriendly: simplifiedSummaryText ? (() => {
+        const parsedInstructions = parseSimplifiedInstructions(simplifiedInstructionsText);
+        return {
+          overview: { en: simplifiedSummaryText },
+          medications: { en: parsedInstructions.medications || 'N/A' },
+          appointments: { en: parsedInstructions.appointments || 'N/A' },
+          activity: { en: parsedInstructions.activity || 'N/A' }
+        };
+      })() : undefined
     };
 
     return transformedPatient;
@@ -681,36 +761,14 @@ export default function ClinicianDashboard() {
       );
 
       // Fetch AI-simplified content from dedicated endpoint
-      let aiSimplifiedSummary = null;
-      let aiSimplifiedInstructions = null;
-
-      try {
-        const simplifiedResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/google/fhir/Composition/${currentPatient.compositionId}/simplified`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'X-Tenant-ID': tenantId,
-            },
-          }
-        );
-
-        if (simplifiedResponse.ok) {
-          const simplifiedData = await simplifiedResponse.json();
-
-          aiSimplifiedSummary = simplifiedData.dischargeSummaries?.find((summary: any) =>
-            summary.tags?.some((tag: any) => tag.code === 'discharge-summary-simplified')
-          );
-
-          aiSimplifiedInstructions = simplifiedData.dischargeInstructions?.find((instr: any) =>
-            instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
-          );
-        }
-      } catch (error) {
-        // Ignore errors fetching simplified content
-      }
+      const simplifiedContent = await fetchSimplifiedContent(
+        currentPatient.compositionId,
+        token,
+        tenantId
+      );
+      
+      const aiSimplifiedSummaryText = simplifiedContent.summary;
+      const aiSimplifiedInstructionsText = simplifiedContent.instructions;
 
       // Parse raw text on frontend if parsedData not available from backend
       let parsedSummaryData = rawSummary?.parsedData || null;
@@ -736,8 +794,8 @@ export default function ClinicianDashboard() {
         originalSummaryParsed: parsedSummaryData,
         originalInstructionsParsed: parsedInstructionsData,
         // Store AI-simplified content
-        aiSimplifiedSummary: aiSimplifiedSummary?.text || null,
-        aiSimplifiedInstructions: aiSimplifiedInstructions?.text || null,
+        aiSimplifiedSummary: aiSimplifiedSummaryText || null,
+        aiSimplifiedInstructions: aiSimplifiedInstructionsText || null,
         // Keep raw text as fallback
         originalSummary: {
           diagnosis: { en: rawSummary?.text || currentPatient.originalSummary?.diagnosis?.en || 'Processing...' },
@@ -746,12 +804,15 @@ export default function ClinicianDashboard() {
           followUp: { en: currentPatient.originalSummary?.followUp?.en || 'Processing...' },
           activity: { en: currentPatient.originalSummary?.activity?.en || 'Processing...' }
         },
-        patientFriendly: simplifiedSummary ? {
-          overview: { en: simplifiedSummary.text },
-          medications: { en: simplifiedInstructions?.text || 'Processing...' },
-          appointments: { en: currentPatient.patientFriendly?.appointments?.en || 'Processing...' },
-          activity: { en: currentPatient.patientFriendly?.activity?.en || 'Processing...' }
-        } : currentPatient.patientFriendly
+        patientFriendly: aiSimplifiedSummaryText ? (() => {
+          const parsedInstructions = parseSimplifiedInstructions(aiSimplifiedInstructionsText);
+          return {
+            overview: { en: aiSimplifiedSummaryText },
+            medications: { en: parsedInstructions.medications || 'N/A' },
+            appointments: { en: parsedInstructions.appointments || 'N/A' },
+            activity: { en: parsedInstructions.activity || 'N/A' }
+          };
+        })() : currentPatient.patientFriendly
       };
 
       // Update patientMedicalData
@@ -1501,34 +1562,14 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
             );
 
             // Fetch AI-simplified content
-            let aiSimplifiedSummary = null;
-            let aiSimplifiedInstructions = null;
-
-            try {
-              const simplifiedResponse = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/google/fhir/Composition/${data.compositionId}/simplified`,
-                {
-                  method: 'GET',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'X-Tenant-ID': tenantId,
-                  },
-                }
-              );
-
-              if (simplifiedResponse.ok) {
-                const simplifiedData = await simplifiedResponse.json();
-                aiSimplifiedSummary = simplifiedData.dischargeSummaries?.find((summary: any) =>
-                  summary.tags?.some((tag: any) => tag.code === 'discharge-summary-simplified')
-                );
-                aiSimplifiedInstructions = simplifiedData.dischargeInstructions?.find((instr: any) =>
-                  instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
-                );
-              }
-            } catch (error) {
-              // Ignore errors fetching simplified content
-            }
+            const simplifiedContent = await fetchSimplifiedContent(
+              data.compositionId,
+              token || '',
+              tenantId || 'demo'
+            );
+            
+            const aiSimplifiedSummaryText = simplifiedContent.summary;
+            const aiSimplifiedInstructionsText = simplifiedContent.instructions;
 
             // Parse raw text on frontend if parsedData not available from backend
             let parsedSummaryData = rawSummary?.parsedData || null;
@@ -1563,8 +1604,8 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
               originalSummaryParsed: parsedSummaryData,
               originalInstructionsParsed: parsedInstructionsData,
               // Store AI-simplified content
-              aiSimplifiedSummary: aiSimplifiedSummary?.text || null,
-              aiSimplifiedInstructions: aiSimplifiedInstructions?.text || null,
+              aiSimplifiedSummary: aiSimplifiedSummaryText || null,
+              aiSimplifiedInstructions: aiSimplifiedInstructionsText || null,
               originalSummary: {
                 diagnosis: { en: rawSummary?.text || data.rawText || 'Processing...' },
                 diagnosisText: { en: rawSummary?.text || data.rawText || 'Processing...' },
@@ -1572,12 +1613,15 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                 followUp: { en: 'Processing...' },
                 activity: { en: 'Processing...' }
               },
-              patientFriendly: simplifiedSummary ? {
-                overview: { en: simplifiedSummary.text },
-                medications: { en: simplifiedInstructions?.text || 'Processing...' },
-                appointments: { en: 'Processing...' },
-                activity: { en: 'Processing...' }
-              } : undefined
+              patientFriendly: aiSimplifiedSummaryText ? (() => {
+                const parsedInstructions = parseSimplifiedInstructions(aiSimplifiedInstructionsText);
+                return {
+                  overview: { en: aiSimplifiedSummaryText },
+                  medications: { en: parsedInstructions.medications || 'N/A' },
+                  appointments: { en: parsedInstructions.appointments || 'N/A' },
+                  activity: { en: parsedInstructions.activity || 'N/A' }
+                };
+              })() : undefined
             };
 
             // Add the new patient to the patients list
