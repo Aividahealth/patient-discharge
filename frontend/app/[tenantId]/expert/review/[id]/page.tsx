@@ -111,27 +111,34 @@ export default function ExpertReviewPage() {
   }, [isLoading, isAuthenticated, tenantId, router])
 
   useEffect(() => {
-    loadContent()
-  }, [summaryId])
+    if (token && tenantId) {
+      loadContent()
+    }
+  }, [summaryId, token, tenantId])
 
   useEffect(() => {
     // Reload translated content when language changes
-    if (reviewType === 'translation' && language) {
+    if (reviewType === 'translation' && language && token && tenantId) {
       loadTranslatedContent()
     }
-  }, [reviewType, language])
+  }, [reviewType, language, token, tenantId])
 
   const loadContent = async () => {
+    if (!token || !tenantId) {
+      console.error('[ExpertReview] Missing authentication')
+      return
+    }
+
     try {
       setLoading(true)
 
       // Load raw and simplified content - same approach as DischargeSummaryViewer
       const [raw, simplified] = await Promise.all([
-        getDischargeSummaryContent(summaryId, 'raw').catch((err) => {
+        getDischargeSummaryContent(summaryId, 'raw', undefined, token, tenantId).catch((err) => {
           console.error('Failed to load raw version:', err)
           return null
         }),
-        getDischargeSummaryContent(summaryId, 'simplified').catch((err) => {
+        getDischargeSummaryContent(summaryId, 'simplified', undefined, token, tenantId).catch((err) => {
           console.error('Failed to load simplified version:', err)
           return null
         }),
@@ -155,10 +162,10 @@ export default function ExpertReviewPage() {
   }
 
   const loadTranslatedContent = async () => {
-    if (!language) return
+    if (!language || !token || !tenantId) return
 
     try {
-      const translated = await getDischargeSummaryContent(summaryId, 'translated', language).catch((err) => {
+      const translated = await getDischargeSummaryContent(summaryId, 'translated', language, token, tenantId).catch((err) => {
         console.error('Failed to load translated version:', err)
         return null
       })
@@ -233,7 +240,7 @@ export default function ExpertReviewPage() {
         specificIssues,
         hasHallucination,
         hasMissingInfo,
-      }, { tenantId, token })
+      }, { tenantId: tenantId || undefined, token: token || undefined })
 
       toast({
         title: "Success",

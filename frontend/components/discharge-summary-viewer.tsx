@@ -15,12 +15,16 @@ interface DischargeSummaryViewerProps {
   summaryId: string
   patientName?: string
   mrn?: string
+  token?: string
+  tenantId?: string
 }
 
 export function DischargeSummaryViewer({
   summaryId,
   patientName,
   mrn,
+  token,
+  tenantId,
 }: DischargeSummaryViewerProps) {
   const [rawContent, setRawContent] = useState<DischargeSummaryContent | null>(null)
   const [simplifiedContent, setSimplifiedContent] = useState<DischargeSummaryContent | null>(null)
@@ -34,11 +38,11 @@ export function DischargeSummaryViewer({
 
       // Load both versions in parallel
       const [raw, simplified] = await Promise.all([
-        getDischargeSummaryContent(summaryId, 'raw').catch(err => {
+        getDischargeSummaryContent(summaryId, 'raw', undefined, token, tenantId).catch(err => {
           console.error('Failed to load raw version:', err)
           return null
         }),
-        getDischargeSummaryContent(summaryId, 'simplified').catch(err => {
+        getDischargeSummaryContent(summaryId, 'simplified', undefined, token, tenantId).catch(err => {
           console.error('Failed to load simplified version:', err)
           return null
         }),

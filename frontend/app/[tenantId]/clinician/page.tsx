@@ -693,10 +693,12 @@ export default function ClinicianDashboard() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
+    console.log('[ClinicianDashboard] Auth check:', { isLoading, isAuthenticated, tenantId, token })
     if (!isLoading && !isAuthenticated && tenantId) {
+      console.log('[ClinicianDashboard] Redirecting to login')
       router.push(`/${tenantId}/login`)
     }
-  }, [isLoading, isAuthenticated, tenantId, router])
+  }, [isLoading, isAuthenticated, tenantId, token, router])
 
   // Load discharge queue on mount
   useEffect(() => {

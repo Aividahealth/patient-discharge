@@ -141,20 +141,32 @@ export async function getDischargeSummaryMetadata(
 export async function getDischargeSummaryContent(
   id: string,
   version: 'raw' | 'simplified' | 'translated' = 'simplified',
-  language?: string
+  language?: string,
+  token?: string,
+  tenantId?: string
 ): Promise<DischargeSummaryContent> {
   const params = new URLSearchParams({ version });
   if (language) {
     params.append('language', language);
   }
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Add authentication headers if provided
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (tenantId) {
+    headers['x-tenant-id'] = tenantId;
+  }
+
   const response = await fetch(
     `${API_BASE_URL}/discharge-summaries/${id}/content?${params}`,
     {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     }
   );
 

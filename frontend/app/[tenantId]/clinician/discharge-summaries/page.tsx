@@ -7,9 +7,11 @@ import { AuthGuard } from "@/components/auth-guard"
 import { DischargeSummariesList } from "@/components/discharge-summaries-list"
 import { DischargeSummaryViewer } from "@/components/discharge-summary-viewer"
 import { DischargeSummaryMetadata } from "@/lib/discharge-summaries"
+import { useTenant } from "@/contexts/tenant-context"
 import { Stethoscope } from "lucide-react"
 
 export default function DischargeSummariesPage() {
+  const { token, tenantId } = useTenant()
   const [selectedSummary, setSelectedSummary] = useState<DischargeSummaryMetadata | null>(null)
 
   return (
@@ -55,6 +57,8 @@ export default function DischargeSummariesPage() {
                     summaryId={selectedSummary.id}
                     patientName={selectedSummary.patientName}
                     mrn={selectedSummary.mrn}
+                    token={token || undefined}
+                    tenantId={tenantId || undefined}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-96 border-2 border-dashed border-muted rounded-lg">
