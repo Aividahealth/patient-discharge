@@ -39,11 +39,24 @@ export interface SubmitFeedbackDto {
   reviewerName: string;
   reviewerHospital?: string;
   overallRating: 1 | 2 | 3 | 4 | 5;
-  whatWorksWell: string;
-  whatNeedsImprovement: string;
-  specificIssues: string;
+  whatWorksWell?: string;
+  whatNeedsImprovement?: string;
+  specificIssues?: string;
   hasHallucination: boolean;
   hasMissingInfo: boolean;
+}
+
+export interface UpdateFeedbackDto {
+  reviewType?: ReviewType;
+  language?: string;
+  reviewerName?: string;
+  reviewerHospital?: string;
+  overallRating?: 1 | 2 | 3 | 4 | 5;
+  whatWorksWell?: string;
+  whatNeedsImprovement?: string;
+  specificIssues?: string;
+  hasHallucination?: boolean;
+  hasMissingInfo?: boolean;
 }
 
 export interface ReviewSummary {

@@ -7,9 +7,10 @@ import { GoogleService } from './google.service';
 import { SimplifiedContentService } from './simplified-content.service';
 import { DischargeUploadService } from './discharge-upload.service';
 import { ConfigModule } from '../config/config.module';
+import { PubSubModule } from '../pubsub/pubsub.module';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, PubSubModule],
   controllers: [GoogleController, CompositionSimplifiedController, DischargeUploadController, PatientsController],
   providers: [GoogleService, SimplifiedContentService, DischargeUploadService],
   exports: [GoogleService],

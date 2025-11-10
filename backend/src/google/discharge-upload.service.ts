@@ -1,5 +1,6 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { GoogleService } from './google.service';
+import { PubSubService, EncounterExportEvent } from '../pubsub/pubsub.service';
 import { TenantContext } from '../tenant/tenant-context';
 
 interface UploadDischargeSummaryRequest {
@@ -25,6 +26,7 @@ export class DischargeUploadService {
 
   constructor(
     private readonly googleService: GoogleService,
+    private readonly pubSubService: PubSubService,
   ) {}
 
   /**
@@ -472,6 +474,25 @@ export class DischargeUploadService {
       );
 
       this.logger.log(`✅ Successfully uploaded discharge summary. Composition ID: ${compositionId}`);
+
+      // Publish Pub/Sub event
+      try {
+        const event: EncounterExportEvent = {
+          tenantId: ctx.tenantId,
+          patientId: patientId,
+          compositionId: compositionId,
+          cernerEncounterId: '', // Empty for patient uploads (no Cerner encounter)
+          googleEncounterId: encounterId,
+          exportTimestamp: new Date().toISOString(),
+          status: 'success',
+        };
+
+        await this.pubSubService.publishEncounterExportEvent(event);
+        this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}`);
+      } catch (pubSubError) {
+        // Log error but don't fail the upload
+        this.logger.error(`❌ Failed to publish Pub/Sub event: ${pubSubError.message}`);
+      }
 
       return {
         success: true,

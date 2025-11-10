@@ -1,14 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Firestore } from '@google-cloud/firestore';
 import { DevConfigService } from '../config/dev-config.service';
+import { GoogleService } from '../google/google.service';
 import type {
   ExpertFeedback,
   SubmitFeedbackDto,
+  UpdateFeedbackDto,
   ReviewSummary,
   ReviewListQuery,
   ReviewListResponse,
 } from './expert.types';
 import { resolveServiceAccountPath } from '../utils/path.helper';
+import { TenantContext } from '../tenant/tenant-context';
 
 @Injectable()
 export class ExpertService {
@@ -17,7 +20,10 @@ export class ExpertService {
   private readonly feedbackCollection = 'expert_feedback';
   private readonly summariesCollection = 'discharge_summaries';
 
-  constructor(private configService: DevConfigService) {}
+  constructor(
+    private configService: DevConfigService,
+    private googleService?: GoogleService,
+  ) {}
 
   private getFirestore(): Firestore {
     if (!this.firestore) {
@@ -125,9 +131,6 @@ export class ExpertService {
       reviewerName: dto.reviewerName,
       reviewDate: now,
       overallRating: dto.overallRating,
-      whatWorksWell: dto.whatWorksWell,
-      whatNeedsImprovement: dto.whatNeedsImprovement,
-      specificIssues: dto.specificIssues,
       hasHallucination: dto.hasHallucination,
       hasMissingInfo: dto.hasMissingInfo,
       createdAt: now,
@@ -139,6 +142,15 @@ export class ExpertService {
     }
     if (dto.reviewerHospital) {
       feedback.reviewerHospital = dto.reviewerHospital;
+    }
+    if (dto.whatWorksWell) {
+      feedback.whatWorksWell = dto.whatWorksWell;
+    }
+    if (dto.whatNeedsImprovement) {
+      feedback.whatNeedsImprovement = dto.whatNeedsImprovement;
+    }
+    if (dto.specificIssues) {
+      feedback.specificIssues = dto.specificIssues;
     }
 
     const docRef = await firestore
@@ -180,5 +192,230 @@ export class ExpertService {
       reviewDate: doc.data().reviewDate?.toDate?.() || doc.data().reviewDate,
       createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
     })) as ExpertFeedback[];
+  }
+
+  /**
+   * Validate feedback data
+   */
+  validateFeedback(dto: SubmitFeedbackDto): string | null {
+    // Required fields
+    if (!dto.dischargeSummaryId || dto.dischargeSummaryId.trim() === '') {
+      return 'Missing required field: dischargeSummaryId';
+    }
+
+    if (!dto.reviewType) {
+      return 'Missing required field: reviewType';
+    }
+
+    if (dto.reviewType !== 'simplification' && dto.reviewType !== 'translation') {
+      return "reviewType must be 'simplification' or 'translation'";
+    }
+
+    // Language is required for translation reviews
+    if (dto.reviewType === 'translation' && (!dto.language || dto.language.trim() === '')) {
+      return "language is required when reviewType is 'translation'";
+    }
+
+    // Validate ISO 639-1 language codes (basic check)
+    if (dto.language && dto.language.length !== 2) {
+      return 'language must be a valid ISO 639-1 code (2 characters)';
+    }
+
+    if (!dto.reviewerName || dto.reviewerName.trim() === '') {
+      return 'Missing required field: reviewerName';
+    }
+
+    if (dto.reviewerName.length < 2 || dto.reviewerName.length > 100) {
+      return 'reviewerName must be between 2 and 100 characters';
+    }
+
+    if (dto.reviewerHospital && dto.reviewerHospital.length > 200) {
+      return 'reviewerHospital must not exceed 200 characters';
+    }
+
+    if (dto.overallRating === undefined || dto.overallRating === null) {
+      return 'Missing required field: overallRating';
+    }
+
+    if (!Number.isInteger(dto.overallRating) || dto.overallRating < 1 || dto.overallRating > 5) {
+      return 'overallRating must be between 1 and 5';
+    }
+
+    if (dto.whatWorksWell && dto.whatWorksWell.length > 2000) {
+      return 'whatWorksWell must not exceed 2000 characters';
+    }
+
+    if (dto.whatNeedsImprovement && dto.whatNeedsImprovement.length > 2000) {
+      return 'whatNeedsImprovement must not exceed 2000 characters';
+    }
+
+    if (dto.specificIssues && dto.specificIssues.length > 5000) {
+      return 'specificIssues must not exceed 5000 characters';
+    }
+
+    if (typeof dto.hasHallucination !== 'boolean') {
+      return 'Missing required field: hasHallucination (must be boolean)';
+    }
+
+    if (typeof dto.hasMissingInfo !== 'boolean') {
+      return 'Missing required field: hasMissingInfo (must be boolean)';
+    }
+
+    return null; // No validation errors
+  }
+
+  /**
+   * Validate update feedback data (allows partial updates)
+   */
+  validateUpdateFeedback(dto: UpdateFeedbackDto): string | null {
+    // Validate reviewType if provided
+    if (dto.reviewType !== undefined) {
+      if (dto.reviewType !== 'simplification' && dto.reviewType !== 'translation') {
+        return "reviewType must be 'simplification' or 'translation'";
+      }
+    }
+
+    // Validate language if provided
+    if (dto.language !== undefined && dto.language.length !== 2) {
+      return 'language must be a valid ISO 639-1 code (2 characters)';
+    }
+
+    // Validate reviewerName if provided
+    if (dto.reviewerName !== undefined) {
+      if (dto.reviewerName.trim() === '') {
+        return 'reviewerName cannot be empty';
+      }
+      if (dto.reviewerName.length < 2 || dto.reviewerName.length > 100) {
+        return 'reviewerName must be between 2 and 100 characters';
+      }
+    }
+
+    // Validate reviewerHospital if provided
+    if (dto.reviewerHospital !== undefined && dto.reviewerHospital.length > 200) {
+      return 'reviewerHospital must not exceed 200 characters';
+    }
+
+    // Validate overallRating if provided
+    if (dto.overallRating !== undefined) {
+      if (!Number.isInteger(dto.overallRating) || dto.overallRating < 1 || dto.overallRating > 5) {
+        return 'overallRating must be between 1 and 5';
+      }
+    }
+
+    // Validate text fields if provided
+    if (dto.whatWorksWell !== undefined && dto.whatWorksWell.length > 2000) {
+      return 'whatWorksWell must not exceed 2000 characters';
+    }
+
+    if (dto.whatNeedsImprovement !== undefined && dto.whatNeedsImprovement.length > 2000) {
+      return 'whatNeedsImprovement must not exceed 2000 characters';
+    }
+
+    if (dto.specificIssues !== undefined && dto.specificIssues.length > 5000) {
+      return 'specificIssues must not exceed 5000 characters';
+    }
+
+    // Validate boolean fields if provided
+    if (dto.hasHallucination !== undefined && typeof dto.hasHallucination !== 'boolean') {
+      return 'hasHallucination must be boolean';
+    }
+
+    if (dto.hasMissingInfo !== undefined && typeof dto.hasMissingInfo !== 'boolean') {
+      return 'hasMissingInfo must be boolean';
+    }
+
+    return null; // No validation errors
+  }
+
+  /**
+   * Verify that a composition exists in Google FHIR store
+   */
+  async verifyCompositionExists(compositionId: string, ctx?: TenantContext): Promise<boolean> {
+    try {
+      if (!this.googleService) {
+        // If GoogleService is not available, skip verification
+        this.logger.warn('GoogleService not available, skipping composition verification');
+        return true;
+      }
+
+      if (!ctx) {
+        // If no tenant context provided, skip verification
+        this.logger.warn('No tenant context provided, skipping composition verification');
+        return true;
+      }
+
+      await this.googleService.fhirRead('Composition', compositionId, ctx);
+      return true;
+    } catch (error) {
+      this.logger.warn(`Composition ${compositionId} not found or error: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get feedback by ID
+   */
+  async getFeedbackById(id: string): Promise<ExpertFeedback | null> {
+    const firestore = this.getFirestore();
+    const docRef = firestore.collection(this.feedbackCollection).doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      reviewDate: data?.reviewDate?.toDate?.() || data?.reviewDate,
+      createdAt: data?.createdAt?.toDate?.() || data?.createdAt,
+      updatedAt: data?.updatedAt?.toDate?.() || data?.updatedAt,
+    } as ExpertFeedback;
+  }
+
+  /**
+   * Update existing feedback
+   */
+  async updateFeedback(id: string, dto: UpdateFeedbackDto): Promise<ExpertFeedback | null> {
+    const firestore = this.getFirestore();
+    const docRef = firestore.collection(this.feedbackCollection).doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const now = new Date();
+    const updateData: any = {
+      updatedAt: now,
+    };
+
+    // Only update fields that are provided
+    if (dto.reviewType !== undefined) updateData.reviewType = dto.reviewType;
+    if (dto.language !== undefined) updateData.language = dto.language;
+    if (dto.reviewerName !== undefined) updateData.reviewerName = dto.reviewerName;
+    if (dto.reviewerHospital !== undefined) updateData.reviewerHospital = dto.reviewerHospital;
+    if (dto.overallRating !== undefined) updateData.overallRating = dto.overallRating;
+    if (dto.whatWorksWell !== undefined) updateData.whatWorksWell = dto.whatWorksWell;
+    if (dto.whatNeedsImprovement !== undefined) updateData.whatNeedsImprovement = dto.whatNeedsImprovement;
+    if (dto.specificIssues !== undefined) updateData.specificIssues = dto.specificIssues;
+    if (dto.hasHallucination !== undefined) updateData.hasHallucination = dto.hasHallucination;
+    if (dto.hasMissingInfo !== undefined) updateData.hasMissingInfo = dto.hasMissingInfo;
+
+    await docRef.update(updateData);
+
+    this.logger.log(`Expert feedback updated: ${id}`);
+
+    // Return updated feedback
+    const updatedDoc = await docRef.get();
+    const data = updatedDoc.data();
+    return {
+      id: updatedDoc.id,
+      ...data,
+      reviewDate: data?.reviewDate?.toDate?.() || data?.reviewDate,
+      createdAt: data?.createdAt?.toDate?.() || data?.createdAt,
+      updatedAt: data?.updatedAt?.toDate?.() || data?.updatedAt,
+    } as ExpertFeedback;
   }
 }

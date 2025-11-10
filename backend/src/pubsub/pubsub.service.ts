@@ -28,6 +28,7 @@ export interface EncounterExportEvent {
 
   cernerEncounterId: string;
   googleEncounterId?: string;
+  compositionId?: string; // Google FHIR Composition ID
 
   cernerDocumentReferenceIds?: string[];
   googleDocumentReferenceIds?: string[];
