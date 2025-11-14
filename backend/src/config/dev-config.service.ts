@@ -44,6 +44,7 @@ export type TenantConfig = {
 export type DevConfig = {
   service_account_path: string;
   firestore_service_account_path?: string;
+  service_authn_path?: string;
   jwt_secret?: string;
   fhir_base_url?: string;
   fhirstore_url?: string;

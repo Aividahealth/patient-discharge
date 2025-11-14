@@ -1,10 +1,13 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
+import * as fs from 'node:fs';
 import { UserService } from './user.service';
 import { DevConfigService } from '../config/dev-config.service';
 import { ConfigService } from '../config/config.service';
 import { LoginRequest, LoginResponse, JWTPayload } from './types/user.types';
+import { resolveServiceAccountPath } from '../utils/path.helper';
 
 @Injectable()
 export class AuthService {
@@ -147,6 +150,90 @@ export class AuthService {
   async hashPassword(password: string): Promise<string> {
     const saltRounds = 10;
     return bcrypt.hash(password, saltRounds);
+  }
+
+  /**
+   * Verify Google OIDC token
+   * Verifies JWT signature against Google certs and checks required claims
+   */
+  async verifyGoogleOIDCToken(
+    token: string,
+    serviceAccountPath: string,
+  ): Promise<{ email: string; email_verified: boolean } | null> {
+    try {
+      // Validate token format before attempting verification
+      if (!token || typeof token !== 'string') {
+        this.logger.warn('Invalid token: token is empty or not a string');
+        return null;
+      }
+
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        this.logger.warn(`Invalid token format: expected 3 segments, got ${tokenParts.length}`);
+        return null;
+      }
+
+      // Read service account to get client_id for aud verification
+      const serviceAccountPathResolved = resolveServiceAccountPath(serviceAccountPath);
+      const serviceAccountContent = fs.readFileSync(serviceAccountPathResolved, 'utf8');
+      const serviceAccount = JSON.parse(serviceAccountContent);
+      const clientId = serviceAccount.client_id;
+
+      if (!clientId) {
+        this.logger.warn('Service account missing client_id for OIDC verification');
+        return null;
+      }
+
+      // Create OAuth2Client with service account credentials
+      const client = new OAuth2Client({
+        clientId: clientId,
+      });
+
+      // Verify the token
+      const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: clientId, // Verify aud matches service account client_id
+      });
+
+      const payload = ticket.getPayload();
+
+      if (!payload) {
+        this.logger.warn('Google OIDC token verification returned no payload');
+        return null;
+      }
+
+      // Check issuer (iss)
+      const validIssuers = [
+        'accounts.google.com',
+        'https://accounts.google.com',
+      ];
+      if (!validIssuers.includes(payload.iss || '')) {
+        this.logger.warn(`Invalid issuer: ${payload.iss}`);
+        return null;
+      }
+
+      // Check email_verified
+      if (payload.email_verified !== true) {
+        this.logger.warn(`Email not verified for: ${payload.email}`);
+        return null;
+      }
+
+      // Extract email
+      const email = payload.email;
+      if (!email) {
+        this.logger.warn('Google OIDC token missing email claim');
+        return null;
+      }
+
+      this.logger.debug(`✅ Google OIDC token verified for email: ${email}`);
+      return {
+        email,
+        email_verified: payload.email_verified === true,
+      };
+    } catch (error) {
+      this.logger.warn(`Google OIDC token verification failed: ${error.message}`);
+      return null;
+    }
   }
 }
 

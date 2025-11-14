@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "sync-discharge-summaries": "ts-node scripts/sync-discharge-summaries.ts",
     "seed-users": "ts-node scripts/seed-users.ts",
-    "seed-config": "ts-node scripts/seed-config.ts"
+    "seed-config": "ts-node scripts/seed-config.ts",
+    "generate-service-token": "ts-node scripts/generate-service-token.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",

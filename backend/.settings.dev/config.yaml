@@ -1,6 +1,7 @@
 # Store only filenames - paths will be built dynamically based on environment
 service_account_path: fhir_store_sa.json
 firestore_service_account_path: firestore_sa.json
+service_authn_path: service_authn.json
 # JWT Secret for authentication token generation
 # Generate a secure random string for production use
 # You can generate one using: openssl rand -base64 32

@@ -31,9 +31,11 @@ export class ExpertService {
 
       try {
         const config = this.configService.get();
-        if (config.service_account_path) {
+        // Use firestore_service_account_path first, fallback to service_account_path
+        const configPath = config.firestore_service_account_path || config.service_account_path;
+        if (configPath) {
           // Resolve the path - handles both full paths and filenames
-          serviceAccountPath = resolveServiceAccountPath(config.service_account_path);
+          serviceAccountPath = resolveServiceAccountPath(configPath);
         }
       } catch (error) {
         // Config not loaded yet or running in Cloud Run with ADC

@@ -9,7 +9,8 @@ import {
 import { Reflector } from '@nestjs/core';
 import { AuthService } from './auth.service';
 import { ConfigService } from '../config/config.service';
-import { JWTPayload } from './types/user.types';
+import { DevConfigService } from '../config/dev-config.service';
+import { JWTPayload, AuthPayload } from './types/user.types';
 
 /**
  * Decorator to mark routes as public (skip authentication)
@@ -23,6 +24,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly devConfigService: DevConfigService,
     private readonly reflector: Reflector,
   ) {}
 
@@ -40,42 +42,101 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const { headers } = request;
 
-    // Extract Bearer token from Authorization header
-    const authHeader = headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      this.logger.warn('Missing or invalid Authorization header');
-      throw new UnauthorizedException('Missing or invalid Authorization header. Expected: Bearer <token>');
+    // Step 1: Check Authorization header exists
+    const authHeader = headers.authorization || headers.Authorization;
+    if (!authHeader) {
+      this.logger.warn('Missing Authorization header');
+      this.logger.debug(`Available headers: ${Object.keys(headers).join(', ')}`);
+      throw new UnauthorizedException('Missing Authorization header. Expected: Bearer <token>');
+    }
+    
+    if (!authHeader.startsWith('Bearer ')) {
+      this.logger.warn(`Invalid Authorization header format. Header value: ${authHeader.substring(0, 50)}...`);
+      throw new UnauthorizedException('Invalid Authorization header format. Expected: Bearer <token>');
     }
 
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    const token = authHeader.substring(7).trim(); // Remove 'Bearer ' prefix and trim whitespace
 
-    // Extract X-Tenant-ID header
+    // Validate token format (JWT should have 3 parts separated by dots)
+    if (!token || token.split('.').length !== 3) {
+      this.logger.warn(`Invalid token format. Token length: ${token.length}, segments: ${token.split('.').length}`);
+      this.logger.debug(`Token preview (first 50 chars): ${token.substring(0, 50)}`);
+      throw new UnauthorizedException('Invalid token format. Expected JWT token with 3 segments.');
+    }
+
+    // Extract X-Tenant-ID header (required for both auth types)
     const tenantIdHeader = headers['x-tenant-id'];
     if (!tenantIdHeader) {
       this.logger.warn('Missing X-Tenant-ID header');
       throw new UnauthorizedException('Missing X-Tenant-ID header');
     }
 
-    // Verify and decode JWT token
-    const payload = await this.authService.verifyToken(token);
-    if (!payload) {
-      this.logger.warn('Invalid or expired token');
+    // Step 2: Try Google OIDC verification
+    let authPayload: AuthPayload | null = null;
+
+    try {
+      const config = this.devConfigService.get();
+      if (config.service_authn_path) {
+        const googleOidcResult = await this.authService.verifyGoogleOIDCToken(
+          token,
+          config.service_authn_path,
+        );
+
+        if (googleOidcResult) {
+          // Google OIDC verification successful
+          authPayload = {
+            type: 'service',
+            email: googleOidcResult.email,
+            tenantId: tenantIdHeader,
+          };
+          this.logger.debug(
+            `✅ Google OIDC authentication successful for service: ${googleOidcResult.email} in tenant: ${tenantIdHeader}`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.debug(`Google OIDC verification failed: ${error.message}`);
+      // Continue to try app JWT verification
+    }
+
+    // Step 3: Try app JWT verification (if Google OIDC didn't succeed)
+    if (!authPayload) {
+      const jwtPayload = await this.authService.verifyToken(token);
+      if (jwtPayload) {
+        // Check token expiration
+        const now = Math.floor(Date.now() / 1000);
+        if (jwtPayload.exp && jwtPayload.exp < now) {
+          this.logger.warn(`Token expired at ${new Date(jwtPayload.exp * 1000).toISOString()}`);
+          throw new UnauthorizedException('Token has expired');
+        }
+
+        // Verify tenantId from token matches X-Tenant-ID header
+        if (jwtPayload.tenantId !== tenantIdHeader) {
+          this.logger.warn(
+            `Tenant ID mismatch: token has ${jwtPayload.tenantId}, header has ${tenantIdHeader}`,
+          );
+          throw new UnauthorizedException('Tenant ID in token does not match X-Tenant-ID header');
+        }
+
+        // App JWT verification successful
+        authPayload = {
+          type: 'user',
+          userId: jwtPayload.userId,
+          username: jwtPayload.username,
+          name: jwtPayload.name,
+          role: jwtPayload.role,
+          tenantId: jwtPayload.tenantId,
+        };
+        this.logger.debug(
+          `✅ App JWT authentication successful for user: ${jwtPayload.username} (${jwtPayload.userId}) in tenant: ${jwtPayload.tenantId}`,
+        );
+      }
+    }
+
+    // Step 4: If both failed, return 401
+    if (!authPayload) {
+      this.logger.warn('Both Google OIDC and app JWT verification failed');
       throw new UnauthorizedException('Invalid or expired token');
-    }
-
-    // Check token expiration
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
-      this.logger.warn(`Token expired at ${new Date(payload.exp * 1000).toISOString()}`);
-      throw new UnauthorizedException('Token has expired');
-    }
-
-    // Verify tenantId from token matches X-Tenant-ID header
-    if (payload.tenantId !== tenantIdHeader) {
-      this.logger.warn(
-        `Tenant ID mismatch: token has ${payload.tenantId}, header has ${tenantIdHeader}`,
-      );
-      throw new UnauthorizedException('Tenant ID in token does not match X-Tenant-ID header');
     }
 
     // Verify tenant exists in Firestore
@@ -85,17 +146,18 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException(`Tenant ${tenantIdHeader} not found in Firestore`);
     }
 
-    // Attach user info to request for use in controllers
-    request.user = {
-      userId: payload.userId,
-      tenantId: payload.tenantId,
-      username: payload.username,
-      name: payload.name,
-      role: payload.role,
-      linkedPatientId: payload.linkedPatientId,
-    };
-
-    this.logger.debug(`✅ Authentication successful for user: ${payload.username} (${payload.userId}) in tenant: ${payload.tenantId}`);
+    // Attach auth info to request for use in controllers
+    request.auth = authPayload;
+    // Also set request.user for backward compatibility (if user type)
+    if (authPayload.type === 'user') {
+      request.user = {
+        userId: authPayload.userId!,
+        tenantId: authPayload.tenantId,
+        username: authPayload.username!,
+        name: authPayload.name!,
+        role: authPayload.role!,
+      };
+    }
 
     return true;
   }

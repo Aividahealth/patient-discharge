@@ -52,3 +52,13 @@ export interface JWTPayload {
   iat: number;
 }
 
+export interface AuthPayload {
+  type: 'service' | 'user';
+  email?: string;        // For service type
+  userId?: string;       // For user type
+  username?: string;     // For user type
+  name?: string;         // For user type
+  role?: string;         // For user type
+  tenantId?: string;
+}
+
