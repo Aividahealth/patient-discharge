@@ -173,29 +173,85 @@ export class AuthService {
         return null;
       }
 
-      // Read service account to get client_id for aud verification
-      const serviceAccountPathResolved = resolveServiceAccountPath(serviceAccountPath);
-      const serviceAccountContent = fs.readFileSync(serviceAccountPathResolved, 'utf8');
-      const serviceAccount = JSON.parse(serviceAccountContent);
-      const clientId = serviceAccount.client_id;
+      // Try to read service account to get client_id for aud verification
+      let clientId: string | undefined;
 
-      if (!clientId) {
-        this.logger.warn('Service account missing client_id for OIDC verification');
-        return null;
+      const serviceAccountPathResolved = resolveServiceAccountPath(serviceAccountPath);
+      if (fs.existsSync(serviceAccountPathResolved)) {
+        const serviceAccountContent = fs.readFileSync(serviceAccountPathResolved, 'utf8');
+        const serviceAccount = JSON.parse(serviceAccountContent);
+        clientId = serviceAccount.client_id;
+        this.logger.debug(`Using client_id from service account: ${clientId}`);
+      } else {
+        this.logger.debug(`Service account file not found at ${serviceAccountPathResolved}, will verify without audience check`);
       }
 
-      // Create OAuth2Client with service account credentials
-      const client = new OAuth2Client({
-        clientId: clientId,
-      });
+      // First, decode the token to check the audience
+      const parts = token.split('.');
+      const payloadB64 = parts[1];
+      const decodedPayload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
+      const tokenAudience = decodedPayload.aud;
+
+      this.logger.debug(`Token audience: ${tokenAudience}`);
 
       // Verify the token
-      const ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: clientId, // Verify aud matches service account client_id
-      });
+      const client = new OAuth2Client();
+      let payload: any;
 
-      const payload = ticket.getPayload();
+      try {
+        // Check if the token's audience is a Cloud Run URL
+        // Cloud Run identity tokens have audience = the target service URL
+        const isCloudRunToken = typeof tokenAudience === 'string' &&
+                               (tokenAudience.includes('.run.app') || tokenAudience.startsWith('https://'));
+
+        if (isCloudRunToken) {
+          // Cloud Run service-to-service token - verify signature but don't check audience
+          // The audience will be the backend's Cloud Run URL
+          this.logger.debug(`Detected Cloud Run identity token with audience: ${tokenAudience}`);
+          try {
+            const tokenInfo = await client.getTokenInfo(token);
+            this.logger.debug(`Token info: email=${tokenInfo.email}, aud=${tokenInfo.aud}`);
+          } catch (tokenInfoError) {
+            this.logger.debug(`getTokenInfo failed: ${tokenInfoError.message}, continuing with signature verification`);
+            // If getTokenInfo fails, try verifyIdToken without audience check
+            const ticket = await client.verifyIdToken({
+              idToken: token,
+              // Don't specify audience - accept any valid Google-signed token
+            });
+            const verifiedPayload = ticket.getPayload();
+            if (verifiedPayload) {
+              payload = verifiedPayload;
+              this.logger.debug(`Google OIDC verified using verifyIdToken (Cloud Run identity token)`);
+            } else {
+              throw new Error('Token verification returned no payload');
+            }
+          }
+          if (!payload) {
+            payload = decodedPayload; // Use the already-decoded payload if we got tokenInfo successfully
+          }
+          this.logger.debug(`Google OIDC verified (Cloud Run identity token)`);
+        } else if (clientId && tokenAudience === clientId) {
+          // Service account token with matching client_id - do full verification
+          this.logger.debug(`Verifying token with audience check for client_id: ${clientId}`);
+          const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: clientId,
+          });
+          payload = ticket.getPayload();
+          this.logger.debug(`Google OIDC verified with audience check (client_id: ${clientId})`);
+        } else {
+          // Fallback: verify without audience check
+          this.logger.debug(`Verifying token without audience check (audience: ${tokenAudience})`);
+          const tokenInfo = await client.getTokenInfo(token);
+          this.logger.debug(`Token info: email=${tokenInfo.email}, aud=${tokenInfo.aud}`);
+          payload = decodedPayload;
+          this.logger.debug(`Google OIDC verified without audience check`);
+        }
+      } catch (verifyError) {
+        this.logger.warn(`Token verification failed: ${verifyError.message}`);
+        throw verifyError;
+      }
+
 
       if (!payload) {
         this.logger.warn('Google OIDC token verification returned no payload');
@@ -225,7 +281,8 @@ export class AuthService {
         return null;
       }
 
-      this.logger.debug(`✅ Google OIDC token verified for email: ${email}`);
+      // Log token details for debugging
+      this.logger.debug(`✅ Google OIDC token verified for email: ${email}, aud: ${payload.aud}`);
       return {
         email,
         email_verified: payload.email_verified === true,
