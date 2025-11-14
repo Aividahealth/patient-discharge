@@ -34,6 +34,10 @@ MEMORY="512MB"
 TIMEOUT="540s"
 GEN2_FLAG="--gen2"
 
+# Service account configuration
+SERVICE_ACCOUNT_NAME="discharge-export-processor-sa"
+SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
 echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}Discharge Summary Simplifier${NC}"
 echo -e "${GREEN}Cloud Functions Deployment${NC}"
@@ -92,6 +96,7 @@ echo "  Runtime: $RUNTIME"
 echo "  Memory: $MEMORY"
 echo "  Timeout: $TIMEOUT"
 echo "  Model: $MODEL_NAME"
+echo "  Service Account: $SERVICE_ACCOUNT_EMAIL"
 if [ "$DEPLOY_MODE" == "gcs" ] || [ "$DEPLOY_MODE" == "all" ]; then
     echo ""
     echo "  GCS Function:"
@@ -334,6 +339,7 @@ if [ "$DEPLOY_MODE" == "gcs" ] || [ "$DEPLOY_MODE" == "all" ]; then
         --trigger-bucket="$GCS_TRIGGER_BUCKET" \
         --memory="$MEMORY" \
         --timeout="$TIMEOUT" \
+        --service-account="$SERVICE_ACCOUNT_EMAIL" \
         --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},FHIR_API_BASE_URL=${FHIR_API_BASE_URL},BACKEND_API_URL=${BACKEND_API_URL}" \
         --project="$PROJECT_ID"
 
@@ -356,6 +362,7 @@ if [ "$DEPLOY_MODE" == "pubsub" ] || [ "$DEPLOY_MODE" == "all" ]; then
         --trigger-topic="$PUBSUB_TOPIC" \
         --memory="$MEMORY" \
         --timeout="$TIMEOUT" \
+        --service-account="$SERVICE_ACCOUNT_EMAIL" \
         --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},FHIR_API_BASE_URL=${FHIR_API_BASE_URL},BACKEND_API_URL=${BACKEND_API_URL}" \
         --project="$PROJECT_ID"
 
