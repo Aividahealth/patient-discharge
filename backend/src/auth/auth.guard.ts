@@ -29,6 +29,13 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+
+    // Skip authentication for OPTIONS (CORS preflight) requests
+    if (request.method === 'OPTIONS') {
+      return true;
+    }
+
     // Check if route is marked as public
     const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
@@ -39,7 +46,6 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
     const { headers } = request;
 
     // Step 1: Check Authorization header exists
@@ -56,6 +62,15 @@ export class AuthGuard implements CanActivate {
     }
 
     const token = authHeader.substring(7).trim(); // Remove 'Bearer ' prefix and trim whitespace
+
+    // Decode JWT header to check algorithm (for debugging)
+    try {
+      const headerB64 = token.split('.')[0];
+      const header = JSON.parse(Buffer.from(headerB64, 'base64').toString());
+      this.logger.debug(`Token header: ${JSON.stringify(header)}`);
+    } catch (e) {
+      this.logger.debug(`Could not decode token header: ${e.message}`);
+    }
 
     // Validate token format (JWT should have 3 parts separated by dots)
     if (!token || token.split('.').length !== 3) {

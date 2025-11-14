@@ -82,12 +82,21 @@ export class PubSubService {
       // Get tenant-specific configuration
       const topicName = await this.configService.getTenantPubSubTopicName(event.tenantId);
       const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(event.tenantId);
-      
-      // Create tenant-specific Pub/Sub client if needed
-      const pubsub = new PubSub({
+
+      // Check if service account file exists
+      const fs = require('fs');
+      let pubsubConfig: any = {
         projectId: this.configService.getGcpProjectId(),
-        keyFilename: serviceAccountPath,
-      });
+      };
+
+      if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+        pubsubConfig.keyFilename = serviceAccountPath;
+      } else {
+        this.logger.log(`Service account file not found, using Application Default Credentials for PubSub`);
+      }
+
+      // Create tenant-specific Pub/Sub client if needed
+      const pubsub = new PubSub(pubsubConfig);
       
       const topic = pubsub.topic(topicName);
       
@@ -133,10 +142,20 @@ export class PubSubService {
       const topicName = await this.configService.getTenantPubSubTopicName(event.tenantId);
       const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(event.tenantId);
 
-      const pubsub = new PubSub({
+      // Check if service account file exists
+      const fs = require('fs');
+      let pubsubConfig: any = {
         projectId: this.configService.getGcpProjectId(),
-        keyFilename: serviceAccountPath,
-      });
+      };
+
+      if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+        pubsubConfig.keyFilename = serviceAccountPath;
+        this.logger.log(`Using PubSub service account from: ${serviceAccountPath}`);
+      } else {
+        this.logger.log(`Service account file not found, using Application Default Credentials for PubSub`);
+      }
+
+      const pubsub = new PubSub(pubsubConfig);
 
       const topic = pubsub.topic(topicName);
       const [exists] = await topic.exists();
@@ -210,12 +229,21 @@ export class PubSubService {
       // Get tenant-specific configuration
       const topicName = await this.configService.getTenantPubSubTopicName(tenantId);
       const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(tenantId);
-      
-      // Create tenant-specific Pub/Sub client
-      const pubsub = new PubSub({
+
+      // Check if service account file exists
+      const fs = require('fs');
+      let pubsubConfig: any = {
         projectId: this.configService.getGcpProjectId(),
-        keyFilename: serviceAccountPath,
-      });
+      };
+
+      if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+        pubsubConfig.keyFilename = serviceAccountPath;
+      } else {
+        this.logger.log(`Service account file not found, using Application Default Credentials for PubSub`);
+      }
+
+      // Create tenant-specific Pub/Sub client
+      const pubsub = new PubSub(pubsubConfig);
       
       const topic = pubsub.topic(topicName);
       
@@ -260,11 +288,20 @@ export class PubSubService {
     try {
       const topicName = await this.configService.getTenantPubSubTopicName(tenantId);
       const serviceAccountPath = await this.configService.getTenantPubSubServiceAccountPath(tenantId);
-      
-      const pubsub = new PubSub({
+
+      // Check if service account file exists
+      const fs = require('fs');
+      let pubsubConfig: any = {
         projectId: this.configService.getGcpProjectId(),
-        keyFilename: serviceAccountPath,
-      });
+      };
+
+      if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+        pubsubConfig.keyFilename = serviceAccountPath;
+      } else {
+        this.logger.log(`Service account file not found, using Application Default Credentials for PubSub`);
+      }
+
+      const pubsub = new PubSub(pubsubConfig);
       
       const topic = pubsub.topic(topicName);
       const [exists] = await topic.exists();

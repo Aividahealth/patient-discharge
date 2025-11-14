@@ -24,17 +24,23 @@ const getDefaultServiceAccountPath = () => {
 
 export async function readServiceAccount(
   filePath?: string,
-): Promise<GoogleServiceAccount> {
+): Promise<GoogleServiceAccount | null> {
   const env = process.env.NODE_ENV || 'dev';
   const resolvedPath = filePath
     || process.env.SERVICE_ACCOUNT_PATH
     || getDefaultServiceAccountPath();
-  
+
   // Use console.log here since this is a utility function, not a service
   console.log(`🔐 Google Auth - NODE_ENV: ${env}, Service account path: ${resolvedPath}`);
-  const raw = await fs.readFile(path.resolve(resolvedPath), 'utf8');
-  const parsed = JSON.parse(raw);
-  return parsed as GoogleServiceAccount;
+
+  try {
+    const raw = await fs.readFile(path.resolve(resolvedPath), 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed as GoogleServiceAccount;
+  } catch (error) {
+    console.log(`⚠️  Service account file not found at ${resolvedPath}, will use Application Default Credentials`);
+    return null;
+  }
 }
 
 let cachedClients: Map<string, Promise<AuthClient>> = new Map();
@@ -46,13 +52,22 @@ export async function getGoogleAuthClient(scopes: string[]): Promise<AuthClient>
 
   const ready = (async () => {
     const creds = await readServiceAccount();
-    const auth = new GoogleAuth({
-      credentials: {
-        client_email: creds.client_email,
-        private_key: creds.private_key,
-      },
-      scopes,
-    });
+
+    // If service account file exists, use it
+    if (creds) {
+      const auth = new GoogleAuth({
+        credentials: {
+          client_email: creds.client_email,
+          private_key: creds.private_key,
+        },
+        scopes,
+      });
+      return auth.getClient();
+    }
+
+    // Otherwise, use Application Default Credentials
+    console.log('🔐 Using Application Default Credentials (Cloud Run service account)');
+    const auth = new GoogleAuth({ scopes });
     return auth.getClient();
   })();
 
