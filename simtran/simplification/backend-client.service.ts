@@ -64,6 +64,7 @@ export class BackendClientService {
       const response = await axios.get<TenantConfig>(url, {
         headers: {
           'Authorization': `Bearer ${idToken}`,
+          'X-Tenant-ID': tenantId,
         },
         timeout: 10000,
       });
@@ -107,6 +108,7 @@ export class BackendClientService {
         {
           headers: {
             'Authorization': `Bearer ${idToken}`,
+            'X-Tenant-ID': tenantId,
           },
           timeout: 30000,
         }
