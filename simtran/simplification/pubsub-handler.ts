@@ -93,9 +93,14 @@ export async function processDischargeExportEvent(cloudEvent: CloudEvent<unknown
     const decodedData = Buffer.from(base64Data, 'base64').toString('utf-8');
     logger.debug('Decoded Pub/Sub message', { decodedData: decodedData.substring(0, 200) });
 
-    const event: DischargeExportEvent = JSON.parse(decodedData);
+    // Parse the message wrapper (contains eventType, timestamp, and data)
+    const messageWrapper = JSON.parse(decodedData);
+
+    // Extract the actual event from the 'data' field
+    const event: DischargeExportEvent = messageWrapper.data || messageWrapper;
 
     logger.info('Parsed discharge export event', {
+      eventType: messageWrapper.eventType,
       tenantId: event.tenantId,
       patientId: event.patientId,
       googleCompositionId: event.googleCompositionId,

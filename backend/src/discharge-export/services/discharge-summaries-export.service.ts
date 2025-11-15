@@ -1143,7 +1143,13 @@ export class DischargeSummariesExportService {
         this.logger.log(`📭 No additional resources found for encounter ${result.cernerEncounterId}, skipping event publication`);
         return;
       }
-      
+
+      // Only publish if composition was created (required by simplification processor)
+      if (!result.compositionId) {
+        this.logger.log(`📭 No composition created for encounter ${result.cernerEncounterId}, skipping event publication`);
+        return;
+      }
+
       this.logger.log(`🔍 Debug - result.conditionIds in event publishing: ${JSON.stringify(result.conditionIds)}`);
       this.logger.log(`📡 Publishing event for encounter ${result.cernerEncounterId} with ${totalResources} additional resources`);
       

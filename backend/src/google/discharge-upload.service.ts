@@ -480,7 +480,7 @@ export class DischargeUploadService {
         const event: EncounterExportEvent = {
           tenantId: ctx.tenantId,
           patientId: patientId,
-          compositionId: compositionId,
+          googleCompositionId: compositionId,
           cernerEncounterId: '', // Empty for patient uploads (no Cerner encounter)
           googleEncounterId: encounterId,
           exportTimestamp: new Date().toISOString(),
