@@ -1,5 +1,5 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { SimplificationCompletedEvent } from '../common/types';
+import { SimplificationCompletedEvent } from '../common/common/types';
 import { TranslationService } from './translation.service';
 import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
@@ -148,7 +148,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     let totalTokensUsed = 0;
 
     // Translate discharge summary if available
-    const summaryFile = event.simplifiedFiles.find(f => f.type === 'discharge-summary');
+    const summaryFile = event.simplifiedFiles.find((f: any) => f.type === 'discharge-summary');
     if (summaryFile) {
       logger.debug('Step 2a: Translating discharge summary');
 
@@ -178,7 +178,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     }
 
     // Translate discharge instructions if available
-    const instructionsFile = event.simplifiedFiles.find(f => f.type === 'discharge-instructions');
+    const instructionsFile = event.simplifiedFiles.find((f: any) => f.type === 'discharge-instructions');
     if (instructionsFile) {
       logger.debug('Step 2b: Translating discharge instructions');
 
@@ -229,12 +229,12 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
         dischargeSummary: translatedResults.dischargeSummary ? {
           content: translatedResults.dischargeSummary.content,
           language: translatedResults.dischargeSummary.language,
-          gcsPath: translatedFiles.find(f => f.type === 'discharge-summary')?.translatedPath || '',
+          gcsPath: translatedFiles.find((f: any) => f.type === 'discharge-summary')?.translatedPath || '',
         } : undefined,
         dischargeInstructions: translatedResults.dischargeInstructions ? {
           content: translatedResults.dischargeInstructions.content,
           language: translatedResults.dischargeInstructions.language,
-          gcsPath: translatedFiles.find(f => f.type === 'discharge-instructions')?.translatedPath || '',
+          gcsPath: translatedFiles.find((f: any) => f.type === 'discharge-instructions')?.translatedPath || '',
         } : undefined,
       }
     );
