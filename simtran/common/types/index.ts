@@ -138,6 +138,7 @@ export interface DischargeExportEvent {
   cernerEncounterId: string;
   googleEncounterId: string;
   googleCompositionId: string;
+  preferredLanguage?: string;
 }
 
 /**

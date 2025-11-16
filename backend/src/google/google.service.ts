@@ -106,8 +106,17 @@ export class GoogleService {
   async fhirDelete(resourceType: string, id: string, ctx: TenantContext) {
     this.assertAllowed(resourceType);
     const client = await this.getFhirClient(ctx);
-    const { data } = await client.delete(`/${resourceType}/${id}`);
-    return data;
+    try {
+      const { data } = await client.delete(`/${resourceType}/${id}`);
+      return data;
+    } catch (error) {
+      console.error(`Google FHIR Delete Error for ${resourceType}/${id} (tenant: ${ctx.tenantId}):`, {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+      });
+      throw error;
+    }
   }
 
   async fhirSearch(resourceType: string, query: Record<string, any>, ctx: TenantContext) {
