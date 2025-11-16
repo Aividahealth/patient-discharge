@@ -61,7 +61,7 @@ export default function ExpertPortalPage() {
 
   const handleReview = (summary: ReviewSummary, reviewType: ReviewType) => {
     // Use compositionId for fetching content
-    router.push(`/${tenantId}/expert/review/${summary.compositionId}?type=${reviewType}`)
+    router.push(`/${tenantId}/expert/review/${summary.compositionId}?type=${reviewType}&patientId=${summary.id}`)
   }
 
   // Show loading spinner while checking authentication

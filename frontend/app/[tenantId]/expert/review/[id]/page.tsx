@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Loader2, Star, CheckCircle } from "lucide-react"
-import { getDischargeSummaryContent, DischargeSummaryContent } from "@/lib/discharge-summaries"
+import { getDischargeSummaryContent, DischargeSummaryContent, getPatientDetails } from "@/lib/discharge-summaries"
 import { submitFeedback } from "@/lib/expert-api"
 import { useToast } from "@/hooks/use-toast"
 import { TenantButton } from "@/components/tenant-button"
@@ -74,6 +74,8 @@ export default function ExpertReviewPage() {
   const [rawContent, setRawContent] = useState<DischargeSummaryContent | null>(null)
   const [simplifiedContent, setSimplifiedContent] = useState<DischargeSummaryContent | null>(null)
   const [translatedContent, setTranslatedContent] = useState<DischargeSummaryContent | null>(null)
+  const [rawText, setRawText] = useState<string>("")
+  const [simplifiedText, setSimplifiedText] = useState<string>("")
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
 
@@ -132,27 +134,19 @@ export default function ExpertReviewPage() {
     try {
       setLoading(true)
 
-      // Load raw and simplified content - same approach as DischargeSummaryViewer
-      const [raw, simplified] = await Promise.all([
-        getDischargeSummaryContent(summaryId, 'raw', undefined, token, tenantId).catch((err) => {
-          console.error('Failed to load raw version:', err)
-          return null
-        }),
-        getDischargeSummaryContent(summaryId, 'simplified', undefined, token, tenantId).catch((err) => {
-          console.error('Failed to load simplified version:', err)
-          return null
-        }),
-      ])
+      // Reuse clinician portal API to fetch raw and simplified via composition
+      const patientIdFromUrl = searchParams.get('patientId') || ''
+      const details = await getPatientDetails(
+        patientIdFromUrl,
+        summaryId,
+        token,
+        tenantId
+      )
 
-      // Direct assignment like DischargeSummaryViewer
-      setRawContent(raw)
-      setSimplifiedContent(simplified)
-
-      // Try to get metadata
-      const metadata = simplified?.metadata || raw?.metadata
-      if (metadata) {
-        if (metadata.patientName) setPatientName(metadata.patientName)
-        if (metadata.mrn) setMrn(metadata.mrn)
+      setRawText(details.rawSummary?.text || "")
+      setSimplifiedText(details.simplifiedSummary?.text || "")
+      if (details) {
+        setPatientName(details.patientId || patientName)
       }
     } catch (error) {
       console.error('Failed to load content:', error)
@@ -328,9 +322,9 @@ export default function ExpertReviewPage() {
             </CardHeader>
             <CardContent className="flex-1">
               <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
-                {simplifiedContent?.content?.content ? (
+                {simplifiedText ? (
                   <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                    {simplifiedContent.content.content}
+                    {simplifiedText}
                   </pre>
                 ) : (
                   <p className="text-sm text-muted-foreground">Simplified version not available</p>
@@ -365,9 +359,9 @@ export default function ExpertReviewPage() {
             <CardContent className="flex-1">
               <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
                 {reviewType === 'simplification' ? (
-                  rawContent?.content?.content ? (
+                  rawText ? (
                     <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                      {rawContent.content.content}
+                      {rawText}
                     </pre>
                   ) : (
                     <p className="text-sm text-muted-foreground">Raw version not available</p>

@@ -14,6 +14,7 @@ import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
 import { FileUploadModal } from "@/components/file-upload-modal"
+import { MarkdownRenderer } from "@/components/markdown-renderer"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import {
@@ -1198,57 +1199,27 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                         <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-96 overflow-y-auto">
                           <div>
                             <h4 className="font-medium mb-2">{t.whatHappenedDuringStay}</h4>
-                            <p className="text-muted-foreground">
-                              {currentPatient?.patientFriendly?.overview?.[language as keyof typeof currentPatient.patientFriendly.overview] || 'N/A'}
-                            </p>
+                            <MarkdownRenderer
+                              content={currentPatient?.patientFriendly?.overview?.[language as keyof typeof currentPatient.patientFriendly.overview] || ''}
+                            />
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.yourMedications}</h4>
-                            <p className="text-muted-foreground">
-                              {(() => {
-                                const medications = currentPatient?.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications];
-                                if (!medications || typeof medications !== 'string') return 'N/A';
-                                const lines = (medications as string).split('\n');
-                                return lines.map((line: string, index: number) => (
-                                  <span key={index}>
-                                    {line}
-                                    {index < lines.length - 1 && <br />}
-                                  </span>
-                                ));
-                              })()}
-                            </p>
+                            <MarkdownRenderer
+                              content={currentPatient?.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications] || ''}
+                            />
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.yourAppointments}</h4>
-                            <p className="text-muted-foreground">
-                              {(() => {
-                                const appointments = currentPatient?.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments];
-                                if (!appointments || typeof appointments !== 'string') return 'N/A';
-                                const lines = (appointments as string).split('\n');
-                                return lines.map((line: string, index: number) => (
-                                  <span key={index}>
-                                    {line}
-                                    {index < lines.length - 1 && <br />}
-                                  </span>
-                                ));
-                              })()}
-                            </p>
+                            <MarkdownRenderer
+                              content={currentPatient?.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments] || ''}
+                            />
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.activityGuidelines}</h4>
-                            <p className="text-muted-foreground">
-                              {(() => {
-                                const activity = currentPatient?.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity];
-                                if (!activity || typeof activity !== 'string') return 'N/A';
-                                const lines = (activity as string).split('\n');
-                                return lines.map((line: string, index: number) => (
-                                  <span key={index}>
-                                    {line}
-                                    {index < lines.length - 1 && <br />}
-                                  </span>
-                                ));
-                              })()}
-                            </p>
+                            <MarkdownRenderer
+                              content={currentPatient?.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity] || ''}
+                            />
                           </div>
                         </div>
                       )}
