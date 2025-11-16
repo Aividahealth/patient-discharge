@@ -43,3 +43,7 @@ Thumbs.db
 
 # Cloud Function
 .gcloudignore
+
+# Symlinks (used for build only, not needed in repo)
+simplification/common
+translation/common
