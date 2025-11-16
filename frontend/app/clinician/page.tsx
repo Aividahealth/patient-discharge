@@ -14,7 +14,7 @@ import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
 import { FileUploadModal } from "@/components/file-upload-modal"
-import { MarkdownRenderer } from "@/components/markdown-renderer"
+import { MarkdownRenderer, markdownToHtml } from "@/components/markdown-renderer"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import {
@@ -804,16 +804,16 @@ IMPORTANT: The patient-friendly content has been simplified using artificial int
           <div class="simplified">
             <h2>PATIENT-FRIENDLY VERSION</h2>
             <h3>Overview:</h3>
-            <p>${currentPatient.patientFriendly?.overview?.[language as keyof typeof currentPatient.patientFriendly.overview] || 'N/A'}</p>
-            
+            <div>${markdownToHtml(currentPatient.patientFriendly?.overview?.[language as keyof typeof currentPatient.patientFriendly.overview] || '')}</div>
+
             <h3>Medications:</h3>
-            <p>${currentPatient.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications] || 'N/A'}</p>
-            
+            <div>${markdownToHtml(currentPatient.patientFriendly?.medications?.[language as keyof typeof currentPatient.patientFriendly.medications] || '')}</div>
+
             <h3>Appointments:</h3>
-            <p>${currentPatient.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments] || 'N/A'}</p>
-            
+            <div>${markdownToHtml(currentPatient.patientFriendly?.appointments?.[language as keyof typeof currentPatient.patientFriendly.appointments] || '')}</div>
+
             <h3>Activity Guidelines:</h3>
-            <p>${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity] || 'N/A'}</p>
+            <div>${markdownToHtml(currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity] || '')}</div>
           </div>
           
           <div class="disclaimer">

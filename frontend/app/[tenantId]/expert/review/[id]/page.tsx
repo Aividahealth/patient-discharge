@@ -19,6 +19,7 @@ import { TenantBadge } from "@/components/tenant-badge"
 import { tenantColors } from "@/lib/tenant-colors"
 import { useTenant } from "@/contexts/tenant-context"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { MarkdownRenderer } from "@/components/markdown-renderer"
 
 // Star Rating Component
 const StarRating = ({ value, onChange, label, required = false }: {
@@ -323,9 +324,7 @@ export default function ExpertReviewPage() {
             <CardContent className="flex-1">
               <div className="bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-y-auto">
                 {simplifiedText ? (
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                    {simplifiedText}
-                  </pre>
+                  <MarkdownRenderer content={simplifiedText} className="text-sm leading-relaxed" />
                 ) : (
                   <p className="text-sm text-muted-foreground">Simplified version not available</p>
                 )}
@@ -368,9 +367,7 @@ export default function ExpertReviewPage() {
                   )
                 ) : (
                   translatedContent?.content?.content ? (
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                      {translatedContent.content.content}
-                    </pre>
+                    <MarkdownRenderer content={translatedContent.content.content} className="text-sm leading-relaxed" />
                   ) : (
                     <p className="text-sm text-muted-foreground">Translated version not available for {language.toUpperCase()}</p>
                   )

@@ -16,6 +16,7 @@ import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { FileUploadModal } from "@/components/file-upload-modal"
+import { MarkdownRenderer, markdownToHtml } from "@/components/markdown-renderer"
 import { useTenant } from "@/contexts/tenant-context"
 import { usePDFExport } from "@/hooks/use-pdf-export"
 import { getDischargeSummaryRenderer } from "@/components/discharge-renderers/renderer-registry"
@@ -1315,64 +1316,55 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                         <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-96 overflow-y-auto">
                           <div>
                             <h4 className="font-medium mb-2">{t.whatHappenedDuringStay}</h4>
-                            <p className="text-muted-foreground">
-                              {(() => {
+                            <MarkdownRenderer
+                              content={(() => {
                                 const overview = currentPatient?.patientFriendly?.overview;
-                                if (!overview) return 'N/A';
+                                if (!overview) return '';
                                 if (typeof overview === 'string') {
                                   return overview;
                                 }
-                                return overview[language as keyof typeof overview] || overview.en || 'N/A';
+                                return overview[language as keyof typeof overview] || overview.en || '';
                               })()}
-                            </p>
+                            />
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.yourMedications}</h4>
-                            <p className="text-muted-foreground">
-                              {(() => {
+                            <MarkdownRenderer
+                              content={(() => {
                                 const medications = currentPatient?.patientFriendly?.medications;
-                                if (!medications || typeof medications !== 'string') return 'N/A';
-                                const lines = (medications as string).split('\n');
-                                return lines.map((line: string, index: number) => (
-                                  <span key={index}>
-                                    {line}
-                                    {index < lines.length - 1 && <br />}
-                                  </span>
-                                ));
+                                if (!medications) return '';
+                                if (typeof medications === 'string') {
+                                  return medications;
+                                }
+                                return medications[language as keyof typeof medications] || medications.en || '';
                               })()}
-                            </p>
+                            />
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.yourAppointments}</h4>
-                            <p className="text-muted-foreground">
-                              {(() => {
+                            <MarkdownRenderer
+                              content={(() => {
                                 const appointments = currentPatient?.patientFriendly?.appointments;
-                                if (!appointments || typeof appointments !== 'string') return 'N/A';
-                                const lines = (appointments as string).split('\n');
-                                return lines.map((line: string, index: number) => (
-                                  <span key={index}>
-                                    {line}
-                                    {index < lines.length - 1 && <br />}
-                                  </span>
-                                ));
+                                if (!appointments) return '';
+                                if (typeof appointments === 'string') {
+                                  return appointments;
+                                }
+                                return appointments[language as keyof typeof appointments] || appointments.en || '';
                               })()}
-                            </p>
+                            />
                           </div>
                           <div>
                             <h4 className="font-medium mb-2">{t.activityGuidelines}</h4>
-                            <p className="text-muted-foreground">
-                              {(() => {
+                            <MarkdownRenderer
+                              content={(() => {
                                 const activity = currentPatient?.patientFriendly?.activity;
-                                if (!activity || typeof activity !== 'string') return 'N/A';
-                                const lines = (activity as string).split('\n');
-                                return lines.map((line: string, index: number) => (
-                                  <span key={index}>
-                                    {line}
-                                    {index < lines.length - 1 && <br />}
-                                  </span>
-                                ));
+                                if (!activity) return '';
+                                if (typeof activity === 'string') {
+                                  return activity;
+                                }
+                                return activity[language as keyof typeof activity] || activity.en || '';
                               })()}
-                            </p>
+                            />
                           </div>
                         </div>
                       )}
