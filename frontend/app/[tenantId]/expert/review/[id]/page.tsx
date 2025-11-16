@@ -284,7 +284,7 @@ export default function ExpertReviewPage() {
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/expert')}>
+                <Button variant="ghost" size="sm" onClick={() => router.push(`/${tenantId}/expert`)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to List
             </Button>
@@ -654,7 +654,7 @@ export default function ExpertReviewPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.push('/expert')}
+                  onClick={() => router.push(`/${tenantId}/expert`)}
                   disabled={submitting}
                 >
                   Cancel
