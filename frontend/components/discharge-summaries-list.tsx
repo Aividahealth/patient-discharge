@@ -16,7 +16,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Loader2, Search, FileText, Calendar, User, Trash2 } from "lucide-react"
-import { useTenant } from "@/contexts/tenant-context"
 import {
   listDischargeSummaries,
   deleteDischargeSummary,
@@ -33,7 +32,6 @@ export function DischargeSummariesList({
   onSelectSummary,
   selectedSummaryId,
 }: DischargeSummariesListProps) {
-  const { tenantId, token } = useTenant()
   const [summaries, setSummaries] = useState<DischargeSummaryMetadata[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -42,9 +40,6 @@ export function DischargeSummariesList({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [summaryToDelete, setSummaryToDelete] = useState<DischargeSummaryMetadata | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [deletePatientDialogOpen, setDeletePatientDialogOpen] = useState(false)
-  const [patientToDelete, setPatientToDelete] = useState<{ id: string; name: string } | null>(null)
-  const [deletingPatient, setDeletingPatient] = useState(false)
 
   const loadSummaries = async (params?: ListDischargeSummariesParams) => {
     try {
@@ -102,19 +97,6 @@ export function DischargeSummariesList({
     setDeleteDialogOpen(true)
   }
 
-  const handleDeletePatientClick = (summary: DischargeSummaryMetadata, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!summary.patientId) {
-      setError('Missing patientId for this summary')
-      return
-    }
-    setPatientToDelete({
-      id: summary.patientId,
-      name: summary.patientName || 'this patient',
-    })
-    setDeletePatientDialogOpen(true)
-  }
-
   const handleDeleteConfirm = async () => {
     if (!summaryToDelete) return
 
@@ -137,50 +119,6 @@ export function DischargeSummariesList({
       setError(err instanceof Error ? err.message : 'Failed to delete summary')
     } finally {
       setDeleting(false)
-    }
-  }
-
-  const handleDeletePatientConfirm = async () => {
-    if (!patientToDelete || !tenantId || !token) {
-      setError('Missing authentication to delete patient')
-      return
-    }
-
-    try {
-      setDeletingPatient(true)
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-      const resp = await fetch(`${apiUrl}/google/fhir/Patient/${patientToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': tenantId,
-        },
-      })
-
-      if (!resp.ok) {
-        const msg = await resp.text().catch(() => resp.statusText)
-        throw new Error(`Failed to delete patient: ${resp.status} ${msg}`)
-      }
-
-      // Remove all summaries belonging to this patient from the list
-      setSummaries(prev => prev.filter(s => s.patientId !== patientToDelete.id))
-      setTotal(prev => prev - prev /* not precise; leave recalculation to reload if needed */)
-
-      // Clear selection if current selection belongs to this patient
-      if (selectedSummaryId) {
-        const selected = summaries.find(s => s.id === selectedSummaryId)
-        if (selected && selected.patientId === patientToDelete.id) {
-          onSelectSummary?.(null as any)
-        }
-      }
-
-      setDeletePatientDialogOpen(false)
-      setPatientToDelete(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete patient')
-    } finally {
-      setDeletingPatient(false)
     }
   }
 
@@ -299,15 +237,6 @@ export function DischargeSummariesList({
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => handleDeletePatientClick(summary, e)}
-                        title="Delete patient (FHIR Patient resource)"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
                     </div>
                     <span className="text-xs text-muted-foreground">
                       {new Date(summary.updatedAt).toLocaleDateString()}
@@ -361,39 +290,6 @@ export function DischargeSummariesList({
                 </>
               ) : (
                 'Delete'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Patient Confirmation Dialog */}
-      <AlertDialog open={deletePatientDialogOpen} onOpenChange={setDeletePatientDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Patient?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete <strong>{patientToDelete?.name}</strong> (FHIR Patient)?
-              <br /><br />
-              This will call DELETE /google/fhir/Patient/{patientToDelete?.id} and cannot be undone.
-              <br />
-              Any associated discharge summaries may reference a deleted patient record.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingPatient}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeletePatientConfirm}
-              disabled={deletingPatient}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deletingPatient ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete Patient'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

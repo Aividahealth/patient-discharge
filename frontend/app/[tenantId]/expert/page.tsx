@@ -7,12 +7,22 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, ClipboardCheck, Star, Stethoscope, Languages } from "lucide-react"
+import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2 } from "lucide-react"
 import { getReviewList, ReviewSummary, ReviewType } from "@/lib/expert-api"
 import { useTenant } from "@/contexts/tenant-context"
 import { getLanguageName } from "@/lib/constants/languages"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { ReviewTable, ColumnRenderers } from "@/components/review-table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export default function ExpertPortalPage() {
   const router = useRouter()
@@ -22,6 +32,9 @@ export default function ExpertPortalPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'no_reviews' | 'low_rating'>('all')
   const [activeTab, setActiveTab] = useState<'medical' | 'language'>('medical')
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [patientToDelete, setPatientToDelete] = useState<{ id: string; name?: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -62,6 +75,38 @@ export default function ExpertPortalPage() {
   const handleReview = (summary: ReviewSummary, reviewType: ReviewType) => {
     // Use compositionId for fetching content
     router.push(`/${tenantId}/expert/review/${summary.compositionId}?type=${reviewType}&patientId=${summary.id}`)
+  }
+
+  const confirmDeletePatient = (summary: ReviewSummary) => {
+    setPatientToDelete({ id: summary.id, name: summary.patientName })
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeletePatient = async () => {
+    if (!patientToDelete || !tenantId || !token) return
+    try {
+      setDeleting(true)
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+      const resp = await fetch(`${apiUrl}/google/fhir/Patient/${patientToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      })
+      if (!resp.ok) {
+        const msg = await resp.text().catch(() => resp.statusText)
+        throw new Error(`Failed to delete patient: ${resp.status} ${msg}`)
+      }
+      await loadSummaries()
+      setDeleteDialogOpen(false)
+      setPatientToDelete(null)
+    } catch (e) {
+      console.error('[ExpertPortal] Failed to delete patient:', e)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   // Show loading spinner while checking authentication
@@ -183,8 +228,19 @@ export default function ExpertPortalPage() {
                     key: 'patientName',
                     header: 'Patient',
                     render: (summary: ReviewSummary) => (
-                      <div>
+                      <div className="flex items-center gap-2">
                         <div className="font-medium text-sm">{summary.patientName}</div>
+                        <button
+                          type="button"
+                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-destructive/10 text-destructive"
+                          title="Delete patient (FHIR Patient resource)"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmDeletePatient(summary)
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                         {summary.unit && (
                           <div className="text-xs text-muted-foreground">{summary.unit}</div>
                         )}
@@ -375,6 +431,29 @@ export default function ExpertPortalPage() {
             )}
           </TabsContent>
         </Tabs>
+        {/* Delete Patient Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Patient?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{patientToDelete?.name || 'this patient'}</strong>?
+                <br /><br />
+                This will call DELETE /google/fhir/Patient/{patientToDelete?.id} and cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeletePatient}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? 'Deleting…' : 'Delete Patient'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
       </div>
     </ErrorBoundary>
