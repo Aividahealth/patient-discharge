@@ -44,7 +44,7 @@ export class BackendClientService {
         throw new Error(`Failed to fetch tenant config: ${response.statusText}`);
       }
 
-      const config = await response.json();
+      const config = await response.json() as TenantConfig;
 
       logger.info('Tenant configuration fetched successfully', {
         tenantId,

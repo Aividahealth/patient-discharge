@@ -221,7 +221,7 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
           }
         );
         if (patientResponse.ok) {
-          const patient = await patientResponse.json();
+          const patient = await patientResponse.json() as any;
           // Extract preferred language from patient.communication array
           // FHIR format: communication: [{ language: { coding: [{ code: "en" }] }, preferred: true }]
           const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
