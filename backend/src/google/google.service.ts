@@ -157,10 +157,14 @@ export class GoogleService {
     const client = await this.getFhirClient(ctx);
 
     try {
-      // Step 1: Find all DocumentReferences and Encounters for this patient and extract Binary IDs
+      // Step 1: Find all DocumentReferences, Compositions, and Encounters for this patient and extract Binary IDs
       const binaryIds = new Set<string>();
       const documentReferenceIds: string[] = [];
+      const compositionIds = new Set<string>();
       const encounterIds = new Set<string>();
+
+      // Add the provided compositionId
+      compositionIds.add(compositionId);
 
       try {
         const docRefSearch = await client.get('/DocumentReference', {
@@ -206,6 +210,25 @@ export class GoogleService {
         // Continue with deletion even if search fails
       }
 
+      // Step 1aa: Find ALL Compositions for this patient (not just the provided one)
+      try {
+        const compositionSearch = await client.get('/Composition', {
+          params: { subject: `Patient/${patientId}`, _count: 100 },
+        });
+
+        if (compositionSearch.data?.entry) {
+          for (const entry of compositionSearch.data.entry) {
+            const comp = entry.resource;
+            if (comp?.id) {
+              compositionIds.add(comp.id);
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Error searching for Compositions:`, error.message);
+        // Continue with deletion even if search fails
+      }
+
       // Step 1a: Also find Encounters directly by patient
       try {
         const encounterSearch = await client.get('/Encounter', {
@@ -225,45 +248,47 @@ export class GoogleService {
         // Continue with deletion even if search fails
       }
 
-      // Step 1b: Also extract Binary IDs and Encounter IDs from Composition
-      try {
-        const composition = await client.get(`/Composition/${compositionId}`);
-        const compData = composition.data;
-        
-        // Extract Encounter ID from Composition.encounter
-        if (compData?.encounter?.reference) {
-          const encounterMatch = compData.encounter.reference.match(/^Encounter\/([^\/]+)$/);
-          if (encounterMatch && encounterMatch[1]) {
-            encounterIds.add(encounterMatch[1]);
+      // Step 1b: Extract Binary IDs and Encounter IDs from ALL Compositions
+      for (const compId of Array.from(compositionIds)) {
+        try {
+          const composition = await client.get(`/Composition/${compId}`);
+          const compData = composition.data;
+          
+          // Extract Encounter ID from Composition.encounter
+          if (compData?.encounter?.reference) {
+            const encounterMatch = compData.encounter.reference.match(/^Encounter\/([^\/]+)$/);
+            if (encounterMatch && encounterMatch[1]) {
+              encounterIds.add(encounterMatch[1]);
+            }
           }
-        }
-        
-        // Extract Binary IDs from Composition sections
-        if (compData?.section && Array.isArray(compData.section)) {
-          for (const section of compData.section) {
-            if (section.entry && Array.isArray(section.entry)) {
-              for (const entry of section.entry) {
-                if (entry.reference) {
-                  const ref = entry.reference;
-                  // Extract Binary ID from reference like "Binary/{id}"
-                  const binaryMatch = ref.match(/^Binary\/([^\/]+)$/);
-                  if (binaryMatch && binaryMatch[1]) {
-                    binaryIds.add(binaryMatch[1]);
+          
+          // Extract Binary IDs from Composition sections
+          if (compData?.section && Array.isArray(compData.section)) {
+            for (const section of compData.section) {
+              if (section.entry && Array.isArray(section.entry)) {
+                for (const entry of section.entry) {
+                  if (entry.reference) {
+                    const ref = entry.reference;
+                    // Extract Binary ID from reference like "Binary/{id}"
+                    const binaryMatch = ref.match(/^Binary\/([^\/]+)$/);
+                    if (binaryMatch && binaryMatch[1]) {
+                      binaryIds.add(binaryMatch[1]);
+                    }
                   }
                 }
               }
             }
           }
+        } catch (error: any) {
+          // Handle 410 (Gone) or 404 (Not Found) gracefully - Composition might already be deleted
+          const statusCode = error.response?.status;
+          if (statusCode === 410 || statusCode === 404) {
+            console.log(`ℹ️ Composition ${compId} not found (already deleted or doesn't exist), continuing...`);
+          } else {
+            console.error(`❌ Error reading Composition ${compId} to extract Binary/Encounter IDs:`, error.message);
+          }
+          // Continue with other Compositions even if one fails
         }
-      } catch (error: any) {
-        // Handle 410 (Gone) or 404 (Not Found) gracefully - Composition might already be deleted
-        const statusCode = error.response?.status;
-        if (statusCode === 410 || statusCode === 404) {
-          console.log(`ℹ️ Composition ${compositionId} not found (already deleted or doesn't exist), continuing...`);
-        } else {
-          console.error(`❌ Error reading Composition to extract Binary/Encounter IDs:`, error.message);
-        }
-        // Continue with deletion even if this fails
       }
 
       // Step 2: Delete all Binary resources first
@@ -274,12 +299,18 @@ export class GoogleService {
           console.log(`✅ Deleted Binary: ${binaryId}`);
         } catch (error: any) {
           const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+          const diagnostics = error.response?.data?.issue?.[0]?.diagnostics || '';
+          const fullError = diagnostics ? `${errorMsg} (${diagnostics})` : errorMsg;
           errors.push({
             resourceType: 'Binary',
             id: binaryId,
-            error: errorMsg,
+            error: fullError,
           });
-          console.error(`❌ Failed to delete Binary ${binaryId}:`, errorMsg);
+          console.error(`❌ Failed to delete Binary ${binaryId}: ${fullError}`);
+          // Log full error response for debugging
+          if (error.response?.data) {
+            console.error(`   Full error response:`, JSON.stringify(error.response.data, null, 2));
+          }
           // Continue with other deletions even if one Binary fails
         }
       }
@@ -320,27 +351,41 @@ export class GoogleService {
         }
       }
 
-      // Step 5: Delete Composition
-      try {
-        await client.delete(`/Composition/${compositionId}`);
-        deleted.composition = compositionId;
-        console.log(`✅ Deleted Composition: ${compositionId}`);
-      } catch (error: any) {
-        const statusCode = error.response?.status;
-        // Handle 410 (Gone) or 404 (Not Found) gracefully - Composition might already be deleted
-        if (statusCode === 410 || statusCode === 404) {
-          console.log(`ℹ️ Composition ${compositionId} not found (already deleted or doesn't exist), continuing...`);
-          deleted.composition = compositionId; // Mark as deleted even though it was already gone
-        } else {
-          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
-          errors.push({
-            resourceType: 'Composition',
-            id: compositionId,
-            error: errorMsg,
-          });
-          console.error(`❌ Failed to delete Composition ${compositionId}:`, errorMsg);
-          // Don't continue to Patient deletion if Composition deletion fails (unless it's already gone)
-          throw new Error(`Failed to delete Composition: ${errorMsg}`);
+      // Step 5: Delete ALL Compositions for this patient
+      for (const compId of Array.from(compositionIds)) {
+        try {
+          await client.delete(`/Composition/${compId}`);
+          if (compId === compositionId) {
+            deleted.composition = compId;
+          }
+          console.log(`✅ Deleted Composition: ${compId}`);
+        } catch (error: any) {
+          const statusCode = error.response?.status;
+          // Handle 410 (Gone) or 404 (Not Found) gracefully - Composition might already be deleted
+          if (statusCode === 410 || statusCode === 404) {
+            console.log(`ℹ️ Composition ${compId} not found (already deleted or doesn't exist), continuing...`);
+            if (compId === compositionId) {
+              deleted.composition = compId; // Mark as deleted even though it was already gone
+            }
+          } else {
+            const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+            const diagnostics = error.response?.data?.issue?.[0]?.diagnostics || '';
+            const fullError = diagnostics ? `${errorMsg} (${diagnostics})` : errorMsg;
+            errors.push({
+              resourceType: 'Composition',
+              id: compId,
+              error: fullError,
+            });
+            console.error(`❌ Failed to delete Composition ${compId}: ${fullError}`);
+            // Log full error response for debugging
+            if (error.response?.data) {
+              console.error(`   Full error response:`, JSON.stringify(error.response.data, null, 2));
+            }
+            // Don't continue to Patient deletion if Composition deletion fails (unless it's already gone)
+            if (compId === compositionId) {
+              throw new Error(`Failed to delete Composition: ${fullError}`);
+            }
+          }
         }
       }
 
