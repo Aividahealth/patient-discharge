@@ -40,9 +40,9 @@ if [ -z "$LOCATION" ]; then
     echo -e "${YELLOW}LOCATION not set, using default: ${LOCATION}${NC}"
 fi
 
-# Check if MODEL_NAME is set (optional, default to gemini-1.5-pro)
+# Check if MODEL_NAME is set (optional, default to gemini-2.5-pro)
 if [ -z "$MODEL_NAME" ]; then
-    MODEL_NAME="gemini-1.5-pro"
+    MODEL_NAME="gemini-2.5-pro"
     echo -e "${YELLOW}MODEL_NAME not set, using default: ${MODEL_NAME}${NC}"
 fi
 
