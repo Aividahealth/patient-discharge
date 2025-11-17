@@ -109,12 +109,16 @@ export class GoogleService {
     try {
       const { data } = await client.delete(`/${resourceType}/${id}`);
       return data;
-    } catch (error) {
-      console.error(`Google FHIR Delete Error for ${resourceType}/${id} (tenant: ${ctx.tenantId}):`, {
+    } catch (error: any) {
+      const errorDetails = {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-      });
+        message: error.message,
+      };
+      console.error(`Google FHIR Delete Error for ${resourceType}/${id} (tenant: ${ctx.tenantId}):`, errorDetails);
+      
+      // Re-throw the error with response preserved for controller to handle
       throw error;
     }
   }

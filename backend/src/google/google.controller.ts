@@ -41,8 +41,31 @@ export class GoogleController {
   }
 
   @Delete('fhir/:resourceType/:id')
-  fhirDelete(@Param('resourceType') resourceType: string, @Param('id') id: string, @TenantContext() ctx: TenantContextType) {
-    return this.googleService.fhirDelete(resourceType, id, ctx);
+  async fhirDelete(@Param('resourceType') resourceType: string, @Param('id') id: string, @TenantContext() ctx: TenantContextType) {
+    try {
+      const result = await this.googleService.fhirDelete(resourceType, id, ctx);
+      return { success: true, message: `${resourceType} deleted successfully`, data: result };
+    } catch (error) {
+      this.logger.error(`Failed to delete ${resourceType}/${id} (tenant: ${ctx.tenantId}):`, error);
+      
+      // Extract error details from the FHIR API response
+      const statusCode = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.issue?.[0]?.details?.text || 
+                          error.message || 
+                          'Failed to delete resource';
+      
+      throw new HttpException(
+        {
+          message: errorMessage,
+          resourceType,
+          id,
+          statusCode,
+          details: error.response?.data,
+        },
+        statusCode,
+      );
+    }
   }
 
   @Get('fhir/:resourceType')
