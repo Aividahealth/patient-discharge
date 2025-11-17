@@ -73,18 +73,22 @@ else
     echo -e "${GREEN}Using Pub/Sub topic: ${PUBSUB_TOPIC}${NC}"
 fi
 
-# Check if BACKEND_API_URL is set (optional)
+# Resolve backend/FHIR API URLs (prefer env; else auto-detect Cloud Run service URL)
 if [ -z "$BACKEND_API_URL" ]; then
-    BACKEND_API_URL=""
-    echo -e "${YELLOW}BACKEND_API_URL not set, will use default tenant config${NC}"
-else
-    echo -e "${GREEN}Using Backend API URL: ${BACKEND_API_URL}${NC}"
+    SERVICE_NAME="${BACKEND_SERVICE_NAME:-patient-discharge-backend-dev}"
+    SERVICE_REGION="${BACKEND_SERVICE_REGION:-$REGION}"
+    echo -e "${YELLOW}BACKEND_API_URL not set. Attempting to detect Cloud Run service URL for ${SERVICE_NAME}...${NC}"
+    BACKEND_API_URL=$(gcloud run services describe "$SERVICE_NAME" --region="$SERVICE_REGION" --format='value(status.url)' --project="$PROJECT_ID" 2>/dev/null || echo "")
+    if [ -z "$BACKEND_API_URL" ]; then
+        echo -e "${RED}Could not determine BACKEND_API_URL. Please export BACKEND_API_URL with your Cloud Run URL and retry.${NC}"
+        exit 1
+    fi
 fi
+echo -e "${GREEN}Using Backend API URL: ${BACKEND_API_URL}${NC}"
 
-# Check if FHIR_API_BASE_URL is set (optional)
 if [ -z "$FHIR_API_BASE_URL" ]; then
-    FHIR_API_BASE_URL=""
-    echo -e "${YELLOW}FHIR_API_BASE_URL not set${NC}"
+    FHIR_API_BASE_URL="$BACKEND_API_URL"
+    echo -e "${YELLOW}FHIR_API_BASE_URL not set. Using BACKEND_API_URL: ${FHIR_API_BASE_URL}${NC}"
 else
     echo -e "${GREEN}Using FHIR API URL: ${FHIR_API_BASE_URL}${NC}"
 fi
