@@ -565,6 +565,11 @@ export default function ClinicianDashboard() {
           instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
         );
 
+        console.log('[DEBUG] Simplified Summary length:', simplifiedSummary?.text?.length || 0);
+        console.log('[DEBUG] Simplified Summary preview:', simplifiedSummary?.text?.substring(0, 200));
+        console.log('[DEBUG] Simplified Instructions length:', simplifiedInstructions?.text?.length || 0);
+        console.log('[DEBUG] Simplified Instructions preview:', simplifiedInstructions?.text?.substring(0, 200));
+        
         return {
           summary: simplifiedSummary?.text || '',
           instructions: simplifiedInstructions?.text || ''
