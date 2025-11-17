@@ -1,19 +1,7 @@
-import { createLogger } from '../common/utils/logger';
+import { createLogger } from './common/utils/logger';
+import { TenantConfig } from './common/types';
 
 const logger = createLogger('BackendClientService');
-
-export interface TenantConfig {
-  tenantId: string;
-  buckets: {
-    rawBucket: string;
-    simplifiedBucket: string;
-    translatedBucket: string;
-  };
-  translationConfig: {
-    enabled: boolean;
-    supportedLanguages: string[];
-  };
-}
 
 /**
  * Service for interacting with the Backend API
@@ -44,7 +32,7 @@ export class BackendClientService {
         throw new Error(`Failed to fetch tenant config: ${response.statusText}`);
       }
 
-      const config = await response.json();
+      const config = (await response.json()) as TenantConfig;
 
       logger.info('Tenant configuration fetched successfully', {
         tenantId,

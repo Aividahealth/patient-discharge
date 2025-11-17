@@ -4,6 +4,7 @@ import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import { Manrope } from "next/font/google"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Analytics } from "@vercel/analytics/next"
 import { TenantProvider } from "@/contexts/tenant-context"
 import "./globals.css"
 
@@ -32,6 +33,7 @@ export default function RootLayout({
           {children}
         </TenantProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   )

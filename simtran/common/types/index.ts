@@ -138,6 +138,44 @@ export interface DischargeExportEvent {
   cernerEncounterId: string;
   googleEncounterId: string;
   googleCompositionId: string;
+  preferredLanguage?: string;
+}
+
+/**
+ * Simplified File Types
+ */
+export interface SimplifiedFile {
+  type: 'discharge-summary' | 'discharge-instructions';
+  originalPath: string;
+  simplifiedPath: string;
+  language: string;
+}
+
+export interface SimplificationCompletedEvent {
+  tenantId: string;
+  compositionId: string;
+  simplifiedFiles: SimplifiedFile[];
+  processingTimeMs: number;
+  tokensUsed: number;
+  timestamp: string;
+  patientId?: string;
+  preferredLanguage?: string;
+}
+
+/**
+ * Tenant Configuration Types
+ */
+export interface TenantConfig {
+  tenantId: string;
+  buckets: {
+    rawBucket: string;
+    simplifiedBucket: string;
+    translatedBucket: string;
+  };
+  translationConfig: {
+    enabled: boolean;
+    supportedLanguages: string[];
+  };
 }
 
 /**

@@ -1,9 +1,9 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { SimplificationCompletedEvent } from '../common/types';
+import { SimplificationCompletedEvent, SimplifiedFile } from '../common/types';
 import { TranslationService } from './translation.service';
 import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
-import { createLogger } from '../common/utils/logger';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('TranslationPubSubHandler');
 
@@ -106,10 +106,34 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
       return;
     }
 
-    // Step 2: Translate content for each supported language
-    // For now, we'll translate to the first supported language
-    // In the future, we can translate to multiple languages in parallel
-    const targetLanguage = tenantConfig.translationConfig.supportedLanguages[0];
+    // Step 2: Determine target language
+    // Priority: 1) Patient's preferred language (if supported), 2) First supported language
+    let targetLanguage = tenantConfig.translationConfig.supportedLanguages[0];
+
+    if (event.preferredLanguage) {
+      // Check if the preferred language is supported
+      if (tenantConfig.translationConfig.supportedLanguages.includes(event.preferredLanguage)) {
+        targetLanguage = event.preferredLanguage;
+        logger.info('Using patient preferred language for translation', {
+          preferredLanguage: event.preferredLanguage,
+          patientId: event.patientId,
+          compositionId: event.compositionId,
+        });
+      } else {
+        logger.warning('Patient preferred language not supported, using default', {
+          preferredLanguage: event.preferredLanguage,
+          defaultLanguage: targetLanguage,
+          supportedLanguages: tenantConfig.translationConfig.supportedLanguages,
+          patientId: event.patientId,
+          compositionId: event.compositionId,
+        });
+      }
+    } else {
+      logger.info('No patient preferred language provided, using first supported language', {
+        targetLanguage,
+        compositionId: event.compositionId,
+      });
+    }
 
     logger.info('Translating to target language', {
       targetLanguage,
@@ -124,7 +148,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     let totalTokensUsed = 0;
 
     // Translate discharge summary if available
-    const summaryFile = event.simplifiedFiles.find(f => f.type === 'discharge-summary');
+    const summaryFile = event.simplifiedFiles.find((f: SimplifiedFile) => f.type === 'discharge-summary');
     if (summaryFile) {
       logger.debug('Step 2a: Translating discharge summary');
 
@@ -154,7 +178,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     }
 
     // Translate discharge instructions if available
-    const instructionsFile = event.simplifiedFiles.find(f => f.type === 'discharge-instructions');
+    const instructionsFile = event.simplifiedFiles.find((f: SimplifiedFile) => f.type === 'discharge-instructions');
     if (instructionsFile) {
       logger.debug('Step 2b: Translating discharge instructions');
 
@@ -205,12 +229,12 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
         dischargeSummary: translatedResults.dischargeSummary ? {
           content: translatedResults.dischargeSummary.content,
           language: translatedResults.dischargeSummary.language,
-          gcsPath: translatedFiles.find(f => f.type === 'discharge-summary')?.translatedPath || '',
+          gcsPath: translatedFiles.find((f: any) => f.type === 'discharge-summary')?.translatedPath || '',
         } : undefined,
         dischargeInstructions: translatedResults.dischargeInstructions ? {
           content: translatedResults.dischargeInstructions.content,
           language: translatedResults.dischargeInstructions.language,
-          gcsPath: translatedFiles.find(f => f.type === 'discharge-instructions')?.translatedPath || '',
+          gcsPath: translatedFiles.find((f: any) => f.type === 'discharge-instructions')?.translatedPath || '',
         } : undefined,
       }
     );

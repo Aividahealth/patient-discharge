@@ -39,7 +39,7 @@ import {
 } from "lucide-react"
 
 export default function ClinicianDashboard() {
-  const { tenant, tenantId, token, isLoading, isAuthenticated } = useTenant()
+  const { tenant, tenantId, token, isLoading, isAuthenticated, user } = useTenant()
   const { exportToPDF } = usePDFExport()
   const router = useRouter()
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
@@ -49,11 +49,59 @@ export default function ClinicianDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoadingQueue, setIsLoadingQueue] = useState(true)
   const [isLoadingPatient, setIsLoadingPatient] = useState(false)
-  const [approvalStatus, setApprovalStatus] = useState({
-    medications: false,
-    appointments: false,
-    dietActivity: false,
+  const [isPublishing, setIsPublishing] = useState(false)
+  
+  // Section approvals with audit trail (timestamp and clinician info)
+  const [sectionApprovals, setSectionApprovals] = useState<{
+    medications: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+    appointments: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+    dietActivity: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+  }>({
+    medications: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
+    appointments: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
+    dietActivity: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
   })
+
+  // Additional clarifications
+  const [additionalClarifications, setAdditionalClarifications] = useState("")
+
+  // Redaction preferences
+  const [redactionPreferences, setRedactionPreferences] = useState({
+    redactRoomNumber: false,
+    redactMRN: false,
+    redactInsuranceInfo: false,
+  })
+
+  // Legacy approvalStatus for UI compatibility (derived from sectionApprovals)
+  const approvalStatus = {
+    medications: sectionApprovals.medications.approved,
+    appointments: sectionApprovals.appointments.approved,
+    dietActivity: sectionApprovals.dietActivity.approved,
+  }
 
   const [patients, setPatients] = useState<Array<{
     id: string;
@@ -721,6 +769,33 @@ export default function ClinicianDashboard() {
     }
   }, [selectedPatient, patients, token, tenantId]);
 
+  // Reset approval state and clarifications when patient changes
+  useEffect(() => {
+    setSectionApprovals({
+      medications: {
+        approved: false,
+        approvedAt: null,
+        approvedBy: null,
+      },
+      appointments: {
+        approved: false,
+        approvedAt: null,
+        approvedBy: null,
+      },
+      dietActivity: {
+        approved: false,
+        approvedAt: null,
+        approvedBy: null,
+      },
+    })
+    setAdditionalClarifications("")
+    setRedactionPreferences({
+      redactRoomNumber: false,
+      redactMRN: false,
+      redactInsuranceInfo: false,
+    })
+  }, [selectedPatient])
+
   const getCurrentPatientData = () => {
     return selectedPatient ? patientMedicalData[selectedPatient] : null
   }
@@ -841,8 +916,111 @@ export default function ClinicianDashboard() {
     }
   };
 
-  const toggleApproval = (section: keyof typeof approvalStatus) => {
-    setApprovalStatus((prev) => ({ ...prev, [section]: !prev[section] }))
+  const toggleApproval = (section: 'medications' | 'appointments' | 'dietActivity') => {
+    setSectionApprovals((prev) => {
+      const currentApproval = prev[section].approved
+      const newApproval = !currentApproval
+      
+      return {
+        ...prev,
+        [section]: {
+          approved: newApproval,
+          approvedAt: newApproval ? new Date().toISOString() : null,
+          approvedBy: newApproval && user ? {
+            id: user.id,
+            name: user.name,
+          } : null,
+        },
+      }
+    })
+  }
+
+  const handlePublish = async () => {
+    if (!currentPatient || !currentPatient.compositionId || !token || !tenantId || !user) {
+      console.error('[ClinicianPortal] Missing required data for publish')
+      return
+    }
+
+    // Validate all sections are approved
+    if (!sectionApprovals.medications.approved || 
+        !sectionApprovals.appointments.approved || 
+        !sectionApprovals.dietActivity.approved) {
+      alert('Please approve all required sections before publishing.')
+      return
+    }
+
+    setIsPublishing(true)
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+      const clarificationsText = additionalClarifications.trim() || "None"
+
+      const requestBody = {
+        additionalClarifications: clarificationsText,
+        publish: true,
+        sectionApprovals: {
+          medications: {
+            approved: sectionApprovals.medications.approved,
+            approvedAt: sectionApprovals.medications.approvedAt!,
+            approvedBy: sectionApprovals.medications.approvedBy!,
+          },
+          appointments: {
+            approved: sectionApprovals.appointments.approved,
+            approvedAt: sectionApprovals.appointments.approvedAt!,
+            approvedBy: sectionApprovals.appointments.approvedBy!,
+          },
+          dietActivity: {
+            approved: sectionApprovals.dietActivity.approved,
+            approvedAt: sectionApprovals.dietActivity.approvedAt!,
+            approvedBy: sectionApprovals.dietActivity.approvedBy!,
+          },
+        },
+        redactionPreferences: {
+          redactRoomNumber: redactionPreferences.redactRoomNumber,
+          redactMRN: redactionPreferences.redactMRN,
+          redactInsuranceInfo: redactionPreferences.redactInsuranceInfo,
+        },
+        clinician: {
+          id: user.id,
+          name: user.name,
+          email: user.username, // Using username as email if available
+        },
+      }
+
+      const response = await fetch(
+        `${apiUrl}/api/discharge-summary/${currentPatient.compositionId}/publish`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-Tenant-ID': tenantId,
+          },
+          body: JSON.stringify(requestBody),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }))
+        throw new Error(errorData.message || `Failed to publish: ${response.status} ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('[ClinicianPortal] Publish successful:', result)
+
+      // Show success message
+      alert('Discharge summary published successfully!')
+
+      // Optionally reload the patient data or refresh the queue
+      if (currentPatient.compositionId) {
+        await refreshComposition()
+      }
+    } catch (error) {
+      console.error('[ClinicianPortal] Failed to publish:', error)
+      alert(error instanceof Error ? error.message : 'Failed to publish discharge summary. Please try again.')
+    } finally {
+      setIsPublishing(false)
+    }
   }
 
   const printDischargeSummary = () => {
@@ -1392,7 +1570,15 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">{t.medications}</p>
-                            <p className="text-xs text-muted-foreground">3 {t.medicationsListed}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(() => {
+                                const medCount = currentPatient?.originalInstructionsParsed?.dischargeMedications
+                                  ? (currentPatient.originalInstructionsParsed.dischargeMedications.new?.length || 0) +
+                                    (currentPatient.originalInstructionsParsed.dischargeMedications.continued?.length || 0)
+                                  : 0;
+                                return `${medCount} ${t.medicationsListed}`;
+                              })()}
+                            </p>
                           </div>
                         </div>
                         <Switch
@@ -1411,7 +1597,12 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">Appointments</p>
-                            <p className="text-xs text-muted-foreground">2 {t.appointmentsScheduled}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(() => {
+                                const apptCount = currentPatient?.originalInstructionsParsed?.followUpAppointments?.length || 0;
+                                return `${apptCount} ${t.appointmentsScheduled}`;
+                              })()}
+                            </p>
                           </div>
                         </div>
                         <Switch
@@ -1453,19 +1644,37 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                         <Label htmlFor="sensitive-info">{t.redactSensitiveInfo}</Label>
                         <div className="mt-2 space-y-2">
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-room" />
+                            <Switch 
+                              id="redact-room" 
+                              checked={redactionPreferences.redactRoomNumber}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactRoomNumber: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-room" className="text-sm">
                               {t.roomNumber}
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-mrn" />
+                            <Switch 
+                              id="redact-mrn" 
+                              checked={redactionPreferences.redactMRN}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactMRN: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-mrn" className="text-sm">
                               {t.medicalRecordNumber}
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-insurance" />
+                            <Switch 
+                              id="redact-insurance" 
+                              checked={redactionPreferences.redactInsuranceInfo}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactInsuranceInfo: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-insurance" className="text-sm">
                               {t.insuranceInformation}
                             </Label>
@@ -1479,6 +1688,8 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           className="mt-2"
                           rows={4}
                           placeholder={t.addNotes}
+                          value={additionalClarifications}
+                          onChange={(e) => setAdditionalClarifications(e.target.value)}
                         />
                       </div>
                     </div>
@@ -1503,11 +1714,12 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
-                      disabled={!Object.values(approvalStatus).every(Boolean)}
+                      disabled={!Object.values(approvalStatus).every(Boolean) || isPublishing}
+                      onClick={handlePublish}
                       className="bg-green-600 hover:bg-green-700"
                     >
                       <Send className="h-4 w-4 mr-2" />
-                      {t.publishToPatient}
+                      {isPublishing ? 'Publishing...' : t.publishToPatient}
                     </Button>
                   </div>
                 </div>

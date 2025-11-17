@@ -91,19 +91,65 @@ fi
 echo -e "${GREEN}Step 1: Building TypeScript...${NC}"
 
 # Build common components first
-cd ../common/common && npm install && npm run build
+cd ../common && npm install && npm run build
 
+# Copy common into translation for Cloud Build
+cd ../translation
 echo "Copying common modules for deployment..."
-cd ../../translation
+cp -r ../common ./common
 
-# Back up source files
+# Backup original files
 echo "Backing up source files..."
-mkdir -p .backup
-cp -r *.ts .backup/ 2>/dev/null || true
+for file in *.ts; do
+  if [ -f "$file" ]; then
+    cp "$file" "$file.backup"
+  fi
+done
 
-# Copy common lib to translation directory
+# Update imports to use ./common instead of ../common
 echo "Updating import statements..."
-cp -r ../common/common ./common
+for file in *.ts; do
+  if [ -f "$file" ]; then
+    sed -i.tmp "s|from '../common/|from './common/|g" "$file"
+    rm -f "$file.tmp"
+  fi
+done
+
+# Also backup and update tsconfig
+cp tsconfig.json tsconfig.json.backup
+cat > tsconfig.json <<'TSCONFIG_EOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "outDir": "./lib",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "baseUrl": "./",
+    "paths": {
+      "@common/*": ["./common/*"]
+    }
+  },
+  "include": [
+    "./**/*.ts",
+    "./common/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib",
+    "**/*.test.ts"
+  ]
+}
+TSCONFIG_EOF
 
 # Install dependencies and build
 npm install && npm run build
@@ -229,14 +275,15 @@ gcloud functions deploy "$FUNCTION_NAME" \
 
 DEPLOY_STATUS=$?
 
-# Cleanup
-echo ""
+# Clean up and restore original files
 echo "Cleaning up deployment files..."
-rm -rf common
-if [ -d .backup ]; then
-    cp -r .backup/* . 2>/dev/null || true
-    rm -rf .backup
-fi
+rm -rf ./common
+mv tsconfig.json.backup tsconfig.json
+for file in *.ts.backup; do
+  if [ -f "$file" ]; then
+    mv "$file" "${file%.backup}"
+  fi
+done
 
 if [ $DEPLOY_STATUS -ne 0 ]; then
     echo -e "${RED}Error: Deployment failed${NC}"
