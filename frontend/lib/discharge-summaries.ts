@@ -27,6 +27,14 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+export interface QualityMetrics {
+  fleschKincaidGradeLevel?: number;
+  fleschReadingEase?: number;
+  smogIndex?: number;
+  compressionRatio?: number;
+  avgSentenceLength?: number;
+}
+
 export interface DischargeSummaryMetadata {
   id: string;
   patientId?: string;
@@ -45,6 +53,7 @@ export interface DischargeSummaryMetadata {
   updatedAt: Date;
   simplifiedAt?: Date;
   translatedAt?: Date;
+  qualityMetrics?: QualityMetrics;
   metadata?: {
     facility?: string;
     department?: string;

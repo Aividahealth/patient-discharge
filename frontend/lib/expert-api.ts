@@ -22,6 +22,14 @@ export interface ExpertFeedback {
   createdAt: Date;
 }
 
+export interface QualityMetrics {
+  fleschKincaidGradeLevel?: number;
+  fleschReadingEase?: number;
+  smogIndex?: number;
+  compressionRatio?: number;
+  avgSentenceLength?: number;
+}
+
 export interface ReviewSummary {
   id: string;                      // Patient ID
   compositionId: string;           // Composition ID for fetching content
@@ -42,6 +50,7 @@ export interface ReviewSummary {
   latestReviewDate?: Date;
   fileName?: string;               // For display purposes
   language?: string;               // Language for translation reviews
+  qualityMetrics?: QualityMetrics; // Automated quality metrics
 }
 
 export interface ReviewListResponse {
@@ -136,6 +145,7 @@ export async function getReviewList(params?: {
       avgRating: patient.avgRating,
       latestReviewDate: patient.latestReviewDate ? new Date(patient.latestReviewDate) : undefined,
       fileName: patient.fileName || `${patient.mrn}-discharge-summary`,
+      qualityMetrics: patient.qualityMetrics,
     })) || [],
     total: data.meta?.total || 0,
     meta: data.meta

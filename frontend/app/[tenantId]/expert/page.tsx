@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2 } from "lucide-react"
+import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2, BarChart } from "lucide-react"
 import { getReviewList, ReviewSummary, ReviewType } from "@/lib/expert-api"
+import { QualityMetricsCard } from "@/components/quality-metrics-card"
 import { useTenant } from "@/contexts/tenant-context"
 import { getLanguageName } from "@/lib/constants/languages"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -269,6 +270,17 @@ export default function ExpertPortalPage() {
                     header: 'Rating',
                     render: (summary: ReviewSummary) =>
                       ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                  },
+                  {
+                    key: 'qualityMetrics',
+                    header: 'Quality Metrics',
+                    render: (summary: ReviewSummary) => (
+                      summary.qualityMetrics ? (
+                        <QualityMetricsCard metrics={summary.qualityMetrics} compact />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No metrics</span>
+                      )
+                    )
                   },
                   {
                     key: 'status',
