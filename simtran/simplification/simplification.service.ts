@@ -186,71 +186,84 @@ export class SimplificationService {
    * - Ensure sections are in the canonical order
    */
   private normalizeSimplifiedMarkdown(text: string): string {
-    const sectionOrder = [
-      'Overview',
-      'Your Medications',
-      'Upcoming Appointments',
-      'Diet & Activity',
-      'Warning Signs',
+    const sectionOrder = ['Overview', 'Your Medications', 'Upcoming Appointments', 'Diet & Activity', 'Warning Signs'] as const;
+    type SectionName = typeof sectionOrder[number];
+
+    // Define header patterns (with or without markdown ##, optional colon)
+    const headerPatterns: Array<{ name: SectionName; regex: RegExp }> = [
+      { name: 'Overview', regex: /^(?:##\s*)?(?:Overview)\s*:?\s*$/i },
+      { name: 'Your Medications', regex: /^(?:##\s*)?(?:Your\s+Medications|Medications|Medication)\s*:?\s*$/i },
+      { name: 'Upcoming Appointments', regex: /^(?:##\s*)?(?:Upcoming\s+Appointments|Your\s+appointments|Appointments|Follow-?up(?:\s+appointments)?)\s*:?\s*$/i },
+      { name: 'Diet & Activity', regex: /^(?:##\s*)?(?:Diet\s*&?\s*Activity|Diet\s+and\s+Activity|Activity\s+guidelines|Activity)\s*:?\s*$/i },
+      { name: 'Warning Signs', regex: /^(?:##\s*)?(?:Warning\s+Signs)\s*:?\s*$/i },
     ];
 
-    // Build regex to split on H2 headings "## <Section>"
-    const headingRegex = /^##\s+(Overview|Your Medications|Upcoming Appointments|Diet\s*&\s*Activity|Diet\s*&?\s*Activity|Warning Signs)\s*$/im;
     const lines = text.split('\n');
 
-    // Find indices of headings
-    const sectionsFound: Array<{ name: string; start: number; end: number }> = [];
-    for (let i = 0; i < lines.length; i++) {
-      const m = lines[i].match(headingRegex);
-      if (m) {
-        const name = m[1]
-          .replace(/Diet\s*&\s*Activity|Diet\s*&?\s*Activity/i, 'Diet & Activity');
-        sectionsFound.push({ name, start: i, end: lines.length });
-      }
-    }
-
-    // Determine section ranges
-    for (let i = 0; i < sectionsFound.length - 1; i++) {
-      sectionsFound[i].end = sectionsFound[i + 1].start;
-    }
-
-    // Keep only the first occurrence of each section
-    const firstOccurrence: Record<string, { start: number; end: number } | undefined> = {};
-    for (const s of sectionsFound) {
-      if (!firstOccurrence[s.name]) {
-        firstOccurrence[s.name] = { start: s.start, end: s.end };
-      }
-    }
-
-    // Helper to extract clean content for a section and strip any stray subheadings for other sections
-    const stripCrossSectionContent = (contentLines: string[]): string[] => {
-      const otherHeading = /^##\s+/i;
-      const allowedSub = /^###\s+|^####\s+/i;
-      const result: string[] = [];
-      for (const line of contentLines) {
-        // Stop if another H2 heading (should not happen inside extracted range, but safe)
-        if (otherHeading.test(line)) break;
-        result.push(line);
-      }
-      // Trim trailing empty lines
-      while (result.length > 0 && result[result.length - 1].trim() === '') {
-        result.pop();
-      }
-      return result;
+    // Scan and capture only first occurrence per section
+    const captured: Record<SectionName, string[] | undefined> = {
+      'Overview': undefined,
+      'Your Medications': undefined,
+      'Upcoming Appointments': undefined,
+      'Diet & Activity': undefined,
+      'Warning Signs': undefined,
     };
 
-    // Reassemble in canonical order
-    const out: string[] = [];
-    for (const name of sectionOrder) {
-      const occ = firstOccurrence[name];
-      if (!occ) continue; // Allow missing sections
-      const header = `## ${name}`;
-      const bodyLines = lines.slice(occ.start + 1, occ.end);
-      const cleaned = stripCrossSectionContent(bodyLines);
-      out.push(header, ...cleaned, ''); // add blank line after each
+    let current: SectionName | null = null;
+
+    const isHeaderLine = (line: string): SectionName | null => {
+      for (const { name, regex } of headerPatterns) {
+        if (regex.test(line.trim())) return name;
+      }
+      return null;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const headerName = isHeaderLine(raw);
+      if (headerName) {
+        // Switch to this section only if it's the first time we see it
+        current = captured[headerName] ? null : headerName;
+        // Initialize storage for first-time sections
+        if (current && !captured[current]) {
+          captured[current] = [];
+        }
+        continue;
+      }
+
+      // If currently capturing a section, append non-header lines
+      if (current) {
+        const potentialNextHeader = isHeaderLine(raw);
+        if (potentialNextHeader) {
+          // Next section header encountered; start handling on next iteration
+          current = captured[potentialNextHeader] ? null : potentialNextHeader;
+          if (current && !captured[current]) {
+            captured[current] = [];
+          }
+          continue;
+        }
+        captured[current]!.push(raw);
+      }
     }
 
-    const normalized = out.join('\n').trim();
+    // Trim trailing empty lines in each captured section
+    for (const name of sectionOrder) {
+      const content = captured[name];
+      if (!content) continue;
+      while (content.length > 0 && content[content.length - 1].trim() === '') {
+        content.pop();
+      }
+    }
+
+    // Reassemble in canonical order with single H2 headers
+    const parts: string[] = [];
+    for (const name of sectionOrder) {
+      const content = captured[name];
+      if (!content || content.length === 0) continue;
+      parts.push(`## ${name}`, ...content, '');
+    }
+
+    const normalized = parts.join('\n').trim();
     return normalized.length > 0 ? normalized : text;
   }
 

@@ -519,15 +519,17 @@ export default function ClinicianDashboard() {
       };
     }
 
-    // Try to parse sections based on common headers (case-insensitive, flexible matching)
-    // Match "Your medications:" or "Medications:" followed by content until next section
-    const medicationsMatch = instructionsText.match(/(?:Your\s+medications|Medications|Medication):?\s*\n?\s*(.*?)(?=\n?\s*(?:Your\s+appointments|Appointments|Follow-up|Activity|Activity\s+guidelines|$))/is);
+    // Try to parse sections based on markdown headers (## Header) or plain text headers
+    // Extract content AFTER the header line until the next section
     
-    // Match "Your appointments:" or "Appointments:" followed by content until activity section
-    const appointmentsMatch = instructionsText.match(/(?:Your\s+appointments|Appointments|Follow-up\s+appointments|Follow-up):?\s*\n?\s*(.*?)(?=\n?\s*(?:Activity|Activity\s+guidelines|Diet|$))/is);
+    // Match "## Your Medications" or "Your medications:" and capture content after the header line
+    const medicationsMatch = instructionsText.match(/(?:^|\n)(?:##\s*)?(?:Your\s+medications|Medications|Medication):?\s*\n(.*?)(?=\n(?:##\s*)?(?:Your\s+appointments|Upcoming\s+appointments|Appointments|Follow-up|Activity|Diet\s*&?\s*Activity|Warning\s+Signs|$))/is);
     
-    // Match "Activity guidelines:" or "Activity:" followed by content until end
-    const activityMatch = instructionsText.match(/(?:Activity\s+guidelines|Activity|Diet\s+and\s+activity|Activity\s+restrictions):?\s*\n?\s*(.*?)$/is);
+    // Match "## Upcoming Appointments" or "Your appointments:" and capture content after the header line
+    const appointmentsMatch = instructionsText.match(/(?:^|\n)(?:##\s*)?(?:Upcoming\s+appointments|Your\s+appointments|Appointments|Follow-up\s+appointments|Follow-up):?\s*\n(.*?)(?=\n(?:##\s*)?(?:Activity|Activity\s+guidelines|Diet\s*&?\s*Activity|Warning\s+Signs|$))/is);
+    
+    // Match "## Diet & Activity" or "Activity guidelines:" and capture content after the header line
+    const activityMatch = instructionsText.match(/(?:^|\n)(?:##\s*)?(?:Diet\s*&?\s*Activity|Activity\s+guidelines|Activity|Diet\s+and\s+activity|Activity\s+restrictions):?\s*\n(.*?)(?=\n(?:##\s*)?(?:Warning\s+Signs|Emergency\s+Contacts|$))/is);
 
     return {
       medications: medicationsMatch ? medicationsMatch[1].trim() : '',
