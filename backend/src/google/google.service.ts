@@ -132,11 +132,12 @@ export class GoogleService {
 
   /**
    * Delete a Patient and all dependent resources (cascading delete)
-   * Deletes in order: DocumentReferences -> Composition -> Patient
+   * Deletes in order: Binaries -> DocumentReferences -> Composition -> Patient
    */
   async deletePatientWithDependencies(patientId: string, compositionId: string, ctx: TenantContext): Promise<{
     success: boolean;
     deleted: {
+      binaries: string[];
       documentReferences: string[];
       composition: string | null;
       patient: string | null;
@@ -144,6 +145,7 @@ export class GoogleService {
     errors: Array<{ resourceType: string; id: string; error: string }>;
   }> {
     const deleted = {
+      binaries: [] as string[],
       documentReferences: [] as string[],
       composition: null as string | null,
       patient: null as string | null,
@@ -153,7 +155,10 @@ export class GoogleService {
     const client = await this.getFhirClient(ctx);
 
     try {
-      // Step 1: Find and delete all DocumentReferences for this patient
+      // Step 1: Find all DocumentReferences for this patient and extract Binary IDs
+      const binaryIds = new Set<string>();
+      const documentReferenceIds: string[] = [];
+
       try {
         const docRefSearch = await client.get('/DocumentReference', {
           params: { patient: patientId, _count: 100 },
@@ -163,18 +168,20 @@ export class GoogleService {
           for (const entry of docRefSearch.data.entry) {
             const docRef = entry.resource;
             if (docRef?.id) {
-              try {
-                await client.delete(`/DocumentReference/${docRef.id}`);
-                deleted.documentReferences.push(docRef.id);
-                console.log(`✅ Deleted DocumentReference: ${docRef.id}`);
-              } catch (error: any) {
-                const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
-                errors.push({
-                  resourceType: 'DocumentReference',
-                  id: docRef.id,
-                  error: errorMsg,
-                });
-                console.error(`❌ Failed to delete DocumentReference ${docRef.id}:`, errorMsg);
+              documentReferenceIds.push(docRef.id);
+              
+              // Extract Binary IDs from DocumentReference content
+              if (docRef.content && Array.isArray(docRef.content)) {
+                for (const contentItem of docRef.content) {
+                  if (contentItem.attachment?.url) {
+                    const url = contentItem.attachment.url;
+                    // Extract Binary ID from URL like "Binary/{id}" or "https://.../Binary/{id}"
+                    const binaryMatch = url.match(/Binary\/([^\/\?]+)/);
+                    if (binaryMatch && binaryMatch[1]) {
+                      binaryIds.add(binaryMatch[1]);
+                    }
+                  }
+                }
               }
             }
           }
@@ -184,7 +191,67 @@ export class GoogleService {
         // Continue with deletion even if search fails
       }
 
-      // Step 2: Delete Composition
+      // Step 1b: Also extract Binary IDs from Composition sections
+      try {
+        const composition = await client.get(`/Composition/${compositionId}`);
+        if (composition.data?.section && Array.isArray(composition.data.section)) {
+          for (const section of composition.data.section) {
+            if (section.entry && Array.isArray(section.entry)) {
+              for (const entry of section.entry) {
+                if (entry.reference) {
+                  const ref = entry.reference;
+                  // Extract Binary ID from reference like "Binary/{id}"
+                  const binaryMatch = ref.match(/^Binary\/([^\/]+)$/);
+                  if (binaryMatch && binaryMatch[1]) {
+                    binaryIds.add(binaryMatch[1]);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Error reading Composition to extract Binary IDs:`, error.message);
+        // Continue with deletion even if this fails
+      }
+
+      // Step 2: Delete all Binary resources first
+      for (const binaryId of Array.from(binaryIds)) {
+        try {
+          await client.delete(`/Binary/${binaryId}`);
+          deleted.binaries.push(binaryId);
+          console.log(`✅ Deleted Binary: ${binaryId}`);
+        } catch (error: any) {
+          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+          errors.push({
+            resourceType: 'Binary',
+            id: binaryId,
+            error: errorMsg,
+          });
+          console.error(`❌ Failed to delete Binary ${binaryId}:`, errorMsg);
+          // Continue with other deletions even if one Binary fails
+        }
+      }
+
+      // Step 3: Delete all DocumentReferences
+      for (const docRefId of documentReferenceIds) {
+        try {
+          await client.delete(`/DocumentReference/${docRefId}`);
+          deleted.documentReferences.push(docRefId);
+          console.log(`✅ Deleted DocumentReference: ${docRefId}`);
+        } catch (error: any) {
+          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+          errors.push({
+            resourceType: 'DocumentReference',
+            id: docRefId,
+            error: errorMsg,
+          });
+          console.error(`❌ Failed to delete DocumentReference ${docRefId}:`, errorMsg);
+          // Continue with other deletions even if one DocumentReference fails
+        }
+      }
+
+      // Step 4: Delete Composition
       try {
         await client.delete(`/Composition/${compositionId}`);
         deleted.composition = compositionId;
@@ -201,7 +268,7 @@ export class GoogleService {
         throw new Error(`Failed to delete Composition: ${errorMsg}`);
       }
 
-      // Step 3: Delete Patient
+      // Step 5: Delete Patient
       try {
         await client.delete(`/Patient/${patientId}`);
         deleted.patient = patientId;
