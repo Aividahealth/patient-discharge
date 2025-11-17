@@ -130,6 +130,99 @@ export class GoogleService {
     return data;
   }
 
+  /**
+   * Delete a Patient and all dependent resources (cascading delete)
+   * Deletes in order: DocumentReferences -> Composition -> Patient
+   */
+  async deletePatientWithDependencies(patientId: string, compositionId: string, ctx: TenantContext): Promise<{
+    success: boolean;
+    deleted: {
+      documentReferences: string[];
+      composition: string | null;
+      patient: string | null;
+    };
+    errors: Array<{ resourceType: string; id: string; error: string }>;
+  }> {
+    const deleted = {
+      documentReferences: [] as string[],
+      composition: null as string | null,
+      patient: null as string | null,
+    };
+    const errors: Array<{ resourceType: string; id: string; error: string }> = [];
+
+    const client = await this.getFhirClient(ctx);
+
+    try {
+      // Step 1: Find and delete all DocumentReferences for this patient
+      try {
+        const docRefSearch = await client.get('/DocumentReference', {
+          params: { patient: patientId, _count: 100 },
+        });
+
+        if (docRefSearch.data?.entry) {
+          for (const entry of docRefSearch.data.entry) {
+            const docRef = entry.resource;
+            if (docRef?.id) {
+              try {
+                await client.delete(`/DocumentReference/${docRef.id}`);
+                deleted.documentReferences.push(docRef.id);
+                console.log(`✅ Deleted DocumentReference: ${docRef.id}`);
+              } catch (error: any) {
+                const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+                errors.push({
+                  resourceType: 'DocumentReference',
+                  id: docRef.id,
+                  error: errorMsg,
+                });
+                console.error(`❌ Failed to delete DocumentReference ${docRef.id}:`, errorMsg);
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Error searching for DocumentReferences:`, error.message);
+        // Continue with deletion even if search fails
+      }
+
+      // Step 2: Delete Composition
+      try {
+        await client.delete(`/Composition/${compositionId}`);
+        deleted.composition = compositionId;
+        console.log(`✅ Deleted Composition: ${compositionId}`);
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+        errors.push({
+          resourceType: 'Composition',
+          id: compositionId,
+          error: errorMsg,
+        });
+        console.error(`❌ Failed to delete Composition ${compositionId}:`, errorMsg);
+        // Don't continue to Patient deletion if Composition deletion fails
+        throw new Error(`Failed to delete Composition: ${errorMsg}`);
+      }
+
+      // Step 3: Delete Patient
+      try {
+        await client.delete(`/Patient/${patientId}`);
+        deleted.patient = patientId;
+        console.log(`✅ Deleted Patient: ${patientId}`);
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+        errors.push({
+          resourceType: 'Patient',
+          id: patientId,
+          error: errorMsg,
+        });
+        console.error(`❌ Failed to delete Patient ${patientId}:`, errorMsg);
+        throw error;
+      }
+
+      return { success: true, deleted, errors };
+    } catch (error: any) {
+      return { success: false, deleted, errors };
+    }
+  }
+
   async fhirBundle(bundle: any, ctx: TenantContext) {
     // For bundles, we need to check if all resource types in the bundle are allowed
     if (bundle.entry && Array.isArray(bundle.entry)) {

@@ -127,35 +127,27 @@ export default function ExpertPortalPage() {
       setDeleting(true)
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
       
-      // Step 1: Delete Composition first
-      const compositionResp = await fetch(`${apiUrl}/google/fhir/Composition/${patientToDelete.compositionId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': tenantId,
-        },
-      })
+      // Use cascading delete endpoint that handles DocumentReferences, Composition, and Patient
+      const deleteResp = await fetch(
+        `${apiUrl}/google/fhir/Patient/${patientToDelete.id}/with-dependencies?compositionId=${patientToDelete.compositionId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-Tenant-ID': tenantId,
+          },
+        }
+      )
       
-      if (!compositionResp.ok) {
-        const msg = await compositionResp.text().catch(() => compositionResp.statusText)
-        throw new Error(`Failed to delete composition: ${compositionResp.status} ${msg}`)
+      if (!deleteResp.ok) {
+        const errorData = await deleteResp.json().catch(() => ({ message: deleteResp.statusText }))
+        const errorMsg = errorData.message || `Failed to delete: ${deleteResp.status} ${deleteResp.statusText}`
+        throw new Error(errorMsg)
       }
       
-      // Step 2: Delete Patient
-      const patientResp = await fetch(`${apiUrl}/google/fhir/Patient/${patientToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': tenantId,
-        },
-      })
-      
-      if (!patientResp.ok) {
-        const msg = await patientResp.text().catch(() => patientResp.statusText)
-        throw new Error(`Failed to delete patient: ${patientResp.status} ${msg}`)
-      }
+      const result = await deleteResp.json()
+      console.log('[ExpertPortal] Delete result:', result)
       
       await loadSummaries()
       setDeleteDialogOpen(false)
