@@ -30,6 +30,10 @@ What Happened During Your Stay
   (Foods to Include, Foods to Limit, Recommended Activities, Activities to Avoid) 
 ## Warning Signs 
   (When to Call 911, When to Call Your Doctor, Emergency Contacts)
+Important structural rules:
+- Each section must contain ONLY information relevant to that section. Do not include medication, appointment, diet, activity, or warning-signs content inside the Overview, and do not mix content across sections.
+- Do NOT repeat the same content in multiple sections. If an item belongs to multiple places, include it in the most appropriate section only (no duplication).
+- Output each section exactly once and in the order above. Do not add extra sections or sub-headers outside the specified structure.
 ---
 ## Helpful Context (Without Interpretation)
 Briefly explain medical terms, procedures, or test names **only if they appear in the original**. 
@@ -96,6 +100,13 @@ Remember to:
 - Break down complex sentences
 - Keep all dates, medications, and follow-up instructions exactly as written
 - NEVER add information not present in the original document
+- Do NOT repeat information across sections; include each fact only once in the most appropriate section
+- Keep sections isolated: 
+  * Overview: high-level reasons and what happened (NO medications/appointments/diet/activity/warning signs here)
+  * Your Medications: only medication names, doses, frequencies, when to take, special instructions
+  * Upcoming Appointments: only appointments and scheduling info
+  * Diet & Activity: only dietary guidance and activity guidelines
+  * Warning Signs: only when to seek help (911), when to call doctor, emergency contacts
 - If information is missing for a section, write "Not specified in your discharge summary"
 - Structure the output in these specific sections:
   * ## Overview (with "Reasons for Hospital Stay" and "What Happened During Your Stay")
