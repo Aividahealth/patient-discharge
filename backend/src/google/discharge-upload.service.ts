@@ -833,7 +833,10 @@ export class DischargeUploadService {
         }
       }
 
-      this.logger.log(`✅ Retrieved ${patients.length} patients from discharge queue`);
+      // Filter out patients with status "approved"
+      const filteredPatients = patients.filter(patient => patient.status !== 'approved');
+      
+      this.logger.log(`✅ Retrieved ${filteredPatients.length} patients from discharge queue (${patients.length - filteredPatients.length} approved patients filtered out)`);
 
       // Fetch quality metrics for all compositions in batch
       const compositionIds = patients.map(p => p.compositionId);
@@ -850,9 +853,9 @@ export class DischargeUploadService {
       this.logger.log(`✅ Added quality metrics to ${qualityMetricsMap.size}/${patients.length} patients`);
 
       return {
-        patients,
+        patients: filteredPatients,
         meta: {
-          total: patients.length,
+          total: filteredPatients.length,
           ...statusCounts,
         },
       };

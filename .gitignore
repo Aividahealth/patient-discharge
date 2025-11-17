@@ -108,13 +108,10 @@ temp/
 *.tmp
 
 # Google Cloud Service Account credentials
-backend/.settings.dev/
-backend/.settings.prod/
-backend/.settings.staging/
-backend/.settings.*/
-**/*_sa.json
-**/*service-account*.json
-**/*credentials*.json
-
-# TypeScript build cache
-*.tsbuildinfo
+# backend/.settings.dev/
+# backend/.settings.prod/
+# backend/.settings.staging/
+# backend/.settings.*/
+# **/*_sa.json
+# **/*service-account*.json
+# **/*credentials*.json
