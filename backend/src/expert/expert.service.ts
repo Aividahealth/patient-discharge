@@ -9,6 +9,8 @@ import type {
   ReviewSummary,
   ReviewListQuery,
   ReviewListResponse,
+  FeedbackStats,
+  FeedbackResponse,
 } from './expert.types';
 import { resolveServiceAccountPath } from '../utils/path.helper';
 import { TenantContext } from '../tenant/tenant-context';
@@ -170,30 +172,194 @@ export class ExpertService {
   }
 
   /**
-   * Get feedback for a specific discharge summary
+   * Get feedback for a specific discharge summary with aggregated statistics
    */
   async getFeedbackForSummary(
     summaryId: string,
-    reviewType?: string,
-  ): Promise<ExpertFeedback[]> {
+    options: {
+      reviewType?: 'simplification' | 'translation';
+      includeStats?: boolean;
+      includeFeedback?: boolean;
+      limit?: number;
+      offset?: number;
+      sortBy?: 'reviewDate' | 'rating' | 'createdAt';
+      sortOrder?: 'asc' | 'desc';
+      tenantId?: string;
+    } = {},
+  ): Promise<FeedbackResponse> {
+    const {
+      reviewType,
+      includeStats = true,
+      includeFeedback = true,
+      limit = 50,
+      offset = 0,
+      sortBy = 'reviewDate',
+      sortOrder = 'desc',
+      tenantId,
+    } = options;
+
     const firestore = this.getFirestore();
 
+    // Build base query
     let query = firestore
       .collection(this.feedbackCollection)
       .where('dischargeSummaryId', '==', summaryId) as any;
 
+    // Filter by tenant if provided
+    if (tenantId) {
+      query = query.where('tenantId', '==', tenantId);
+    }
+
+    // Filter by review type if provided
     if (reviewType) {
       query = query.where('reviewType', '==', reviewType);
     }
 
-    const snapshot = await query.orderBy('reviewDate', 'desc').get();
-
-    return snapshot.docs.map((doc) => ({
+    // Get all matching feedback for stats calculation
+    const allSnapshot = await query.get();
+    const allFeedback = allSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
       reviewDate: doc.data().reviewDate?.toDate?.() || doc.data().reviewDate,
       createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+      updatedAt: doc.data().updatedAt?.toDate?.() || doc.data().updatedAt,
     })) as ExpertFeedback[];
+
+    // Calculate statistics
+    let stats: FeedbackStats | undefined;
+    if (includeStats) {
+      stats = this.calculateFeedbackStats(allFeedback);
+    }
+
+    // Get paginated and sorted feedback
+    let feedback: ExpertFeedback[] = [];
+    if (includeFeedback) {
+      // Sort feedback
+      const sortedFeedback = [...allFeedback].sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+
+        switch (sortBy) {
+          case 'rating':
+            aValue = a.overallRating;
+            bValue = b.overallRating;
+            break;
+          case 'createdAt':
+            aValue = a.createdAt;
+            bValue = b.createdAt;
+            break;
+          case 'reviewDate':
+          default:
+            aValue = a.reviewDate;
+            bValue = b.reviewDate;
+            break;
+        }
+
+        if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      });
+
+      // Apply pagination
+      feedback = sortedFeedback.slice(offset, offset + limit);
+    }
+
+    return {
+      success: true,
+      summaryId,
+      stats,
+      feedback,
+      pagination: {
+        total: allFeedback.length,
+        limit,
+        offset,
+        hasMore: offset + limit < allFeedback.length,
+      },
+    };
+  }
+
+  /**
+   * Calculate aggregated statistics from feedback array
+   */
+  private calculateFeedbackStats(feedback: ExpertFeedback[]): FeedbackStats {
+    if (feedback.length === 0) {
+      return {
+        totalReviews: 0,
+        simplificationReviews: 0,
+        translationReviews: 0,
+        averageRating: 0,
+        simplificationRating: 0,
+        translationRating: 0,
+        latestReviewDate: null,
+        latestSimplificationReview: null,
+        latestTranslationReview: null,
+        hasHallucination: false,
+        hasMissingInfo: false,
+        ratingDistribution: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 },
+      };
+    }
+
+    const simplificationFeedback = feedback.filter((f) => f.reviewType === 'simplification');
+    const translationFeedback = feedback.filter((f) => f.reviewType === 'translation');
+
+    // Calculate average ratings
+    const totalRating = feedback.reduce((sum, f) => sum + f.overallRating, 0);
+    const simplificationRating =
+      simplificationFeedback.length > 0
+        ? simplificationFeedback.reduce((sum, f) => sum + f.overallRating, 0) /
+          simplificationFeedback.length
+        : 0;
+    const translationRating =
+      translationFeedback.length > 0
+        ? translationFeedback.reduce((sum, f) => sum + f.overallRating, 0) /
+          translationFeedback.length
+        : 0;
+
+    // Find latest review dates
+    const reviewDates = feedback
+      .map((f) => f.reviewDate)
+      .filter((d) => d)
+      .map((d) => (d instanceof Date ? d : new Date(d)))
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    const simplificationDates = simplificationFeedback
+      .map((f) => f.reviewDate)
+      .filter((d) => d)
+      .map((d) => (d instanceof Date ? d : new Date(d)))
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    const translationDates = translationFeedback
+      .map((f) => f.reviewDate)
+      .filter((d) => d)
+      .map((d) => (d instanceof Date ? d : new Date(d)))
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    // Rating distribution
+    const ratingDistribution: { [key: string]: number } = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+    feedback.forEach((f) => {
+      ratingDistribution[f.overallRating.toString()]++;
+    });
+
+    // Check for flags
+    const hasHallucination = feedback.some((f) => f.hasHallucination);
+    const hasMissingInfo = feedback.some((f) => f.hasMissingInfo);
+
+    return {
+      totalReviews: feedback.length,
+      simplificationReviews: simplificationFeedback.length,
+      translationReviews: translationFeedback.length,
+      averageRating: totalRating / feedback.length,
+      simplificationRating,
+      translationRating,
+      latestReviewDate: reviewDates.length > 0 ? reviewDates[0].toISOString() : null,
+      latestSimplificationReview:
+        simplificationDates.length > 0 ? simplificationDates[0].toISOString() : null,
+      latestTranslationReview:
+        translationDates.length > 0 ? translationDates[0].toISOString() : null,
+      hasHallucination,
+      hasMissingInfo,
+      ratingDistribution,
+    };
   }
 
   /**

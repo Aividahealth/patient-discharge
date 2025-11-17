@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2 } from "lucide-react"
-import { getReviewList, ReviewSummary, ReviewType } from "@/lib/expert-api"
+import { getReviewList, getFeedbackStats, ReviewSummary, ReviewType } from "@/lib/expert-api"
 import { useTenant } from "@/contexts/tenant-context"
 import { getLanguageName } from "@/lib/constants/languages"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -63,8 +63,43 @@ export default function ExpertPortalPage() {
         getReviewList({ type: 'simplification', filter, limit: 50, tenantId, token }),
         getReviewList({ type: 'translation', filter, limit: 50, tenantId, token })
       ])
-      setMedicalSummaries(medicalResponse.summaries)
-      setLanguageSummaries(languageResponse.summaries)
+
+      // Fetch stats for each summary in parallel
+      const fetchStatsForSummaries = async (summaries: ReviewSummary[], reviewType: ReviewType) => {
+        const statsPromises = summaries.map(async (summary) => {
+          try {
+            const statsResponse = await getFeedbackStats(
+              summary.compositionId,
+              { reviewType, includeStats: true, includeFeedback: false },
+              { tenantId, token }
+            )
+            return {
+              ...summary,
+              stats: statsResponse.stats,
+              // Update reviewCount and avgRating from stats if available
+              reviewCount: statsResponse.stats?.totalReviews ?? summary.reviewCount ?? 0,
+              avgRating: reviewType === 'simplification' 
+                ? statsResponse.stats?.simplificationRating ?? summary.avgRating
+                : statsResponse.stats?.translationRating ?? summary.avgRating,
+              latestReviewDate: statsResponse.stats?.latestReviewDate 
+                ? new Date(statsResponse.stats.latestReviewDate) 
+                : summary.latestReviewDate,
+            }
+          } catch (error) {
+            console.error(`[ExpertPortal] Failed to fetch stats for ${summary.compositionId}:`, error)
+            return summary
+          }
+        })
+        return Promise.all(statsPromises)
+      }
+
+      const [medicalWithStats, languageWithStats] = await Promise.all([
+        fetchStatsForSummaries(medicalResponse.summaries, 'simplification'),
+        fetchStatsForSummaries(languageResponse.summaries, 'translation')
+      ])
+
+      setMedicalSummaries(medicalWithStats)
+      setLanguageSummaries(languageWithStats)
     } catch (error) {
       console.error('[ExpertPortal] Failed to load summaries:', error)
     } finally {
@@ -262,19 +297,79 @@ export default function ExpertPortalPage() {
                   {
                     key: 'reviewCount',
                     header: 'Reviews',
-                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount || 0)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="text-sm font-medium">
+                              {stats.simplificationReviews} simplification
+                            </div>
+                            {stats.translationReviews > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {stats.translationReviews} translation
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.count(summary.reviewCount || 0)
+                    }
                   },
                   {
                     key: 'rating',
                     header: 'Rating',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1">
+                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm font-medium">
+                                {stats.simplificationRating.toFixed(1)}
+                              </span>
+                            </div>
+                            {stats.translationRating > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Trans: {stats.translationRating.toFixed(1)}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    }
                   },
                   {
                     key: 'status',
                     header: 'Status',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.status(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      const reviewCount = stats?.totalReviews ?? summary.reviewCount ?? 0
+                      const avgRating = stats?.simplificationRating ?? summary.avgRating
+                      const hasIssues = stats?.hasHallucination || stats?.hasMissingInfo
+                      
+                      return (
+                        <div className="flex flex-col gap-1">
+                          {ColumnRenderers.status(reviewCount, avgRating)}
+                          {hasIssues && (
+                            <div className="flex gap-1 mt-1">
+                              {stats?.hasHallucination && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Hallucination
+                                </Badge>
+                              )}
+                              {stats?.hasMissingInfo && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Missing Info
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
                   },
                   {
                     key: 'latestReviewDate',
@@ -386,19 +481,79 @@ export default function ExpertPortalPage() {
                   {
                     key: 'reviewCount',
                     header: 'Reviews',
-                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount || 0)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="text-sm font-medium">
+                              {stats.translationReviews} translation
+                            </div>
+                            {stats.simplificationReviews > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {stats.simplificationReviews} simplification
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.count(summary.reviewCount || 0)
+                    }
                   },
                   {
                     key: 'rating',
                     header: 'Rating',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1">
+                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm font-medium">
+                                {stats.translationRating.toFixed(1)}
+                              </span>
+                            </div>
+                            {stats.simplificationRating > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Simpl: {stats.simplificationRating.toFixed(1)}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    }
                   },
                   {
                     key: 'status',
                     header: 'Status',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.status(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      const reviewCount = stats?.totalReviews ?? summary.reviewCount ?? 0
+                      const avgRating = stats?.translationRating ?? summary.avgRating
+                      const hasIssues = stats?.hasHallucination || stats?.hasMissingInfo
+                      
+                      return (
+                        <div className="flex flex-col gap-1">
+                          {ColumnRenderers.status(reviewCount, avgRating)}
+                          {hasIssues && (
+                            <div className="flex gap-1 mt-1">
+                              {stats?.hasHallucination && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Hallucination
+                                </Badge>
+                              )}
+                              {stats?.hasMissingInfo && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Missing Info
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
                   },
                   {
                     key: 'latestReviewDate',
