@@ -489,6 +489,26 @@ export default function ClinicianDashboard() {
     return text;
   };
 
+  // Keep only the overview portion by removing known section blocks that will be rendered separately
+  const extractOverviewOnly = (text: string | undefined): string => {
+    if (!text || typeof text !== 'string') return '';
+    const sectionPatterns: RegExp[] = [
+      /^(?:Your\s+medications|Medications|Medication):?/im,
+      /^(?:Your\s+appointments|Appointments|Follow-?up(?:\s+appointments)?):?/im,
+      /^(?:Activity(?:\s+guidelines)?|Diet\s*&?\s*Activity|Diet\s+and\s+activity|Activity\s+restrictions):?/im
+    ];
+    let cutIndex = -1;
+    for (const pattern of sectionPatterns) {
+      const match = pattern.exec(text);
+      if (match && typeof match.index === 'number') {
+        if (cutIndex === -1 || match.index < cutIndex) {
+          cutIndex = match.index;
+        }
+      }
+    }
+    return cutIndex === -1 ? text : text.slice(0, cutIndex).trimEnd();
+  };
+
   // Helper function to parse simplified instructions text into sections
   const parseSimplifiedInstructions = (instructionsText: string) => {
     if (!instructionsText) {
@@ -1511,9 +1531,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                                 const overview = currentPatient?.patientFriendly?.overview;
                                 if (!overview) return '';
                                 if (typeof overview === 'string') {
-                                  return overview;
+                                  return extractOverviewOnly(overview);
                                 }
-                                return overview[language as keyof typeof overview] || overview.en || '';
+                                const raw = overview[language as keyof typeof overview] || overview.en || '';
+                                return extractOverviewOnly(raw);
                               })()}
                             />
                           </div>
