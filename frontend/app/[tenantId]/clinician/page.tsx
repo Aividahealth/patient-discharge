@@ -477,6 +477,18 @@ export default function ClinicianDashboard() {
 
   const [patientMedicalData, setPatientMedicalData] = useState<Record<string, any>>({})
 
+  // Helper to strip a leading section header from AI content to avoid duplicate headings
+  const stripLeadingHeader = (text: string | undefined, patterns: RegExp[]): string => {
+    if (!text || typeof text !== 'string') return '';
+    const lines = text.split('\n');
+    if (lines.length === 0) return '';
+    const first = lines[0].trim();
+    if (patterns.some((p) => p.test(first))) {
+      return lines.slice(1).join('\n').trimStart();
+    }
+    return text;
+  };
+
   // Helper function to parse simplified instructions text into sections
   const parseSimplifiedInstructions = (instructionsText: string) => {
     if (!instructionsText) {
@@ -1313,7 +1325,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="bg-muted/30 p-4 rounded-lg text-sm max-h-96 overflow-y-auto">
+                      <div className="bg-muted/30 p-4 rounded-lg text-sm max-h-[70vh] overflow-y-auto">
                         {(() => {
                           // Try to use structured renderer if parsed data is available
                           const parsedData = currentPatient.originalSummaryParsed;
@@ -1334,19 +1346,19 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                             <div className="space-y-4">
                               <div>
                                 <h4 className="font-medium mb-2">{t.dischargeDiagnosis}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}
                                 </p>
                               </div>
                               <div>
                                 <h4 className="font-medium mb-2">{t.historyExamination || 'History & Examination'}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {currentPatient.originalSummary?.diagnosisText?.[language as keyof typeof currentPatient.originalSummary.diagnosisText] || 'N/A'}
                                 </p>
                               </div>
                               <div>
                                 <h4 className="font-medium mb-2">{t.medications}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {(() => {
                                     const medications = currentPatient.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications];
                                     if (!medications || typeof medications !== 'string') return 'N/A';
@@ -1362,7 +1374,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               </div>
                               <div>
                                 <h4 className="font-medium mb-2">{t.followUp}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {(() => {
                                     const followUp = currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp];
                                     if (!followUp || typeof followUp !== 'string') return 'N/A';
@@ -1491,7 +1503,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-96 overflow-y-auto">
+                        <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-[70vh] overflow-y-auto">
                           <div>
                             <h4 className="font-medium mb-2">{t.whatHappenedDuringStay}</h4>
                             <MarkdownRenderer
@@ -1511,10 +1523,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               content={(() => {
                                 const medications = currentPatient?.patientFriendly?.medications;
                                 if (!medications) return '';
-                                if (typeof medications === 'string') {
-                                  return medications;
-                                }
-                                return medications[language as keyof typeof medications] || medications.en || '';
+                                const raw = typeof medications === 'string'
+                                  ? medications
+                                  : (medications[language as keyof typeof medications] || medications.en || '');
+                                return stripLeadingHeader(raw, [/^(?:Your\s+medications|Medications|Medication):?\s*$/i]);
                               })()}
                             />
                           </div>
@@ -1524,10 +1536,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               content={(() => {
                                 const appointments = currentPatient?.patientFriendly?.appointments;
                                 if (!appointments) return '';
-                                if (typeof appointments === 'string') {
-                                  return appointments;
-                                }
-                                return appointments[language as keyof typeof appointments] || appointments.en || '';
+                                const raw = typeof appointments === 'string'
+                                  ? appointments
+                                  : (appointments[language as keyof typeof appointments] || appointments.en || '');
+                                return stripLeadingHeader(raw, [/^(?:Your\s+appointments|Appointments|Follow-?up(?:\s+appointments)?):?\s*$/i]);
                               })()}
                             />
                           </div>
@@ -1537,10 +1549,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               content={(() => {
                                 const activity = currentPatient?.patientFriendly?.activity;
                                 if (!activity) return '';
-                                if (typeof activity === 'string') {
-                                  return activity;
-                                }
-                                return activity[language as keyof typeof activity] || activity.en || '';
+                                const raw = typeof activity === 'string'
+                                  ? activity
+                                  : (activity[language as keyof typeof activity] || activity.en || '');
+                                return stripLeadingHeader(raw, [/^(?:Activity(?:\s+guidelines)?|Diet\s+and\s+activity|Activity\s+restrictions):?\s*$/i]);
                               })()}
                             />
                           </div>

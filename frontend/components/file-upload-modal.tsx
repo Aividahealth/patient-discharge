@@ -61,7 +61,13 @@ async function extractTextFromPDF(file: File): Promise<string> {
   try {
     const pdfjsLib = await loadPDFJS()
     const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    const pdf = await pdfjsLib.getDocument({
+      data: arrayBuffer,
+      // Provide CMap and standard font data to improve text extraction on some PDFs
+      cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+    }).promise
 
     let fullText = ''
 
@@ -75,7 +81,15 @@ async function extractTextFromPDF(file: File): Promise<string> {
       fullText += pageText + '\n\n'
     }
 
-    return fullText.trim()
+    const trimmed = fullText.trim()
+    if (!trimmed) {
+      // Likely an image-only (scanned) PDF with no text layer
+      throw new Error(
+        'This PDF does not contain extractable text (likely a scanned image). ' +
+        'Please upload a .txt/.md version, or use an OCR-processed PDF.'
+      )
+    }
+    return trimmed
   } catch (error) {
     console.error('[PDF Extraction] Error:', error)
     throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)

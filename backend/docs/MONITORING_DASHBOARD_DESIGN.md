@@ -87,6 +87,29 @@ Note: Use a simple label set to keep dev costs and cardinality low.
 - Pub/Sub: unacked messages, oldest unacked age
 - Cloud Functions: invocations, error count
 
+### Make “Uploaded, Simplified, Translated” obvious
+
+Add three scorecards and one bar chart to Pipeline Overview:
+- Uploaded (last 24h): completed `frontend_upload`
+- Simplified (last 24h): completed `simplify` or `publish_simplified`
+- Translated (last 24h): completed `store_translated_in_fhir`
+
+Recommended MQL scorecards:
+- Uploaded (24h):
+  - `fetch logging.googleapis.com/user/pipeline_completed_frontend_upload | align rate(24h) | group_by [], [sum(value)]`
+- Simplified (24h) [use whichever metric you emit]:
+  - `fetch logging.googleapis.com/user/pipeline_completed_simplify | align rate(24h) | group_by [], [sum(value)]`
+  - or `fetch logging.googleapis.com/user/pipeline_completed_publish_simplified | align rate(24h) | group_by [], [sum(value)]`
+- Translated (24h):
+  - `fetch logging.googleapis.com/user/pipeline_completed_store_translated_in_fhir | align rate(24h) | group_by [], [sum(value)]`
+
+Bar chart (by step, last 24h):
+- Include: `pipeline_completed_frontend_upload`, `pipeline_completed_simplify` (or `pipeline_completed_publish_simplified`), `pipeline_completed_store_translated_in_fhir`
+- Plot as bars to show the funnel at-a-glance.
+
+Prerequisite:
+- Ensure all services emit `pipeline_event` logs for these steps. The backend already emits `frontend_upload` and store-in-FHIR steps; add emissions in Cloud Functions for `simplify`, `publish_simplified`, and `translate` so the scorecards populate.
+
 ## Alerts (minimal)
 
 Critical
