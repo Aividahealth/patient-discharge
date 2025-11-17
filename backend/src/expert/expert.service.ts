@@ -316,61 +316,42 @@ export class ExpertService {
         : 0;
 
     // Find latest review dates - handle various date formats safely
+    const parseDate = (d: any): Date | null => {
+      try {
+        if (d instanceof Date) return d;
+        if (typeof d === 'string') return new Date(d);
+        if (d && typeof d === 'object' && 'toDate' in d) {
+          const timestamp = d as { toDate: () => Date };
+          if (typeof timestamp.toDate === 'function') {
+            return timestamp.toDate();
+          }
+        }
+        return null;
+      } catch (e) {
+        this.logger.warn(`Invalid date format: ${d}`);
+        return null;
+      }
+    };
+
     const reviewDates = feedback
       .map((f) => f.reviewDate)
       .filter((d) => d != null)
-      .map((d) => {
-        try {
-          if (d instanceof Date) return d;
-          if (typeof d === 'string') return new Date(d);
-          if (d && typeof d === 'object' && 'toDate' in d && typeof d.toDate === 'function') {
-            return d.toDate();
-          }
-          return null;
-        } catch (e) {
-          this.logger.warn(`Invalid date format in feedback: ${d}`);
-          return null;
-        }
-      })
-      .filter((d) => d != null && !isNaN(d.getTime()))
+      .map(parseDate)
+      .filter((d): d is Date => d != null && !isNaN(d.getTime()))
       .sort((a, b) => b.getTime() - a.getTime());
 
     const simplificationDates = simplificationFeedback
       .map((f) => f.reviewDate)
       .filter((d) => d != null)
-      .map((d) => {
-        try {
-          if (d instanceof Date) return d;
-          if (typeof d === 'string') return new Date(d);
-          if (d && typeof d === 'object' && 'toDate' in d && typeof d.toDate === 'function') {
-            return d.toDate();
-          }
-          return null;
-        } catch (e) {
-          this.logger.warn(`Invalid date format in simplification feedback: ${d}`);
-          return null;
-        }
-      })
-      .filter((d) => d != null && !isNaN(d.getTime()))
+      .map(parseDate)
+      .filter((d): d is Date => d != null && !isNaN(d.getTime()))
       .sort((a, b) => b.getTime() - a.getTime());
 
     const translationDates = translationFeedback
       .map((f) => f.reviewDate)
       .filter((d) => d != null)
-      .map((d) => {
-        try {
-          if (d instanceof Date) return d;
-          if (typeof d === 'string') return new Date(d);
-          if (d && typeof d === 'object' && 'toDate' in d && typeof d.toDate === 'function') {
-            return d.toDate();
-          }
-          return null;
-        } catch (e) {
-          this.logger.warn(`Invalid date format in translation feedback: ${d}`);
-          return null;
-        }
-      })
-      .filter((d) => d != null && !isNaN(d.getTime()))
+      .map(parseDate)
+      .filter((d): d is Date => d != null && !isNaN(d.getTime()))
       .sort((a, b) => b.getTime() - a.getTime());
 
     // Rating distribution
