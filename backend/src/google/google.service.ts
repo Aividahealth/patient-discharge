@@ -132,7 +132,7 @@ export class GoogleService {
 
   /**
    * Delete a Patient and all dependent resources (cascading delete)
-   * Deletes in order: Binaries -> DocumentReferences -> Encounters -> Composition -> Patient
+   * Deletes in order: DocumentReferences -> Compositions -> Binaries -> Encounters -> Patient
    */
   async deletePatientWithDependencies(patientId: string, compositionId: string, ctx: TenantContext): Promise<{
     success: boolean;
@@ -291,31 +291,7 @@ export class GoogleService {
         }
       }
 
-      // Step 2: Delete all Binary resources first
-      for (const binaryId of Array.from(binaryIds)) {
-        try {
-          await client.delete(`/Binary/${binaryId}`);
-          deleted.binaries.push(binaryId);
-          console.log(`✅ Deleted Binary: ${binaryId}`);
-        } catch (error: any) {
-          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
-          const diagnostics = error.response?.data?.issue?.[0]?.diagnostics || '';
-          const fullError = diagnostics ? `${errorMsg} (${diagnostics})` : errorMsg;
-          errors.push({
-            resourceType: 'Binary',
-            id: binaryId,
-            error: fullError,
-          });
-          console.error(`❌ Failed to delete Binary ${binaryId}: ${fullError}`);
-          // Log full error response for debugging
-          if (error.response?.data) {
-            console.error(`   Full error response:`, JSON.stringify(error.response.data, null, 2));
-          }
-          // Continue with other deletions even if one Binary fails
-        }
-      }
-
-      // Step 3: Delete all DocumentReferences
+      // Step 2: Delete all DocumentReferences first (they reference Binaries)
       for (const docRefId of documentReferenceIds) {
         try {
           await client.delete(`/DocumentReference/${docRefId}`);
@@ -333,25 +309,7 @@ export class GoogleService {
         }
       }
 
-      // Step 4: Delete all Encounters
-      for (const encounterId of Array.from(encounterIds)) {
-        try {
-          await client.delete(`/Encounter/${encounterId}`);
-          deleted.encounters.push(encounterId);
-          console.log(`✅ Deleted Encounter: ${encounterId}`);
-        } catch (error: any) {
-          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
-          errors.push({
-            resourceType: 'Encounter',
-            id: encounterId,
-            error: errorMsg,
-          });
-          console.error(`❌ Failed to delete Encounter ${encounterId}:`, errorMsg);
-          // Continue with other deletions even if one Encounter fails
-        }
-      }
-
-      // Step 5: Delete ALL Compositions for this patient
+      // Step 3: Delete ALL Compositions for this patient (they reference Binaries)
       for (const compId of Array.from(compositionIds)) {
         try {
           await client.delete(`/Composition/${compId}`);
@@ -386,6 +344,48 @@ export class GoogleService {
               throw new Error(`Failed to delete Composition: ${fullError}`);
             }
           }
+        }
+      }
+
+      // Step 4: Delete all Binary resources (now that Compositions and DocumentReferences are deleted)
+      for (const binaryId of Array.from(binaryIds)) {
+        try {
+          await client.delete(`/Binary/${binaryId}`);
+          deleted.binaries.push(binaryId);
+          console.log(`✅ Deleted Binary: ${binaryId}`);
+        } catch (error: any) {
+          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+          const diagnostics = error.response?.data?.issue?.[0]?.diagnostics || '';
+          const fullError = diagnostics ? `${errorMsg} (${diagnostics})` : errorMsg;
+          errors.push({
+            resourceType: 'Binary',
+            id: binaryId,
+            error: fullError,
+          });
+          console.error(`❌ Failed to delete Binary ${binaryId}: ${fullError}`);
+          // Log full error response for debugging
+          if (error.response?.data) {
+            console.error(`   Full error response:`, JSON.stringify(error.response.data, null, 2));
+          }
+          // Continue with other deletions even if one Binary fails
+        }
+      }
+
+      // Step 5: Delete all Encounters
+      for (const encounterId of Array.from(encounterIds)) {
+        try {
+          await client.delete(`/Encounter/${encounterId}`);
+          deleted.encounters.push(encounterId);
+          console.log(`✅ Deleted Encounter: ${encounterId}`);
+        } catch (error: any) {
+          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+          errors.push({
+            resourceType: 'Encounter',
+            id: encounterId,
+            error: errorMsg,
+          });
+          console.error(`❌ Failed to delete Encounter ${encounterId}:`, errorMsg);
+          // Continue with other deletions even if one Encounter fails
         }
       }
 
