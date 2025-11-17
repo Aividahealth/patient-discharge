@@ -142,6 +142,41 @@ export interface DischargeExportEvent {
 }
 
 /**
+ * Simplified File Types
+ */
+export interface SimplifiedFile {
+  type: 'discharge-summary' | 'discharge-instructions';
+  originalPath: string;
+  simplifiedPath: string;
+  language: string;
+}
+
+export interface SimplificationCompletedEvent {
+  tenantId: string;
+  compositionId: string;
+  simplifiedFiles: SimplifiedFile[];
+  processingTimeMs: number;
+  tokensUsed: number;
+  timestamp: string;
+}
+
+/**
+ * Tenant Configuration Types
+ */
+export interface TenantConfig {
+  tenantId: string;
+  buckets: {
+    rawBucket: string;
+    simplifiedBucket: string;
+    translatedBucket: string;
+  };
+  translationConfig: {
+    enabled: boolean;
+    supportedLanguages: string[];
+  };
+}
+
+/**
  * FHIR API Response Types
  */
 export interface BinaryTag {

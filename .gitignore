@@ -101,6 +101,9 @@ public
 tmp/
 temp/
 
+# Temporary files
+*.tmp
+
 # Google Cloud Service Account credentials
 backend/.settings.dev/
 backend/.settings.prod/

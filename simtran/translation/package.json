@@ -2,7 +2,7 @@
   "name": "discharge-summary-translator",
   "version": "1.0.0",
   "description": "Cloud Function service for translating simplified discharge summaries using Google Translate",
-  "main": "lib/translation-function.js",
+  "main": "lib/pubsub-handler.js",
   "scripts": {
     "build": "tsc",
     "dev": "npm run build && functions-framework --target=translateDischargeSummary --signature-type=cloudevent",

@@ -1,9 +1,9 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { SimplificationCompletedEvent } from '../common/common/types';
+import { SimplificationCompletedEvent, SimplifiedFile } from '../common/types';
 import { TranslationService } from './translation.service';
 import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
-import { createLogger } from '../common/utils/logger';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('TranslationPubSubHandler');
 
@@ -148,7 +148,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     let totalTokensUsed = 0;
 
     // Translate discharge summary if available
-    const summaryFile = event.simplifiedFiles.find((f: any) => f.type === 'discharge-summary');
+    const summaryFile = event.simplifiedFiles.find((f: SimplifiedFile) => f.type === 'discharge-summary');
     if (summaryFile) {
       logger.debug('Step 2a: Translating discharge summary');
 
@@ -178,7 +178,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     }
 
     // Translate discharge instructions if available
-    const instructionsFile = event.simplifiedFiles.find((f: any) => f.type === 'discharge-instructions');
+    const instructionsFile = event.simplifiedFiles.find((f: SimplifiedFile) => f.type === 'discharge-instructions');
     if (instructionsFile) {
       logger.debug('Step 2b: Translating discharge instructions');
 

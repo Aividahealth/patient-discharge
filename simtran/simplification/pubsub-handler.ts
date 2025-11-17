@@ -94,7 +94,18 @@ export async function processDischargeExportEvent(cloudEvent: CloudEvent<unknown
     logger.debug('Decoded Pub/Sub message', { decodedData: decodedData.substring(0, 200) });
 
     // Parse the message wrapper (contains eventType, timestamp, and data)
-    const messageWrapper = JSON.parse(decodedData);
+    let messageWrapper: any;
+    try {
+      messageWrapper = JSON.parse(decodedData);
+    } catch (parseError) {
+      logger.error('Failed to parse decoded message as JSON', parseError as Error, {
+        decodedDataPreview: decodedData.substring(0, 300),
+        decodedDataLength: decodedData.length,
+        charCodeAt79: decodedData.charCodeAt(79),
+        charCodeAt80: decodedData.charCodeAt(80),
+      });
+      throw new ValidationError(`Invalid JSON in Pub/Sub message: ${(parseError as Error).message}`);
+    }
 
     // Extract the actual event from the 'data' field
     const event: DischargeExportEvent = messageWrapper.data || messageWrapper;

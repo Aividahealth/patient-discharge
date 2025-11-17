@@ -1,7 +1,7 @@
 import { Storage } from '@google-cloud/storage';
-import { GCSError, GCSFileMetadata, ValidationError } from '../common/types';
-import { getConfig } from '../common/utils/config';
-import { createLogger } from '../common/utils/logger';
+import { GCSError, GCSFileMetadata, ValidationError } from './common/types';
+import { getConfig } from './common/utils/config';
+import { createLogger } from './common/utils/logger';
 import * as path from 'path';
 
 const logger = createLogger('GCSService');
