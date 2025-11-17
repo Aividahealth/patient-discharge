@@ -140,6 +140,7 @@ interface PatientData {
     name: string
     id?: string
   }
+  preferredLanguage?: string
 }
 
 export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUploadModalProps) {
@@ -290,6 +291,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
               name: patientFormData.attendingPhysician?.name || '',
               id: patientFormData.attendingPhysician?.id || `physician-${Date.now()}`
             },
+            preferredLanguage: patientFormData.preferredLanguage || undefined,
             avatar: undefined // Optional field
           };
 
@@ -539,6 +541,24 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
                       attendingPhysician: { name: e.target.value }
                     })}
                   />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="preferredLanguage">Preferred Language</Label>
+                  <select
+                    id="preferredLanguage"
+                    className="w-full border rounded-md h-9 px-3 text-sm"
+                    value={patientFormData.preferredLanguage || ''}
+                    onChange={(e) => setPatientFormData({ ...patientFormData, preferredLanguage: e.target.value })}
+                  >
+                    <option value="">Select language</option>
+                    <option value="es">Spanish</option>
+                    <option value="vi">Vietnamese</option>
+                    <option value="fr">French</option>
+                    <option value="hi">Hindi</option>
+                    <option value="zh">Mandarin</option>
+                  </select>
                 </div>
               </div>
             </CardContent>

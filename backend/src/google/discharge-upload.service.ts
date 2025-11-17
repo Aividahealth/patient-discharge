@@ -19,6 +19,7 @@ interface UploadDischargeSummaryRequest {
     id: string;
   };
   avatar?: string;
+  preferredLanguage?: string; // ISO 639-1 code e.g., es, vi, fr, hi, zh
 }
 
 @Injectable()
@@ -38,6 +39,7 @@ export class DischargeUploadService {
     mrn: string,
     name: string,
     avatar: string | undefined,
+    preferredLanguage: string | undefined,
     ctx: TenantContext,
   ): Promise<string> {
     try {
@@ -53,6 +55,30 @@ export class DischargeUploadService {
       if (searchResult?.entry && searchResult.entry.length > 0) {
         const existingPatient = searchResult.entry[0].resource;
         this.logger.log(`✅ Found existing Patient: ${existingPatient.id}`);
+        // If preferredLanguage provided and not set on patient, update communication
+        if (preferredLanguage) {
+          const hasPreferred =
+            existingPatient.communication?.some(
+              (c: any) =>
+                c.preferred === true &&
+                c.language?.coding?.some((cd: any) => cd.code === preferredLanguage),
+            ) || false;
+          if (!hasPreferred) {
+            existingPatient.communication = [
+              ...(existingPatient.communication || []),
+              {
+                language: {
+                  coding: [
+                    { system: 'urn:ietf:bcp:47', code: preferredLanguage },
+                  ],
+                },
+                preferred: true,
+              },
+            ];
+            await this.googleService.fhirUpdate('Patient', existingPatient.id, existingPatient, ctx);
+            this.logger.log(`🗣️ Updated Patient ${existingPatient.id} communication preferred language: ${preferredLanguage}`);
+          }
+        }
         return existingPatient.id;
       }
 
@@ -88,6 +114,18 @@ export class DischargeUploadService {
             text: name,
           },
         ],
+        ...(preferredLanguage
+          ? {
+              communication: [
+                {
+                  language: {
+                    coding: [{ system: 'urn:ietf:bcp:47', code: preferredLanguage }],
+                  },
+                  preferred: true,
+                },
+              ],
+            }
+          : {}),
         ...(avatar ? {
           photo: [
             {
@@ -421,6 +459,7 @@ export class DischargeUploadService {
         request.mrn,
         request.name,
         request.avatar,
+        request.preferredLanguage,
         ctx,
       );
 
@@ -501,6 +540,9 @@ export class DischargeUploadService {
           googleEncounterId: encounterId,
           exportTimestamp: new Date().toISOString(),
           status: 'success',
+          // Include preferredLanguage to help downstream services
+          // (simtran will also verify via FHIR Patient if needed)
+          ...(request.preferredLanguage ? { preferredLanguage: request.preferredLanguage } : {}),
         };
 
         await this.pubSubService.publishEncounterExportEvent(event);
