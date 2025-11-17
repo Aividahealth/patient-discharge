@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Firestore } from '@google-cloud/firestore';
+import * as fs from 'fs';
 import { DevConfigService } from '../config/dev-config.service';
 import { GoogleService } from '../google/google.service';
 import type {
@@ -37,7 +38,14 @@ export class ExpertService {
         const configPath = config.firestore_service_account_path || config.service_account_path;
         if (configPath) {
           // Resolve the path - handles both full paths and filenames
-          serviceAccountPath = resolveServiceAccountPath(configPath);
+          const resolvedPath = resolveServiceAccountPath(configPath);
+          // Check if file exists before using it
+          if (fs.existsSync(resolvedPath)) {
+            serviceAccountPath = resolvedPath;
+            this.logger.log(`Using Firestore service account: ${serviceAccountPath}`);
+          } else {
+            this.logger.log(`Firestore service account file not found at ${resolvedPath}, using Application Default Credentials`);
+          }
         }
       } catch (error) {
         // Config not loaded yet or running in Cloud Run with ADC
