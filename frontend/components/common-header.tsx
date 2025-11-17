@@ -9,12 +9,28 @@ interface CommonHeaderProps {
   hideTenantInfo?: boolean // When true, always show Aivida branding
 }
 
+/**
+ * Normalize tenant logo path to point to /tenant/ folder
+ * Handles various path formats and extracts just the filename
+ */
+function normalizeTenantLogoPath(logoPath: string | undefined): string {
+  if (!logoPath) return '/aivida-logo.png'
+  
+  // Extract just the filename from the path
+  const filename = logoPath.split('/').pop() || logoPath
+  
+  // Return path pointing to /public/tenant/ folder
+  return `/tenant/${filename}`
+}
+
 export function CommonHeader({ title, hideTenantInfo = false }: CommonHeaderProps) {
   const { tenant } = useTenant()
 
   // Use tenant branding if available and not hidden, otherwise fall back to Aivida defaults
   const shouldShowTenant = !hideTenantInfo && tenant
-  const logo = shouldShowTenant ? tenant.branding?.logo : "/aivida-logo.png"
+  const logo = shouldShowTenant && tenant.branding?.logo 
+    ? normalizeTenantLogoPath(tenant.branding.logo)
+    : "/aivida-logo.png"
   const name = shouldShowTenant ? tenant.name : "Aivida Health"
 
   return (

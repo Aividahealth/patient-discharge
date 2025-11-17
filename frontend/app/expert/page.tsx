@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, ClipboardCheck, Star, Stethoscope, Languages } from "lucide-react"
 import { getReviewList, getFeedbackStats, ReviewSummary, ReviewType } from "@/lib/expert-api"
+import { CommonHeader } from "@/components/common-header"
 
 export default function ExpertPortalPage() {
   const router = useRouter()
@@ -79,7 +80,9 @@ export default function ExpertPortalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
+      <CommonHeader title="Expert Review Portal" />
+      
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">

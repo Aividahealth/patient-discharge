@@ -12,6 +12,7 @@ import { getReviewList, getFeedbackStats, ReviewSummary, ReviewType } from "@/li
 import { useTenant } from "@/contexts/tenant-context"
 import { getLanguageName } from "@/lib/constants/languages"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { CommonHeader } from "@/components/common-header"
 import { ReviewTable, ColumnRenderers } from "@/components/review-table"
 import {
   AlertDialog,
@@ -190,7 +191,9 @@ export default function ExpertPortalPage() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
+      <CommonHeader title="Expert Review Portal" />
+      
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
