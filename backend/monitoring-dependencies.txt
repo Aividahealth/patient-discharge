@@ -1,0 +1,27 @@
+# Google Cloud Monitoring Dependencies
+# Add these to backend/package.json
+
+# To install all at once:
+npm install --save @google-cloud/logging @google-cloud/monitoring @google-cloud/opentelemetry-cloud-trace-exporter @opentelemetry/api @opentelemetry/sdk-trace-node @opentelemetry/instrumentation-http @opentelemetry/context-async-hooks @opentelemetry/resources @opentelemetry/semantic-conventions @opentelemetry/sdk-trace-base
+
+# Individual packages:
+
+## Cloud Logging
+@google-cloud/logging@^11.0.0
+
+## Cloud Monitoring
+@google-cloud/monitoring@^4.0.0
+
+## OpenTelemetry (Cloud Trace)
+@google-cloud/opentelemetry-cloud-trace-exporter@^2.0.0
+@opentelemetry/api@^1.7.0
+@opentelemetry/sdk-trace-node@^1.19.0
+@opentelemetry/instrumentation-http@^0.45.0
+@opentelemetry/context-async-hooks@^1.19.0
+@opentelemetry/resources@^1.19.0
+@opentelemetry/semantic-conventions@^1.19.0
+@opentelemetry/sdk-trace-base@^1.19.0
+
+# Optional: For advanced use cases
+@opentelemetry/instrumentation-express@^0.34.0
+@opentelemetry/instrumentation-nestjs-core@^0.34.0

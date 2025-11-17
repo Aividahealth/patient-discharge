@@ -14,9 +14,11 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { CernerAuthModule } from './cerner-auth/cerner-auth.module';
 import { PubSubModule } from './pubsub/pubsub.module';
 import { AuthModule } from './auth/auth.module';
+import { MonitoringModule } from './monitoring/monitoring.module';
 
 @Module({
   imports: [
+    MonitoringModule, // Add monitoring module first (global)
     ConfigModule,
     GoogleModule,
     CernerModule,
