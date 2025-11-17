@@ -121,7 +121,7 @@ export default function ExpertPortalPage() {
     setDeleteDialogOpen(true)
   }
 
-  const handleDeletePatient = async () => {
+  const handleDeletePatient = async (retryCount = 0) => {
     if (!patientToDelete || !tenantId || !token) return
     try {
       setDeleting(true)
@@ -149,12 +149,25 @@ export default function ExpertPortalPage() {
       const result = await deleteResp.json()
       console.log('[ExpertPortal] Delete result:', result)
       
-      await loadSummaries()
-      setDeleteDialogOpen(false)
-      setPatientToDelete(null)
+      // Check if deletion was successful
+      if (result.success) {
+        await loadSummaries()
+        setDeleteDialogOpen(false)
+        setPatientToDelete(null)
+      } else if (result.retryable && retryCount < 2) {
+        // Partial deletion - automatically retry once
+        console.log('[ExpertPortal] Partial deletion detected, retrying...', result)
+        // Wait a moment for resources to be fully cleaned up
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Retry the deletion
+        return handleDeletePatient(retryCount + 1)
+      } else {
+        // Failed and not retryable, or too many retries
+        const errorMsg = result.message || 'Failed to delete patient. Some resources may have been partially deleted.'
+        throw new Error(errorMsg)
+      }
     } catch (e) {
       console.error('[ExpertPortal] Failed to delete:', e)
-      // You might want to show an error toast/alert here
       alert(e instanceof Error ? e.message : 'Failed to delete. Please try again.')
     } finally {
       setDeleting(false)
