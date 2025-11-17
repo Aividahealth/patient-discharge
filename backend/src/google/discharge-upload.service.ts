@@ -2,6 +2,7 @@ import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { GoogleService } from './google.service';
 import { PubSubService, EncounterExportEvent } from '../pubsub/pubsub.service';
 import { TenantContext } from '../tenant/tenant-context';
+import { logPipelineEvent } from '../utils/pipeline-logger';
 
 interface UploadDischargeSummaryRequest {
   id: string; // patientId
@@ -410,6 +411,7 @@ export class DischargeUploadService {
     message: string;
     processingStatus: string;
   }> {
+    const uploadStartTime = Date.now();
     try {
       this.logger.log(`📤 Uploading discharge summary for patient: ${request.id}`);
 
@@ -474,9 +476,23 @@ export class DischargeUploadService {
       );
 
       this.logger.log(`✅ Successfully uploaded discharge summary. Composition ID: ${compositionId}`);
+      // Log frontend_upload completion
+      logPipelineEvent({
+        tenantId: ctx.tenantId,
+        compositionId,
+        step: 'frontend_upload',
+        status: 'completed',
+        durationMs: Date.now() - uploadStartTime,
+        metadata: {
+          patientId,
+          encounterId,
+        },
+        error: null,
+      });
 
       // Publish Pub/Sub event
       try {
+        const pubsubStartTime = Date.now();
         const event: EncounterExportEvent = {
           tenantId: ctx.tenantId,
           patientId: patientId,
@@ -489,9 +505,38 @@ export class DischargeUploadService {
 
         await this.pubSubService.publishEncounterExportEvent(event);
         this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}`);
+        // Log backend_publish_to_topic completion
+        logPipelineEvent({
+          tenantId: ctx.tenantId,
+          compositionId,
+          step: 'backend_publish_to_topic',
+          status: 'completed',
+          durationMs: Date.now() - pubsubStartTime,
+          metadata: {
+            patientId,
+            encounterId,
+          },
+          error: null,
+        });
       } catch (pubSubError) {
         // Log error but don't fail the upload
         this.logger.error(`❌ Failed to publish Pub/Sub event: ${pubSubError.message}`);
+        // Log backend_publish_to_topic failure
+        logPipelineEvent({
+          tenantId: ctx.tenantId,
+          compositionId,
+          step: 'backend_publish_to_topic',
+          status: 'failed',
+          durationMs: Date.now() - uploadStartTime,
+          metadata: {
+            patientId,
+          },
+          error: {
+            message: pubSubError?.message || String(pubSubError),
+            name: pubSubError?.name,
+            stack: pubSubError?.stack,
+          },
+        });
       }
 
       return {
@@ -503,6 +548,22 @@ export class DischargeUploadService {
       };
     } catch (error) {
       this.logger.error(`❌ Failed to upload discharge summary: ${error.message}`);
+      // Best effort: if compositionId is available later, it won't be here.
+      logPipelineEvent({
+        tenantId: ctx.tenantId,
+        compositionId: 'unknown',
+        step: 'frontend_upload',
+        status: 'failed',
+        durationMs: Date.now() - uploadStartTime,
+        metadata: {
+          patientId: request.id,
+        },
+        error: {
+          message: error?.message || String(error),
+          name: error?.name,
+          stack: error?.stack,
+        },
+      });
       throw error;
     }
   }

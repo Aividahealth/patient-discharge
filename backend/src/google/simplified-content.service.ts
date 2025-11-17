@@ -4,6 +4,7 @@ import { GoogleService } from './google.service';
 import { DevConfigService } from '../config/dev-config.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { resolveServiceAccountPath } from '../utils/path.helper';
+import { logPipelineEvent } from '../utils/pipeline-logger';
 
 interface SimplifiedContentRequest {
   dischargeSummary?: {
@@ -390,6 +391,7 @@ export class SimplifiedContentService {
     contentType: 'simplified' | 'translated',
     ctx: TenantContext,
   ): Promise<{ success: boolean; fhirResourceId?: string; documentReferenceIds?: string[]; timestamp: string }> {
+    const startTime = Date.now();
     try {
       this.logger.log(`🚀 Processing ${contentType} content for Composition: ${compositionId}`);
 
@@ -614,14 +616,44 @@ export class SimplifiedContentService {
         }
       }
 
-      return {
+      const result = {
         success: true,
         fhirResourceId: documentReferenceIds.length > 0 ? `DocumentReference/${documentReferenceIds[0]}` : undefined,
         documentReferenceIds,
         timestamp: new Date().toISOString(),
       };
+      // Log pipeline event for storing content in FHIR
+      logPipelineEvent({
+        tenantId: ctx.tenantId,
+        compositionId,
+        step: contentType === 'simplified' ? 'store_in_fhir' : 'store_translated_in_fhir',
+        status: 'completed',
+        durationMs: Date.now() - startTime,
+        metadata: {
+          patientId,
+          encounterId,
+          createdDocumentReferences: documentReferenceIds.length,
+          createdBinaries: binaryIds.length,
+        },
+        error: null,
+      });
+      return result;
     } catch (error) {
       this.logger.error(`❌ Error processing ${contentType} content: ${error.message}`);
+      // Log failure event
+      logPipelineEvent({
+        tenantId: ctx.tenantId,
+        compositionId,
+        step: contentType === 'simplified' ? 'store_in_fhir' : 'store_translated_in_fhir',
+        status: 'failed',
+        durationMs: Date.now() - startTime,
+        metadata: {},
+        error: {
+          message: error?.message || String(error),
+          name: error?.name,
+          stack: error?.stack,
+        },
+      });
       throw error;
     }
   }
