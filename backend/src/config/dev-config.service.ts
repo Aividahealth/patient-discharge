@@ -79,7 +79,14 @@ export class DevConfigService {
         const configPath = this.config.firestore_service_account_path || this.config.service_account_path;
         if (configPath) {
           // Resolve the path - handles both full paths and filenames
-          serviceAccountPath = resolveServiceAccountPath(configPath);
+          const resolved = resolveServiceAccountPath(configPath);
+          // Only use the path if the file actually exists; otherwise fall back to ADC
+          if (fs.existsSync(resolved)) {
+            serviceAccountPath = resolved;
+            this.logger.log(`Using Firestore service account from: ${resolved}`);
+          } else {
+            this.logger.log(`Firestore service account not found at ${resolved}, using Application Default Credentials`);
+          }
         }
       } catch (error) {
         this.logger.log('Config not available, using Application Default Credentials');
