@@ -91,7 +91,50 @@ Return only the simplified content in Markdown with these sections:
 Do NOT include any meta-commentary or preamble.`;
 
 export const createSimplificationPrompt = (content: string, fileName: string): string => {
-  return `Please simplify the following hospital discharge summary. The file name is: ${fileName}
+  const isSummary = fileName.toLowerCase().includes('summary');
+  const isInstructions = fileName.toLowerCase().includes('instructions');
+  
+  let documentTypeInstructions = '';
+  let sectionsToOutput = '';
+  
+  if (isSummary) {
+    documentTypeInstructions = `
+**DOCUMENT TYPE: DISCHARGE SUMMARY**
+This document contains the hospital stay overview. You should ONLY output the Overview section.
+Do NOT include Medications, Appointments, Diet & Activity, or Warning Signs.
+`;
+    sectionsToOutput = `
+Output ONLY this section:
+  * ## Overview (with "Reasons for Hospital Stay" and "What Happened During Your Stay")
+`;
+  } else if (isInstructions) {
+    documentTypeInstructions = `
+**DOCUMENT TYPE: DISCHARGE INSTRUCTIONS**
+This document contains post-discharge instructions. You should ONLY output Medications, Appointments, Diet & Activity, and Warning Signs.
+Do NOT include the Overview or hospital stay information.
+`;
+    sectionsToOutput = `
+Output ONLY these sections (in this order):
+  * ## Your Medications (with Frequency, When to Take, Special Instructions for each)
+  * ## Upcoming Appointments
+  * ## Diet & Activity (with Foods to Include, Foods to Limit, Recommended Activities, Activities to Avoid)
+  * ## Warning Signs (with When to Seek Help - Call 911, When to Call Your Doctor, Emergency Contacts)
+`;
+  } else {
+    // Default to full document if filename doesn't indicate type
+    sectionsToOutput = `
+Structure the output in these specific sections:
+  * ## Overview (with "Reasons for Hospital Stay" and "What Happened During Your Stay")
+  * ## Your Medications (with Frequency, When to Take, Special Instructions for each)
+  * ## Upcoming Appointments
+  * ## Diet & Activity (with Foods to Include, Foods to Limit, Recommended Activities, Activities to Avoid)
+  * ## Warning Signs (with When to Seek Help - Call 911, When to Call Your Doctor, Emergency Contacts)
+`;
+  }
+
+  return `Please simplify the following hospital discharge document. The file name is: ${fileName}
+
+${documentTypeInstructions}
 
 CRITICAL: ZERO TOLERANCE FOR HALLUCINATION - Only use information explicitly present in the original document.
 
@@ -108,16 +151,11 @@ Remember to:
   * Diet & Activity: only dietary guidance and activity guidelines
   * Warning Signs: only when to seek help (911), when to call doctor, emergency contacts
 - If information is missing for a section, write "Not specified in your discharge summary"
-- Structure the output in these specific sections:
-  * ## Overview (with "Reasons for Hospital Stay" and "What Happened During Your Stay")
-  * ## Your Medications (with Frequency, When to Take, Special Instructions for each)
-  * ## Upcoming Appointments
-  * ## Diet & Activity (with Foods to Include, Foods to Limit, Recommended Activities, Activities to Avoid)
-  * ## Warning Signs (with When to Seek Help - Call 911, When to Call Your Doctor, Emergency Contacts)
+${sectionsToOutput}
 - Make it understandable for a high school student
 - Only include information that exists in the original document
 
-Here is the discharge summary to simplify:
+Here is the discharge document to simplify:
 
 ---
 
