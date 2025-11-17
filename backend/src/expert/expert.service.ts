@@ -315,23 +315,62 @@ export class ExpertService {
           translationFeedback.length
         : 0;
 
-    // Find latest review dates
+    // Find latest review dates - handle various date formats safely
     const reviewDates = feedback
       .map((f) => f.reviewDate)
-      .filter((d) => d)
-      .map((d) => (d instanceof Date ? d : new Date(d)))
+      .filter((d) => d != null)
+      .map((d) => {
+        try {
+          if (d instanceof Date) return d;
+          if (typeof d === 'string') return new Date(d);
+          if (d && typeof d === 'object' && 'toDate' in d && typeof d.toDate === 'function') {
+            return d.toDate();
+          }
+          return null;
+        } catch (e) {
+          this.logger.warn(`Invalid date format in feedback: ${d}`);
+          return null;
+        }
+      })
+      .filter((d) => d != null && !isNaN(d.getTime()))
       .sort((a, b) => b.getTime() - a.getTime());
 
     const simplificationDates = simplificationFeedback
       .map((f) => f.reviewDate)
-      .filter((d) => d)
-      .map((d) => (d instanceof Date ? d : new Date(d)))
+      .filter((d) => d != null)
+      .map((d) => {
+        try {
+          if (d instanceof Date) return d;
+          if (typeof d === 'string') return new Date(d);
+          if (d && typeof d === 'object' && 'toDate' in d && typeof d.toDate === 'function') {
+            return d.toDate();
+          }
+          return null;
+        } catch (e) {
+          this.logger.warn(`Invalid date format in simplification feedback: ${d}`);
+          return null;
+        }
+      })
+      .filter((d) => d != null && !isNaN(d.getTime()))
       .sort((a, b) => b.getTime() - a.getTime());
 
     const translationDates = translationFeedback
       .map((f) => f.reviewDate)
-      .filter((d) => d)
-      .map((d) => (d instanceof Date ? d : new Date(d)))
+      .filter((d) => d != null)
+      .map((d) => {
+        try {
+          if (d instanceof Date) return d;
+          if (typeof d === 'string') return new Date(d);
+          if (d && typeof d === 'object' && 'toDate' in d && typeof d.toDate === 'function') {
+            return d.toDate();
+          }
+          return null;
+        } catch (e) {
+          this.logger.warn(`Invalid date format in translation feedback: ${d}`);
+          return null;
+        }
+      })
+      .filter((d) => d != null && !isNaN(d.getTime()))
       .sort((a, b) => b.getTime() - a.getTime());
 
     // Rating distribution

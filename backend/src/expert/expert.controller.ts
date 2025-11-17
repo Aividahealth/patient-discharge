@@ -206,19 +206,30 @@ export class ExpertController {
     @Query('sortOrder') sortOrder?: string,
     @TenantContext() ctx?: TenantContextType,
   ) {
-    this.logger.log(`Getting feedback for summary: ${summaryId}`);
-    
-    const options = {
-      reviewType: reviewType as 'simplification' | 'translation' | undefined,
-      includeStats: includeStats !== 'false',
-      includeFeedback: includeFeedback !== 'false',
-      limit: limit ? parseInt(limit, 10) : 50,
-      offset: offset ? parseInt(offset, 10) : 0,
-      sortBy: (sortBy || 'reviewDate') as 'reviewDate' | 'rating' | 'createdAt',
-      sortOrder: (sortOrder || 'desc') as 'asc' | 'desc',
-      tenantId: ctx?.tenantId,
-    };
+    try {
+      this.logger.log(`Getting feedback for summary: ${summaryId}`);
+      
+      const options = {
+        reviewType: reviewType as 'simplification' | 'translation' | undefined,
+        includeStats: includeStats !== 'false',
+        includeFeedback: includeFeedback !== 'false',
+        limit: limit ? parseInt(limit, 10) : 50,
+        offset: offset ? parseInt(offset, 10) : 0,
+        sortBy: (sortBy || 'reviewDate') as 'reviewDate' | 'rating' | 'createdAt',
+        sortOrder: (sortOrder || 'desc') as 'asc' | 'desc',
+        tenantId: ctx?.tenantId,
+      };
 
-    return this.expertService.getFeedbackForSummary(summaryId, options);
+      return await this.expertService.getFeedbackForSummary(summaryId, options);
+    } catch (error) {
+      this.logger.error(`Failed to get feedback for summary ${summaryId}:`, error);
+      throw new HttpException(
+        {
+          error: 'Internal Server Error',
+          message: `Failed to retrieve expert feedback: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }
