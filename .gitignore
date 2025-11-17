@@ -92,6 +92,9 @@ dist
 # Gatsby files
 .cache/
 public
+# Allow tenant logos in public/tenant
+!frontend/public/tenant/
+!frontend/public/tenant/**
 
 # Storybook build outputs
 .out

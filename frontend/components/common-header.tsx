@@ -10,13 +10,19 @@ interface CommonHeaderProps {
 }
 
 /**
- * Normalize tenant logo path to point to /tenant/ folder
- * Handles various path formats and extracts just the filename
+ * Normalize tenant logo path
+ * - If it's already a full URL (http/https), use it as-is
+ * - If it's a local path, extract filename and point to /tenant/ folder
  */
 function normalizeTenantLogoPath(logoPath: string | undefined): string {
   if (!logoPath) return '/aivida-logo.png'
   
-  // Extract just the filename from the path
+  // If it's already a full URL (GCS or other external URL), use it as-is
+  if (logoPath.startsWith('http://') || logoPath.startsWith('https://')) {
+    return logoPath
+  }
+  
+  // For local paths, extract just the filename from the path
   const filename = logoPath.split('/').pop() || logoPath
   
   // Return path pointing to /public/tenant/ folder
