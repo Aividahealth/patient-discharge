@@ -153,17 +153,20 @@ export class SimplificationService {
         throw new VertexAIError(`Unexpected finish reason: ${candidate.finishReason}`, false);
       }
 
-      const simplifiedContent = candidate.content.parts.map((part: any) => part.text).join('');
+      const rawContent = candidate.content.parts.map((part: any) => part.text).join('');
 
-      if (!simplifiedContent || simplifiedContent.trim().length === 0) {
+      if (!rawContent || rawContent.trim().length === 0) {
         throw new VertexAIError('Empty response from Gemini API', false);
       }
+
+      // Normalize output: enforce one occurrence per section and prevent cross-section repeats
+      const simplifiedContent = this.normalizeSimplifiedMarkdown(rawContent.trim());
 
       // Extract token usage if available
       const tokensUsed = response.usageMetadata?.totalTokenCount;
 
       return {
-        simplifiedContent: simplifiedContent.trim(),
+        simplifiedContent,
         tokensUsed,
       };
     } catch (error) {
@@ -174,6 +177,81 @@ export class SimplificationService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new VertexAIError(`Gemini API error: ${errorMessage}`, this.isRetryableError(error));
     }
+  }
+
+  /**
+   * Normalize simplified markdown:
+   * - Keep only the first occurrence of each required section
+   * - Trim content in each section to exclude content belonging to other sections
+   * - Ensure sections are in the canonical order
+   */
+  private normalizeSimplifiedMarkdown(text: string): string {
+    const sectionOrder = [
+      'Overview',
+      'Your Medications',
+      'Upcoming Appointments',
+      'Diet & Activity',
+      'Warning Signs',
+    ];
+
+    // Build regex to split on H2 headings "## <Section>"
+    const headingRegex = /^##\s+(Overview|Your Medications|Upcoming Appointments|Diet\s*&\s*Activity|Diet\s*&?\s*Activity|Warning Signs)\s*$/im;
+    const lines = text.split('\n');
+
+    // Find indices of headings
+    const sectionsFound: Array<{ name: string; start: number; end: number }> = [];
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(headingRegex);
+      if (m) {
+        const name = m[1]
+          .replace(/Diet\s*&\s*Activity|Diet\s*&?\s*Activity/i, 'Diet & Activity');
+        sectionsFound.push({ name, start: i, end: lines.length });
+      }
+    }
+
+    // Determine section ranges
+    for (let i = 0; i < sectionsFound.length - 1; i++) {
+      sectionsFound[i].end = sectionsFound[i + 1].start;
+    }
+
+    // Keep only the first occurrence of each section
+    const firstOccurrence: Record<string, { start: number; end: number } | undefined> = {};
+    for (const s of sectionsFound) {
+      if (!firstOccurrence[s.name]) {
+        firstOccurrence[s.name] = { start: s.start, end: s.end };
+      }
+    }
+
+    // Helper to extract clean content for a section and strip any stray subheadings for other sections
+    const stripCrossSectionContent = (contentLines: string[]): string[] => {
+      const otherHeading = /^##\s+/i;
+      const allowedSub = /^###\s+|^####\s+/i;
+      const result: string[] = [];
+      for (const line of contentLines) {
+        // Stop if another H2 heading (should not happen inside extracted range, but safe)
+        if (otherHeading.test(line)) break;
+        result.push(line);
+      }
+      // Trim trailing empty lines
+      while (result.length > 0 && result[result.length - 1].trim() === '') {
+        result.pop();
+      }
+      return result;
+    };
+
+    // Reassemble in canonical order
+    const out: string[] = [];
+    for (const name of sectionOrder) {
+      const occ = firstOccurrence[name];
+      if (!occ) continue; // Allow missing sections
+      const header = `## ${name}`;
+      const bodyLines = lines.slice(occ.start + 1, occ.end);
+      const cleaned = stripCrossSectionContent(bodyLines);
+      out.push(header, ...cleaned, ''); // add blank line after each
+    }
+
+    const normalized = out.join('\n').trim();
+    return normalized.length > 0 ? normalized : text;
   }
 
   /**
