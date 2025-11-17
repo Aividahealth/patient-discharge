@@ -33,7 +33,7 @@ export default function ExpertPortalPage() {
   const [filter, setFilter] = useState<'all' | 'no_reviews' | 'low_rating'>('all')
   const [activeTab, setActiveTab] = useState<'medical' | 'language'>('medical')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [patientToDelete, setPatientToDelete] = useState<{ id: string; name?: string } | null>(null)
+  const [patientToDelete, setPatientToDelete] = useState<{ id: string; compositionId: string; name?: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   // Redirect to login if not authenticated
@@ -113,7 +113,11 @@ export default function ExpertPortalPage() {
   }
 
   const confirmDeletePatient = (summary: ReviewSummary) => {
-    setPatientToDelete({ id: summary.id, name: summary.patientName })
+    setPatientToDelete({ 
+      id: summary.id, 
+      compositionId: summary.compositionId,
+      name: summary.patientName 
+    })
     setDeleteDialogOpen(true)
   }
 
@@ -122,7 +126,9 @@ export default function ExpertPortalPage() {
     try {
       setDeleting(true)
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-      const resp = await fetch(`${apiUrl}/google/fhir/Patient/${patientToDelete.id}`, {
+      
+      // Step 1: Delete Composition first
+      const compositionResp = await fetch(`${apiUrl}/google/fhir/Composition/${patientToDelete.compositionId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -130,15 +136,34 @@ export default function ExpertPortalPage() {
           'X-Tenant-ID': tenantId,
         },
       })
-      if (!resp.ok) {
-        const msg = await resp.text().catch(() => resp.statusText)
-        throw new Error(`Failed to delete patient: ${resp.status} ${msg}`)
+      
+      if (!compositionResp.ok) {
+        const msg = await compositionResp.text().catch(() => compositionResp.statusText)
+        throw new Error(`Failed to delete composition: ${compositionResp.status} ${msg}`)
       }
+      
+      // Step 2: Delete Patient
+      const patientResp = await fetch(`${apiUrl}/google/fhir/Patient/${patientToDelete.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      })
+      
+      if (!patientResp.ok) {
+        const msg = await patientResp.text().catch(() => patientResp.statusText)
+        throw new Error(`Failed to delete patient: ${patientResp.status} ${msg}`)
+      }
+      
       await loadSummaries()
       setDeleteDialogOpen(false)
       setPatientToDelete(null)
     } catch (e) {
-      console.error('[ExpertPortal] Failed to delete patient:', e)
+      console.error('[ExpertPortal] Failed to delete:', e)
+      // You might want to show an error toast/alert here
+      alert(e instanceof Error ? e.message : 'Failed to delete. Please try again.')
     } finally {
       setDeleting(false)
     }
@@ -590,11 +615,17 @@ export default function ExpertPortalPage() {
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Patient?</AlertDialogTitle>
+              <AlertDialogTitle>Delete Patient and Discharge Summary?</AlertDialogTitle>
               <AlertDialogDescription>
                 Are you sure you want to delete <strong>{patientToDelete?.name || 'this patient'}</strong>?
                 <br /><br />
-                This will call DELETE /google/fhir/Patient/{patientToDelete?.id} and cannot be undone.
+                This will delete:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Composition: {patientToDelete?.compositionId}</li>
+                  <li>Patient: {patientToDelete?.id}</li>
+                </ul>
+                <br />
+                This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -604,7 +635,7 @@ export default function ExpertPortalPage() {
                 disabled={deleting}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {deleting ? 'Deleting…' : 'Delete Patient'}
+                {deleting ? 'Deleting…' : 'Delete Patient & Summary'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
