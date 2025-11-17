@@ -21,7 +21,10 @@
     "sync-discharge-summaries": "ts-node scripts/sync-discharge-summaries.ts",
     "seed-users": "ts-node scripts/seed-users.ts",
     "seed-config": "ts-node scripts/seed-config.ts",
-    "generate-service-token": "ts-node scripts/generate-service-token.ts"
+    "generate-service-token": "ts-node scripts/generate-service-token.ts",
+    "onboard-tenant": "ts-node scripts/onboard-tenant.ts",
+    "create-user": "ts-node scripts/create-user.ts",
+    "test-cerner-integration": "ts-node scripts/test-cerner-integration.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",
@@ -59,6 +62,7 @@
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
+    "firebase-admin": "^13.6.0",
     "globals": "^16.0.0",
     "jest": "^30.0.0",
     "prettier": "^3.4.2",
