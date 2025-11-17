@@ -158,6 +158,8 @@ export interface SimplificationCompletedEvent {
   processingTimeMs: number;
   tokensUsed: number;
   timestamp: string;
+  patientId?: string;
+  preferredLanguage?: string;
 }
 
 /**
