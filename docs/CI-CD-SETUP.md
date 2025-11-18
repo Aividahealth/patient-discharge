@@ -2,6 +2,8 @@
 
 This document describes the Continuous Integration and Continuous Deployment (CI/CD) pipelines for the Patient Discharge System.
 
+> **Note**: This CI/CD pipeline is configured for a **simplified main-branch workflow**. All deployments go directly to production from the `main` branch. Feature branches should create PRs to `main` for review and testing before merge.
+
 ## Overview
 
 The Patient Discharge System uses GitHub Actions for automated testing, building, and deployment of three main components:
@@ -44,7 +46,7 @@ The Patient Discharge System uses GitHub Actions for automated testing, building
 ### 1. Pull Request CI (`ci.yml`)
 
 **Triggers:**
-- Pull requests to `main` or `develop` branches
+- Pull requests to `main` branch
 
 **Jobs:**
 - **Detect Changes**: Uses path filtering to determine which components changed
@@ -69,7 +71,7 @@ The Patient Discharge System uses GitHub Actions for automated testing, building
 ### 2. Backend CI/CD (`backend-ci-cd.yml`)
 
 **Triggers:**
-- Push to `main` or `develop` branches (when `backend/**` changes)
+- Push to `main` branch (when `backend/**` changes)
 - Pull requests affecting `backend/**`
 
 **Jobs:**
@@ -89,17 +91,6 @@ The Patient Discharge System uses GitHub Actions for automated testing, building
 - Tags: `<commit-sha>` and `latest`
 - Base image: `node:20-alpine`
 - Image size: ~8MB (optimized)
-
-#### Deploy to Development
-- **Trigger**: Push to `develop` branch
-- **Target**: Cloud Run service `patient-discharge-backend-dev`
-- **Configuration**:
-  - Memory: 512Mi
-  - CPU: 1
-  - Max instances: 10
-  - Min instances: 0 (scales to zero)
-  - Timeout: 300s
-  - Environment: `NODE_ENV=development`
 
 #### Deploy to Production
 - **Trigger**: Push to `main` branch
@@ -327,15 +318,7 @@ gcloud services enable containerregistry.googleapis.com
 
 ---
 
-## Environments
-
-### Development Environment
-- **Branch**: `develop`
-- **Backend**: `patient-discharge-backend-dev` (Cloud Run)
-- **Frontend**: Vercel preview or `patient-discharge-frontend-dev` (Cloud Run)
-- **Functions**: `*-dev` suffixed functions
-- **Scaling**: Lower limits, auto-scale to zero
-- **Purpose**: Testing features before production
+## Deployment Environment
 
 ### Production Environment
 - **Branch**: `main`
@@ -345,19 +328,21 @@ gcloud services enable containerregistry.googleapis.com
 - **Scaling**: Higher limits, min 1 instance (always warm)
 - **Purpose**: Live production traffic
 
+> **Note**: This is a simplified single-environment setup. All merges to `main` automatically deploy to production after passing CI checks.
+
 ---
 
 ## Deployment Flow
 
 ### Feature Development Flow
 ```
-1. Create feature branch from develop
-   git checkout -b feature/my-feature develop
+1. Create feature branch from main
+   git checkout -b feature/my-feature main
 
 2. Make changes and commit
    git commit -m "feat: add new feature"
 
-3. Push and create PR to develop
+3. Push and create PR to main
    git push origin feature/my-feature
 
 4. CI runs automatically:
@@ -366,13 +351,9 @@ gcloud services enable containerregistry.googleapis.com
    ✓ Build
    ✓ Security scan
 
-5. After PR approval and merge to develop:
-   ✓ Deploy to development environment
-
-6. After testing, create PR from develop to main
-
-7. After merge to main:
-   ✓ Deploy to production environment
+5. After PR approval and merge to main:
+   ✓ Automatic deployment to production
+   ✓ Monitor deployment and application health
 ```
 
 ### Hotfix Flow
@@ -387,8 +368,8 @@ gcloud services enable containerregistry.googleapis.com
    git push origin hotfix/critical-fix
 
 4. After CI passes and approval:
-   ✓ Merge to main → deploys to production
-   ✓ Merge back to develop
+   ✓ Merge to main → deploys to production immediately
+   ✓ Monitor deployment closely
 ```
 
 ---

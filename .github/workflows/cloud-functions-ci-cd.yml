@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - develop
     paths:
       - 'simtran/**'
       - '.github/workflows/cloud-functions-ci-cd.yml'
@@ -73,43 +72,6 @@ jobs:
           cd ../simplification && npm run build
           cd ../translation && npm run build
 
-  deploy-simplification-dev:
-    name: Deploy Simplification (Dev)
-    runs-on: ubuntu-latest
-    needs: [lint-and-test]
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    environment:
-      name: development
-      url: https://${{ env.REGION }}-${{ secrets.GCP_PROJECT_ID }}.cloudfunctions.net/simplify-discharge-dev
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Setup Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Deploy Simplification Function (Dev)
-        working-directory: ./simtran/simplification
-        run: |
-          gcloud functions deploy simplify-discharge-dev \
-            --gen2 \
-            --runtime nodejs20 \
-            --region ${{ env.REGION }} \
-            --source . \
-            --entry-point simplifyDischarge \
-            --trigger-http \
-            --allow-unauthenticated \
-            --set-env-vars "NODE_ENV=development,GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
-            --memory 512MB \
-            --timeout 540s \
-            --max-instances 10
-
   deploy-simplification-prod:
     name: Deploy Simplification (Production)
     runs-on: ubuntu-latest
@@ -147,43 +109,6 @@ jobs:
             --timeout 540s \
             --max-instances 100 \
             --min-instances 1
-
-  deploy-translation-dev:
-    name: Deploy Translation (Dev)
-    runs-on: ubuntu-latest
-    needs: [lint-and-test]
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    environment:
-      name: development
-      url: https://${{ env.REGION }}-${{ secrets.GCP_PROJECT_ID }}.cloudfunctions.net/translate-discharge-dev
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Setup Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Deploy Translation Function (Dev)
-        working-directory: ./simtran/translation
-        run: |
-          gcloud functions deploy translate-discharge-dev \
-            --gen2 \
-            --runtime nodejs20 \
-            --region ${{ env.REGION }} \
-            --source . \
-            --entry-point translateDischarge \
-            --trigger-http \
-            --allow-unauthenticated \
-            --set-env-vars "NODE_ENV=development,GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
-            --memory 512MB \
-            --timeout 300s \
-            --max-instances 10
 
   deploy-translation-prod:
     name: Deploy Translation (Production)
