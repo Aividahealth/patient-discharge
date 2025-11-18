@@ -145,7 +145,15 @@ export default function ExpertReviewPage() {
       )
 
       setRawText(details.rawSummary?.text || "")
-      setSimplifiedText(details.simplifiedSummary?.text || "")
+      
+      // Combine simplified summary and instructions
+      const simplifiedCombined = [
+        details.simplifiedSummary?.text || '',
+        details.simplifiedInstructions?.text || ''
+      ].filter(Boolean).join('\n\n---\n\n')
+      
+      setSimplifiedText(simplifiedCombined)
+      
       if (details) {
         setPatientName(details.patientId || patientName)
       }
