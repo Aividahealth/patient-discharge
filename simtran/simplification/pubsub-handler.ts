@@ -6,6 +6,7 @@ import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
 import { PubSubPublisherService } from './pubsub-publisher.service';
 import { createLogger } from './common/utils/logger';
+import { logPipelineEvent } from './common/utils/pipeline-logger';
 
 const logger = createLogger('PubSubHandler');
 
@@ -274,14 +275,32 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
 
     // Step 4: Simplify discharge summaries and instructions
     logger.debug('Step 4: Simplifying content');
+    const simplifyStartTime = Date.now();
     const simplifiedResults = await simplifyBinaries(
       binariesResponse.dischargeSummaries,
       binariesResponse.dischargeInstructions
     );
+    const simplifyDuration = Date.now() - simplifyStartTime;
 
     logger.info('Content simplified successfully', {
       dischargeSummarySimplified: !!simplifiedResults.dischargeSummary,
       dischargeInstructionsSimplified: !!simplifiedResults.dischargeInstructions,
+    });
+
+    // Log pipeline event for metrics/dashboard
+    const totalTokens = (simplifiedResults.dischargeSummary?.tokensUsed || 0) +
+                       (simplifiedResults.dischargeInstructions?.tokensUsed || 0);
+    logPipelineEvent({
+      tenantId,
+      compositionId: event.googleCompositionId,
+      step: 'simplify',
+      status: 'completed',
+      durationMs: simplifyDuration,
+      metadata: {
+        tokensUsed: totalTokens,
+        dischargeSummarySimplified: !!simplifiedResults.dischargeSummary,
+        dischargeInstructionsSimplified: !!simplifiedResults.dischargeInstructions,
+      },
     });
 
     // Step 5: Write simplified files to tenant-specific simplified bucket
@@ -320,9 +339,8 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
 
     // Step 7: Publish to discharge-simplification-completed topic (triggers Translation service)
     logger.debug('Step 7: Publishing to discharge-simplification-completed topic');
-    const totalTokens = (simplifiedResults.dischargeSummary?.tokensUsed || 0) +
-                       (simplifiedResults.dischargeInstructions?.tokensUsed || 0);
 
+    const publishStartTime = Date.now();
     const messageId = await pubsubPublisher.publishSimplificationCompleted({
       tenantId,
       compositionId: event.googleCompositionId,
@@ -333,10 +351,24 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
       patientId: event.patientId,
       preferredLanguage,
     });
+    const publishDuration = Date.now() - publishStartTime;
 
     logger.info('Published to discharge-simplification-completed topic', {
       messageId,
       compositionId: event.googleCompositionId,
+    });
+
+    // Log pipeline event for publish_simplified step
+    logPipelineEvent({
+      tenantId,
+      compositionId: event.googleCompositionId,
+      step: 'publish_simplified',
+      status: 'completed',
+      durationMs: publishDuration,
+      metadata: {
+        messageId,
+        filesCount: simplifiedFiles.length,
+      },
     });
 
     const processingTime = Date.now() - processingStartTime;
@@ -353,6 +385,22 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
       compositionId: event.googleCompositionId,
       tenantId,
     });
+
+    // Log pipeline event for failed simplification
+    const err = error as Error;
+    logPipelineEvent({
+      tenantId,
+      compositionId: event.googleCompositionId,
+      step: 'simplify',
+      status: 'failed',
+      durationMs: Date.now() - processingStartTime,
+      error: {
+        message: err.message,
+        name: err.name,
+        stack: err.stack,
+      },
+    });
+
     throw error;
   }
 }

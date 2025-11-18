@@ -47,6 +47,78 @@ export class BackendClientService {
   }
 
   /**
+   * Get simplified content from FHIR via Backend API
+   */
+  async getSimplifiedFromFhir(
+    compositionId: string,
+    tenantId: string
+  ): Promise<{
+    dischargeSummary?: { content: string };
+    dischargeInstructions?: { content: string };
+  }> {
+    logger.info('Fetching simplified content from FHIR', {
+      compositionId,
+      tenantId,
+    });
+
+    try {
+      const response = await fetch(
+        `${this.apiBaseUrl}/google/fhir/Composition/${compositionId}/simplified`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch simplified content from FHIR: ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as any;
+
+      // Extract simplified content from the response
+      const result: {
+        dischargeSummary?: { content: string };
+        dischargeInstructions?: { content: string };
+      } = {};
+
+      // Find simplified discharge summary
+      const simplifiedSummary = data.dischargeSummaries?.find((summary: any) =>
+        summary.tags?.some((tag: any) => tag.code === 'simplified-content')
+      );
+      if (simplifiedSummary?.text) {
+        result.dischargeSummary = { content: simplifiedSummary.text };
+      }
+
+      // Find simplified discharge instructions
+      const simplifiedInstructions = data.dischargeInstructions?.find((instr: any) =>
+        instr.tags?.some((tag: any) => tag.code === 'simplified-content')
+      );
+      if (simplifiedInstructions?.text) {
+        result.dischargeInstructions = { content: simplifiedInstructions.text };
+      }
+
+      logger.info('Simplified content fetched from FHIR successfully', {
+        compositionId,
+        tenantId,
+        hasDischargeSummary: !!result.dischargeSummary,
+        hasDischargeInstructions: !!result.dischargeInstructions,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to fetch simplified content from FHIR', error as Error, {
+        compositionId,
+        tenantId,
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Write translated content back to FHIR via Backend API
    */
   async writeTranslatedToFhir(

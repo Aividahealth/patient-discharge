@@ -220,6 +220,26 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
       compositionId: event.compositionId,
     });
 
+    // Step 2: Fetch simplified content from FHIR (source of truth)
+    logger.debug('Step 2: Fetching simplified content from FHIR');
+    const simplifiedContent = await backendClient.getSimplifiedFromFhir(
+      event.compositionId,
+      tenantId
+    );
+
+    if (!simplifiedContent.dischargeSummary && !simplifiedContent.dischargeInstructions) {
+      logger.warning('No simplified content found in FHIR, skipping translation', {
+        compositionId: event.compositionId,
+        tenantId,
+      });
+      return;
+    }
+
+    logger.info('Simplified content fetched from FHIR', {
+      hasDischargeSummary: !!simplifiedContent.dischargeSummary,
+      hasDischargeInstructions: !!simplifiedContent.dischargeInstructions,
+    });
+
     const translatedResults: {
       dischargeSummary?: { content: string; language: string };
       dischargeInstructions?: { content: string; language: string };
@@ -228,20 +248,13 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     let totalTokensUsed = 0;
 
     // Translate discharge summary if available
-    const summaryFile = event.simplifiedFiles.find((f: SimplifiedFile) => f.type === 'discharge-summary');
-    if (summaryFile) {
+    if (simplifiedContent.dischargeSummary) {
       logger.debug('Step 2a: Translating discharge summary');
-
-      // Read simplified content from GCS
-      const simplifiedContent = await storageService.readSimplifiedFile(
-        tenantConfig.buckets.simplifiedBucket,
-        summaryFile.simplifiedPath
-      );
 
       // Translate the content
       const translationResult = await translationService.translateContent({
-        content: simplifiedContent,
-        fileName: summaryFile.simplifiedPath,
+        content: simplifiedContent.dischargeSummary.content,
+        fileName: `${event.compositionId}-discharge-summary-simplified.md`,
         targetLanguage,
       });
 
@@ -252,26 +265,19 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
 
       logger.info('Discharge summary translated successfully', {
         targetLanguage,
-        originalLength: simplifiedContent.length,
+        originalLength: simplifiedContent.dischargeSummary.content.length,
         translatedLength: translationResult.translatedContent.length,
       });
     }
 
     // Translate discharge instructions if available
-    const instructionsFile = event.simplifiedFiles.find((f: SimplifiedFile) => f.type === 'discharge-instructions');
-    if (instructionsFile) {
+    if (simplifiedContent.dischargeInstructions) {
       logger.debug('Step 2b: Translating discharge instructions');
-
-      // Read simplified content from GCS
-      const simplifiedContent = await storageService.readSimplifiedFile(
-        tenantConfig.buckets.simplifiedBucket,
-        instructionsFile.simplifiedPath
-      );
 
       // Translate the content
       const translationResult = await translationService.translateContent({
-        content: simplifiedContent,
-        fileName: instructionsFile.simplifiedPath,
+        content: simplifiedContent.dischargeInstructions.content,
+        fileName: `${event.compositionId}-discharge-instructions-simplified.md`,
         targetLanguage,
       });
 
@@ -282,7 +288,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
 
       logger.info('Discharge instructions translated successfully', {
         targetLanguage,
-        originalLength: simplifiedContent.length,
+        originalLength: simplifiedContent.dischargeInstructions.content.length,
         translatedLength: translationResult.translatedContent.length,
       });
     }
