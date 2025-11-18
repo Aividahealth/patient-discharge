@@ -112,4 +112,3 @@ export interface UserResponse {
   createdBy?: string;
   lastUpdatedBy?: string;
 }
-

@@ -84,6 +84,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+
     // Reset failed login attempts on successful login
     if (user.failedLoginAttempts > 0) {
       await this.userService.update(user.id, {
@@ -97,11 +98,16 @@ export class AuthService {
       });
     }
 
-    // Verify tenant exists (check Firestore first, then YAML config)
-    const yamlTenantConfig = await this.configService.getTenantConfig(request.tenantId);
-    if (!yamlTenantConfig) {
-      this.logger.error(`Tenant configuration not found: ${request.tenantId}`);
-      throw new UnauthorizedException('Tenant not found');
+    // For system admins, skip tenant config verification
+    if (user.role === 'system_admin') {
+      this.logger.log(`System admin login for user: ${user.username}`);
+    } else {
+      // Verify tenant exists (check Firestore first, then YAML config)
+      const yamlTenantConfig = await this.configService.getTenantConfig(request.tenantId);
+      if (!yamlTenantConfig) {
+        this.logger.error(`Tenant configuration not found: ${request.tenantId}`);
+        throw new UnauthorizedException('Tenant not found');
+      }
     }
 
     // Generate JWT token
@@ -133,47 +139,75 @@ export class AuthService {
 
     this.logger.log(`✅ Login successful for user: ${user.username} (${user.id})`);
 
-    // Get tenant configuration from Firestore (with fallback to YAML)
-    const tenantConfig = await this.tenantConfigService.getTenantConfigWithFallback(request.tenantId);
-    
-    if (!tenantConfig) {
-      this.logger.warn(`Tenant configuration not found for: ${request.tenantId}, using defaults`);
-    }
-
     // Build response with tenant branding from config
-    const response: LoginResponse = {
-      success: true,
-      token,
-      expiresIn: this.jwtExpiresIn,
-      user: {
-        id: user.id,
-        tenantId: tenantId,
-        username: user.username,
-        name: user.name,
-        role: user.role,
-        linkedPatientId: user.linkedPatientId,
-      },
-      tenant: tenantConfig
-        ? {
-            id: tenantConfig.id,
-            name: tenantConfig.name,
-            branding: {
-              logo: tenantConfig.branding.logo,
-              primaryColor: tenantConfig.branding.primaryColor,
-              secondaryColor: tenantConfig.branding.secondaryColor,
-            },
-          }
-        : {
-            // Fallback to defaults if config not found
-            id: request.tenantId,
-            name: `${request.tenantId} Hospital`,
-            branding: {
-              logo: `https://storage.googleapis.com/logos/${request.tenantId}.png`,
-              primaryColor: '#3b82f6',
-              secondaryColor: '#60a5fa',
-            },
+    let response: LoginResponse;
+
+    if (user.role === 'system_admin') {
+      // System admin gets a special tenant config
+      response = {
+        success: true,
+        token,
+        expiresIn: this.jwtExpiresIn,
+        user: {
+          id: user.id,
+          tenantId: user.tenantId,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          linkedPatientId: user.linkedPatientId,
+        },
+        tenant: {
+          id: 'system',
+          name: 'System Administration',
+          branding: {
+            logo: 'https://storage.googleapis.com/logos/system-admin.png',
+            primaryColor: '#7c3aed',
+            secondaryColor: '#a78bfa',
           },
-    };
+        },
+      };
+    } else {
+      // Get tenant configuration from Firestore (with fallback to YAML)
+      const tenantConfig = await this.tenantConfigService.getTenantConfigWithFallback(request.tenantId);
+
+      if (!tenantConfig) {
+        this.logger.warn(`Tenant configuration not found for: ${request.tenantId}, using defaults`);
+      }
+
+      response = {
+        success: true,
+        token,
+        expiresIn: this.jwtExpiresIn,
+        user: {
+          id: user.id,
+          tenantId: tenantId,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          linkedPatientId: user.linkedPatientId,
+        },
+        tenant: tenantConfig
+          ? {
+              id: tenantConfig.id,
+              name: tenantConfig.name,
+              branding: {
+                logo: tenantConfig.branding.logo,
+                primaryColor: tenantConfig.branding.primaryColor,
+                secondaryColor: tenantConfig.branding.secondaryColor,
+              },
+            }
+          : {
+              // Fallback to defaults if config not found
+              id: request.tenantId,
+              name: `${request.tenantId} Hospital`,
+              branding: {
+                logo: `https://storage.googleapis.com/logos/${request.tenantId}.png`,
+                primaryColor: '#3b82f6',
+                secondaryColor: '#60a5fa',
+              },
+            },
+      };
+    }
 
     return response;
   }

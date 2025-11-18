@@ -43,7 +43,7 @@ export interface LoginResponse {
     tenantId: string
     username: string
     name: string
-    role: 'patient' | 'clinician' | 'admin' | 'expert'
+    role: 'patient' | 'clinician' | 'admin' | 'expert' | 'system_admin'
     linkedPatientId?: string
   }
   tenant: {
