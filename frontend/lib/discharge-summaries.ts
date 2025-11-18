@@ -348,6 +348,92 @@ export interface PatientDetailsResponse {
   };
 }
 
+/**
+ * Get translated content from FHIR for a specific composition and language
+ */
+export async function getTranslatedContent(
+  compositionId: string,
+  language: string,
+  token?: string,
+  tenantId?: string
+): Promise<DischargeSummaryContent | null> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || API_BASE_URL;
+  
+  try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (tenantId) {
+      headers['X-Tenant-ID'] = tenantId;
+    }
+
+    const response = await fetch(
+      `${apiUrl}/google/fhir/Composition/${compositionId}/translated`,
+      {
+        method: 'GET',
+        headers,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch translated binaries: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    // Find the translated summary for the requested language
+    const translatedSummary = data.dischargeSummaries?.find((summary: any) =>
+      summary.tags?.some((tag: any) => tag.code === 'discharge-summary-translated') &&
+      summary.text?.includes(`-${language}.md`)
+    );
+    
+    const translatedInstructions = data.dischargeInstructions?.find((instr: any) =>
+      instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-translated') &&
+      instr.text?.includes(`-${language}.md`)
+    );
+
+    if (!translatedSummary && !translatedInstructions) {
+      return null;
+    }
+
+    // Combine summary and instructions
+    const combinedContent = [
+      translatedSummary?.text || '',
+      translatedInstructions?.text || ''
+    ].filter(Boolean).join('\n\n---\n\n');
+
+    return {
+      metadata: {
+        id: compositionId,
+        compositionId: compositionId,
+        patientId: '',
+        patientName: '',
+        mrn: '',
+        dischargeDate: '',
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        files: {},
+        hospital: {},
+      },
+      content: {
+        content: combinedContent,
+        version: 'translated',
+        language: language,
+        fileSize: combinedContent.length,
+        lastModified: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    console.error('Failed to fetch translated content:', error);
+    return null;
+  }
+}
+
 export async function getPatientDetails(
   patientId: string,
   compositionId: string,

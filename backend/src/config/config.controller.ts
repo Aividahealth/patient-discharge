@@ -42,7 +42,7 @@ export class ConfigController {
         },
         translationConfig: {
           enabled: tenantConfig?.config?.translationEnabled ?? true,
-          targetLanguages: tenantConfig?.features?.supportedLanguages || ['en', 'es', 'zh'],
+          supportedLanguages: tenantConfig?.features?.supportedLanguages || ['en', 'es', 'zh'],
         },
       };
 

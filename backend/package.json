@@ -21,7 +21,8 @@
     "sync-discharge-summaries": "ts-node scripts/sync-discharge-summaries.ts",
     "seed-users": "ts-node scripts/seed-users.ts",
     "seed-config": "ts-node scripts/seed-config.ts",
-    "generate-service-token": "ts-node scripts/generate-service-token.ts"
+    "generate-service-token": "ts-node scripts/generate-service-token.ts",
+    "update-demo-languages": "ts-node scripts/update-demo-languages.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",

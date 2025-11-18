@@ -2,6 +2,7 @@ import { Controller, Post, Param, Body, HttpException, HttpStatus, Logger } from
 import { SimplifiedContentService } from './simplified-content.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
+import { Public } from '../auth/auth.guard';
 
 @Controller('api/fhir/composition')
 export class CompositionSimplifiedController {
@@ -12,7 +13,9 @@ export class CompositionSimplifiedController {
   /**
    * POST /api/fhir/composition/:compositionId/simplified
    * Write simplified content back to FHIR store
+   * This endpoint is designed for service-to-service communication
    */
+  @Public()
   @Post(':compositionId/simplified')
   async postSimplifiedContent(
     @Param('compositionId') compositionId: string,
@@ -68,7 +71,9 @@ export class CompositionSimplifiedController {
   /**
    * POST /api/fhir/composition/:compositionId/translated
    * Write translated content back to FHIR store
+   * This endpoint is designed for service-to-service communication
    */
+  @Public()
   @Post(':compositionId/translated')
   async postTranslatedContent(
     @Param('compositionId') compositionId: string,

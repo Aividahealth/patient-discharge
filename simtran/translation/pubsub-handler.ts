@@ -1,5 +1,5 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { SimplificationCompletedEvent, SimplifiedFile } from '../common/types';
+import { SimplificationCompletedEvent, SimplifiedFile } from './common/types';
 import { TranslationService } from './translation.service';
 import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
@@ -38,11 +38,91 @@ export async function processSimplificationCompletedEvent(cloudEvent: CloudEvent
     // Initialize services
     initializeServices();
 
+    // Log the raw cloudEvent for debugging
+    logger.debug('Received CloudEvent', {
+      id: cloudEvent.id,
+      type: cloudEvent.type,
+      source: cloudEvent.source,
+      dataContentType: cloudEvent.datacontenttype,
+      hasData: !!cloudEvent.data,
+    });
+
     // Parse the Pub/Sub message
+    // For Gen2 Cloud Functions with Pub/Sub triggers, the CloudEvent.data can be:
+    // 1. An object with { message: { data: <base64>, attributes: {} } }
+    // 2. Or directly the message object { data: <base64>, attributes: {} }
     const messageData = cloudEvent.data as any;
-    const message: SimplificationCompletedEvent = JSON.parse(
-      Buffer.from(messageData.message.data, 'base64').toString()
-    );
+    
+    if (!messageData) {
+      throw new Error('CloudEvent data is undefined');
+    }
+
+    // Determine the format of cloudEvent.data
+    let messageJson: string;
+    const dataType = typeof messageData;
+    const isBuffer = Buffer.isBuffer(messageData);
+    const isString = dataType === 'string';
+    
+    if (isString) {
+      // CloudEvent.data is a string - could be JSON or base64
+      const dataString = messageData as string;
+      
+      // Check if it looks like base64 or JSON
+      if (dataString.trim().startsWith('{')) {
+        // Looks like JSON
+        messageJson = dataString;
+        logger.debug('CloudEvent data is a JSON string', {
+          length: messageJson.length,
+          preview: messageJson.substring(0, 100),
+        });
+      } else {
+        // Assume it's base64
+        messageJson = Buffer.from(dataString, 'base64').toString('utf-8');
+        logger.debug('CloudEvent data is a base64 string', {
+          base64Length: dataString.length,
+          decodedLength: messageJson.length,
+          preview: messageJson.substring(0, 100),
+        });
+      }
+    } else if (isBuffer) {
+      // CloudEvent.data is a Buffer
+      messageJson = messageData.toString('utf-8');
+      logger.debug('CloudEvent data is a Buffer', {
+        length: messageJson.length,
+        preview: messageJson.substring(0, 100),
+      });
+    } else if (messageData.message && messageData.message.data) {
+      // Wrapped format: cloudEvent.data.message.data (base64)
+      messageJson = Buffer.from(messageData.message.data, 'base64').toString();
+      logger.debug('Using wrapped format with base64: cloudEvent.data.message.data', {
+        length: messageJson.length,
+        preview: messageJson.substring(0, 100),
+      });
+    } else if (messageData.data) {
+      // Direct format: cloudEvent.data.data (base64)
+      messageJson = Buffer.from(messageData.data, 'base64').toString();
+      logger.debug('Using direct format with base64: cloudEvent.data.data', {
+        length: messageJson.length,
+        preview: messageJson.substring(0, 100),
+      });
+    } else {
+      // Unknown format
+      const errorDetails = {
+        dataType,
+        isBuffer,
+        isString,
+        hasMessage: !!messageData.message,
+        hasData: !!messageData.data,
+        length: messageData.length,
+        keys: isBuffer || isString ? 'buffer/string' : Object.keys(messageData).slice(0, 10),
+      };
+      
+      logger.error('CloudEvent data structure unknown', new Error('Unknown format'), errorDetails);
+      
+      throw new Error(`Unexpected CloudEvent data format. Type: ${dataType}, isBuffer: ${isBuffer}, isString: ${isString}`);
+    }
+
+    const message: SimplificationCompletedEvent = JSON.parse(messageJson);
 
     logger.info('Translation function triggered', {
       tenantId: message.tenantId,

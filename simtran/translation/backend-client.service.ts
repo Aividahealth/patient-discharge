@@ -74,15 +74,16 @@ export class BackendClientService {
 
     try {
       const response = await fetch(
-        `${this.apiBaseUrl}/api/compositions/${compositionId}/translated`,
+        `${this.apiBaseUrl}/api/fhir/composition/${compositionId}/translated`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'X-Tenant-ID': tenantId,
           },
           body: JSON.stringify({
             tenantId,
-            ...translatedContent,
+            translatedContent,
           }),
         }
       );
