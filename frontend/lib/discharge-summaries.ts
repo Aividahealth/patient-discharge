@@ -386,14 +386,13 @@ export async function getTranslatedContent(
     const data = await response.json();
     
     // Find the translated summary for the requested language
+    // Note: Currently, all translated content is returned together, not filtered by language on the backend
     const translatedSummary = data.dischargeSummaries?.find((summary: any) =>
-      summary.tags?.some((tag: any) => tag.code === 'discharge-summary-translated') &&
-      summary.text?.includes(`-${language}.md`)
+      summary.tags?.some((tag: any) => tag.code === 'discharge-summary-translated')
     );
     
     const translatedInstructions = data.dischargeInstructions?.find((instr: any) =>
-      instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-translated') &&
-      instr.text?.includes(`-${language}.md`)
+      instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-translated')
     );
 
     if (!translatedSummary && !translatedInstructions) {
