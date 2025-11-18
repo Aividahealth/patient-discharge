@@ -1,23 +1,29 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatMessageDto, ChatResponseDto } from './dto/chat-message.dto';
-import Anthropic from '@anthropic-ai/sdk';
+import { VertexAI } from '@google-cloud/vertexai';
 
 @Injectable()
 export class PatientChatbotService {
   private readonly logger = new Logger(PatientChatbotService.name);
-  private readonly anthropic: Anthropic;
-  private readonly model = 'claude-3-5-sonnet-20241022';
+  private readonly vertexAI: VertexAI;
+  private readonly model = 'gemini-2.0-flash-exp';
+  private readonly projectId: string;
+  private readonly location: string;
 
   constructor() {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      this.logger.warn('ANTHROPIC_API_KEY not set. Chatbot will not function.');
-    }
-    this.anthropic = new Anthropic({ apiKey });
+    this.projectId = process.env.GCP_PROJECT || 'simtran-474018';
+    this.location = process.env.LOCATION || 'us-central1';
+
+    this.vertexAI = new VertexAI({
+      project: this.projectId,
+      location: this.location,
+    });
+
+    this.logger.log(`Patient Chatbot Service initialized with Gemini (project: ${this.projectId}, location: ${this.location})`);
   }
 
   /**
-   * Generate chat response using Claude AI with strict context restrictions
+   * Generate chat response using Gemini AI with strict context restrictions
    */
   async chat(dto: ChatMessageDto): Promise<ChatResponseDto> {
     try {
@@ -26,31 +32,55 @@ export class PatientChatbotService {
         dto.dischargeInstructions
       );
 
-      // Build conversation history for Claude
-      const messages = [
-        ...(dto.conversationHistory || []).map((msg) => ({
-          role: msg.role as 'user' | 'assistant',
-          content: msg.content,
-        })),
-        {
-          role: 'user' as const,
-          content: dto.message,
-        },
-      ];
-
       this.logger.log(`Chatbot request for patient ${dto.patientId}, composition ${dto.compositionId}`);
 
-      const response = await this.anthropic.messages.create({
+      // Get the generative model with system instruction
+      const generativeModel = this.vertexAI.getGenerativeModel({
         model: this.model,
-        max_tokens: 1000,
-        temperature: 0.3, // Lower temperature for more conservative responses
-        system: systemPrompt,
-        messages: messages,
+        generationConfig: {
+          maxOutputTokens: 1000,
+          temperature: 0.3, // Lower temperature for more conservative responses
+          topP: 0.95,
+        },
+        systemInstruction: {
+          role: 'system',
+          parts: [{ text: systemPrompt }],
+        },
       });
 
-      const responseText = response.content[0].type === 'text'
-        ? response.content[0].text
-        : '';
+      // Build conversation history for Gemini
+      const history = (dto.conversationHistory || []).map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }],
+      }));
+
+      // Start chat with history
+      const chat = generativeModel.startChat({
+        history: history,
+      });
+
+      // Send the user's message
+      const result = await chat.sendMessage(dto.message);
+      const response = result.response;
+
+      if (!response.candidates || response.candidates.length === 0) {
+        throw new Error('No response generated from Gemini');
+      }
+
+      const candidate = response.candidates[0];
+
+      // Check for safety blocks
+      if (candidate.finishReason === 'SAFETY') {
+        this.logger.warn('Content blocked by safety filters', {
+          patientId: dto.patientId,
+          safetyRatings: candidate.safetyRatings,
+        });
+        throw new Error('Content was blocked by safety filters');
+      }
+
+      const responseText = candidate.content.parts
+        .map((part: any) => part.text)
+        .join('');
 
       this.logger.log(`Chatbot response generated for patient ${dto.patientId}`);
 
