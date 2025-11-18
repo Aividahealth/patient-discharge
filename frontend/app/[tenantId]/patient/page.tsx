@@ -740,49 +740,83 @@ EMERGENCY CONTACTS:
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">{t.recoverySummary}</CardTitle>
-                  <div className="flex items-center gap-2 mt-2">
+            {/* Recovery Summary Card */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 mt-1">
+                    <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                      <Heart className="h-6 w-6 text-purple-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <h3 className="font-heading text-xl font-semibold text-gray-900">{t.recoverySummary}</h3>
                     <TenantBadge tenantVariant="light">
                       AI Generated
                     </TenantBadge>
-                    <span className="text-xs text-muted-foreground">
-                      This content has been simplified using artificial intelligence
-                    </span>
+                      {preferredLanguage && preferredLanguage !== 'en' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setViewTranslated(!viewTranslated)}
+                        >
+                          <Globe className="h-4 w-4 mr-2" />
+                          {viewTranslated ? 'View Original' : `View ${SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.name}`}
+                        </Button>
+                      )}
                   </div>
-                  {preferredLanguage && preferredLanguage !== 'en' && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setViewTranslated(!viewTranslated)}
-                      >
-                        <Globe className="h-4 w-4 mr-2" />
-                        {viewTranslated ? 'View Original' : `View ${SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.name}`}
-                      </Button>
+                    
+                    <div className="space-y-4">
+                      {/* Reasons for Hospital Stay */}
+                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <h4 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          Reasons for Hospital Stay
+                        </h4>
+                        <div className="text-sm text-gray-900 leading-relaxed prose prose-sm max-w-none">
+                          {viewTranslated && translatedSummary ? (
+                            <div dangerouslySetInnerHTML={{ __html: translatedSummary.split('What happened during your stay')[0].replace(/\n/g, '<br />') }} />
+                          ) : (
+                            <div dangerouslySetInnerHTML={{ __html: dischargeSummary.split('What happened during your stay')[0].replace(/\n/g, '<br />') }} />
+                          )}
+                  </div>
+                      </div>
+
+                      {/* What Happened During Your Stay */}
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          What Happened During Your Stay
+                        </h4>
+                        <div className="text-sm text-gray-900 leading-relaxed prose prose-sm max-w-none">
+                          {viewTranslated && translatedSummary ? (
+                            <div dangerouslySetInnerHTML={{ __html: (translatedSummary.split('What happened during your stay')[1] || translatedSummary).replace(/\n/g, '<br />') }} />
+                          ) : (
+                            <div dangerouslySetInnerHTML={{ __html: (dischargeSummary.split('What happened during your stay')[1] || dischargeSummary).replace(/\n/g, '<br />') }} />
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="prose prose-sm max-w-none">
-                    {viewTranslated && translatedSummary ? (
-                      <div dangerouslySetInnerHTML={{ __html: translatedSummary.replace(/\n/g, '<br />') }} />
-                    ) : (
-                      <div dangerouslySetInnerHTML={{ __html: dischargeSummary.replace(/\n/g, '<br />') }} />
-                    )}
+                  </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">{t.quickActions}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+            {/* Quick Actions Card */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 mt-1">
+                    <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                      <MessageCircle className="h-6 w-6 text-gray-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">{t.quickActions}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Button
-                    className="w-full justify-start bg-transparent"
+                        className="w-full justify-start"
                     variant="outline"
                     onClick={() => setActiveTab("medications")}
                   >
@@ -790,28 +824,30 @@ EMERGENCY CONTACTS:
                     {t.viewTodaysMeds}
                   </Button>
                   <Button
-                    className="w-full justify-start bg-transparent"
+                        className="w-full justify-start"
                     variant="outline"
                     onClick={() => setActiveTab("appointments")}
                   >
                     <Calendar className="h-4 w-4 mr-2" />
                     {t.nextAppointment}
                   </Button>
-                  <Button className="w-full justify-start bg-transparent" variant="outline">
+                      <Button className="w-full justify-start" variant="outline">
                     <Phone className="h-4 w-4 mr-2" />
                     {t.callNurse}
                   </Button>
                   <Button
-                    className="w-full justify-start bg-transparent"
+                        className="w-full justify-start"
                     variant="outline"
-                    onClick={() => setActiveTab("chat")}
+                        onClick={() => setActiveTab("chat")}
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
                     {t.askQuestion}
                   </Button>
+                    </div>
+                  </div>
+                </div>
                 </CardContent>
               </Card>
-            </div>
           </TabsContent>
 
           {/* Medications Tab */}
@@ -825,16 +861,16 @@ EMERGENCY CONTACTS:
             </div>
 
             {structuredMedications.length > 0 ? (
-              <div className="grid gap-4">
+            <div className="grid gap-4">
                 {structuredMedications.map((med, index) => (
                   <Card key={`med-${index}`} className="hover:shadow-md transition-shadow">
-                    <CardContent className="pt-6">
+                  <CardContent className="pt-6">
                       <div className="flex items-start gap-4">
                         <div className="flex-shrink-0 mt-1">
                           <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
                             <Pill className="h-6 w-6 text-blue-600" />
-                          </div>
                         </div>
+                          </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-3">
                             <h3 className="font-heading text-xl font-semibold text-gray-900">{med.name}</h3>
@@ -851,27 +887,27 @@ EMERGENCY CONTACTS:
                               <div className="flex items-center gap-2 text-sm">
                                 <Clock className="h-4 w-4 text-gray-500" />
                                 <span className="text-gray-700"><strong>Frequency:</strong> {med.frequency}</span>
-                              </div>
+                        </div>
                             )}
                             {med.howToTake && (
                               <div className="flex items-center gap-2 text-sm">
                                 <Pill className="h-4 w-4 text-gray-500" />
                                 <span className="text-gray-700"><strong>How:</strong> {med.howToTake}</span>
-                              </div>
-                            )}
-                          </div>
+                        </div>
+                          )}
+                        </div>
                           
                           {/* Full Instructions */}
                           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                             <p className="text-sm font-semibold text-gray-700 mb-2">Complete Instructions:</p>
                             <p className="text-sm text-gray-900 leading-relaxed">{med.instructions}</p>
                           </div>
-                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
             ) : parsedSections.medications ? (
               <Card>
                 <CardContent className="pt-6">
@@ -908,8 +944,8 @@ EMERGENCY CONTACTS:
                       <div className="flex-shrink-0 mt-1">
                         <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
                           <Calendar className="h-5 w-5 text-green-600" />
-                        </div>
                       </div>
+                    </div>
                       <div className="flex-1 min-w-0">
                         {apt.specialty && (
                           <h3 className="font-heading text-xl font-semibold text-gray-900 mb-2">
@@ -928,11 +964,11 @@ EMERGENCY CONTACTS:
                               📍 {apt.location}
                             </Badge>
                           )}
-                        </div>
+                      </div>
                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                           <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-line">{apt.rawText}</p>
-                        </div>
                       </div>
+                    </div>
                     </div>
                   </CardContent>
                 </Card>
