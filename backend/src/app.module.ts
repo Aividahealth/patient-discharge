@@ -14,6 +14,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { CernerAuthModule } from './cerner-auth/cerner-auth.module';
 import { PubSubModule } from './pubsub/pubsub.module';
 import { AuthModule } from './auth/auth.module';
+import { PatientChatbotModule } from './patient-chatbot/patient-chatbot.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AuthModule } from './auth/auth.module';
     CernerAuthModule,
     PubSubModule,
     AuthModule,
+    PatientChatbotModule,
   ],
   controllers: [AppController],
   providers: [AppService],

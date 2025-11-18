@@ -23,9 +23,21 @@ interface PatientChatbotProps {
     medications: Array<{ name: string; dose: string; instructions: string }>
     appointments: Array<{ date: string; doctor: string; specialty: string }>
   }
+  dischargeSummary: string
+  dischargeInstructions: string
+  compositionId: string
+  patientId: string
 }
 
-export function PatientChatbot({ isOpen, onClose, patientData }: PatientChatbotProps) {
+export function PatientChatbot({
+  isOpen,
+  onClose,
+  patientData,
+  dischargeSummary,
+  dischargeInstructions,
+  compositionId,
+  patientId,
+}: PatientChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -52,15 +64,31 @@ export function PatientChatbot({ isOpen, onClose, patientData }: PatientChatbotP
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/chat", {
+      // Get auth token from localStorage (assuming it's stored there)
+      const authData = localStorage.getItem('aivida_auth')
+      const token = authData ? JSON.parse(authData).token : null
+      const tenantId = authData ? JSON.parse(authData).tenant.id : 'demo'
+
+      // Use environment variable for chatbot service URL
+      const chatbotUrl = process.env.NEXT_PUBLIC_CHATBOT_SERVICE_URL || '/api/chat'
+
+      const response = await fetch(chatbotUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token && { "Authorization": `Bearer ${token}` }),
+          ...(tenantId && { "X-Tenant-ID": tenantId }),
         },
         body: JSON.stringify({
           message: input,
-          patientData,
-          conversationHistory: messages,
+          patientId,
+          compositionId,
+          dischargeSummary,
+          dischargeInstructions,
+          conversationHistory: messages.map(m => ({
+            role: m.role,
+            content: m.content
+          })),
         }),
       })
 
@@ -70,7 +98,7 @@ export function PatientChatbot({ isOpen, onClose, patientData }: PatientChatbotP
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.message,
+        content: data.response || data.message,
         role: "assistant",
         timestamp: new Date(),
       }
