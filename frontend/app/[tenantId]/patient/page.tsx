@@ -23,6 +23,7 @@ import { usePDFExport } from "@/hooks/use-pdf-export"
 import { useTenant } from "@/contexts/tenant-context"
 import { login } from "@/lib/api/auth"
 import { getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
+import { parseDischargeIntoSections, extractMedications, extractAppointments, type DischargeSections, type Medication, type Appointment } from "@/lib/parse-discharge-sections"
 import html2canvas from "html2canvas"
 import {
   Heart,
@@ -60,7 +61,10 @@ export default function PatientDashboard() {
   const [translatedInstructions, setTranslatedInstructions] = useState<string>("")
   const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
   const [patientName, setPatientName] = useState<string>("")
-  const { exportToPDF } = usePDFExport()
+  const [parsedSections, setParsedSections] = useState<DischargeSections>({})
+  const [structuredMedications, setStructuredMedications] = useState<Medication[]>([])
+  const [structuredAppointments, setStructuredAppointments] = useState<Appointment[]>([])
+  const { exportToPDF} = usePDFExport()
 
   // Auto-login with patient credentials if not authenticated
   useEffect(() => {
@@ -164,8 +168,29 @@ export default function PatientDashboard() {
         console.log('[Patient Portal] Patient details fetched successfully')
 
         // Set discharge summary and instructions
-        setDischargeSummary(details.simplifiedSummary?.text || details.rawSummary?.text || "")
-        setDischargeInstructions(details.simplifiedInstructions?.text || details.rawInstructions?.text || "")
+        const summaryText = details.simplifiedSummary?.text || details.rawSummary?.text || ""
+        const instructionsText = details.simplifiedInstructions?.text || details.rawInstructions?.text || ""
+        
+        setDischargeSummary(summaryText)
+        setDischargeInstructions(instructionsText)
+
+        // Parse the simplified instructions into structured sections
+        console.log('[Patient Portal] Parsing discharge instructions into sections...')
+        const sections = parseDischargeIntoSections(instructionsText)
+        setParsedSections(sections)
+        
+        // Extract structured medications and appointments
+        if (sections.medications) {
+          const meds = extractMedications(sections.medications)
+          setStructuredMedications(meds)
+          console.log('[Patient Portal] Extracted medications:', meds.length)
+        }
+        
+        if (sections.appointments) {
+          const appts = extractAppointments(sections.appointments)
+          setStructuredAppointments(appts)
+          console.log('[Patient Portal] Extracted appointments:', appts.length)
+        }
 
         // Fetch translated content if preferred language is set and not English
         if (preferredLanguage && preferredLanguage !== 'en') {
@@ -747,95 +772,42 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
-            <div className="grid gap-4">
-              {[
-                {
-                  id: "med1",
-                  name: "Metoprolol",
-                  dose: "25mg",
-                  frequency: t.twiceDaily,
-                  timing: t.morningEvening,
-                  instructions: t.medInstructionTakeWithFood,
-                  morning: true,
-                  evening: true,
-                },
-                {
-                  id: "med2",
-                  name: "Atorvastatin",
-                  dose: "20mg",
-                  frequency: t.onceDaily,
-                  timing: t.evening,
-                  instructions: t.medInstructionBedtimeGrapefruit,
-                  evening: true,
-                },
-                {
-                  id: "med3",
-                  name: "Aspirin",
-                  dose: "81mg",
-                  frequency: t.onceDaily,
-                  timing: t.morning,
-                  instructions: t.medInstructionTakeWithFoodStomach,
-                  morning: true,
-                },
-              ].map((med) => (
-                <Card key={med.id} className="relative">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-heading text-lg font-semibold">{med.name}</h3>
-                          <Badge variant="secondary">{med.dose}</Badge>
-                        </div>
-                        <div className="grid sm:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">{t.frequency}</p>
-                            <p className="text-sm">{med.frequency}</p>
+            {structuredMedications.length > 0 ? (
+              <div className="grid gap-4">
+                {structuredMedications.map((med, index) => (
+                  <Card key={`med-${index}`} className="relative">
+                    <CardContent className="pt-6">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="font-heading text-lg font-semibold">{med.name}</h3>
+                            {med.dose && <Badge variant="secondary">{med.dose}</Badge>}
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">{t.whenToTake}</p>
-                            <p className="text-sm">{med.timing}</p>
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-muted-foreground mb-1">{t.specialInstructions}</p>
+                            <p className="text-sm">{med.instructions}</p>
                           </div>
-                        </div>
-                        <div className="mb-4">
-                          <p className="text-sm font-medium text-muted-foreground mb-1">{t.specialInstructions}</p>
-                          <p className="text-sm">{med.instructions}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          {med.morning && (
-                            <Button
-                              variant={checkedMeds[`${med.id}-morning`] ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => toggleMedication(`${med.id}-morning`)}
-                            >
-                              {checkedMeds[`${med.id}-morning`] ? (
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                              ) : (
-                                <Clock className="h-4 w-4 mr-1" />
-                              )}
-                              {t.morning}
-                            </Button>
-                          )}
-                          {med.evening && (
-                            <Button
-                              variant={checkedMeds[`${med.id}-evening`] ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => toggleMedication(`${med.id}-evening`)}
-                            >
-                              {checkedMeds[`${med.id}-evening`] ? (
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                              ) : (
-                                <Clock className="h-4 w-4 mr-1" />
-                              )}
-                              {t.evening}
-                            </Button>
-                          )}
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : parsedSections.medications ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {parsedSections.medications}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-muted-foreground">No medication information available</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Appointments Tab */}
@@ -848,78 +820,48 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
-            <div className="grid gap-4">
-              {[
-                {
-                  date: "March 22, 2024",
-                  time: "10:30 AM",
-                  doctor: "Dr. Sarah Johnson",
-                  specialty: "Cardiology Follow-up",
-                  location: "General Hospital - Cardiology Clinic",
-                  address: "123 Medical Center Dr, Suite 200",
-                  preparation: t.appointmentPrepMedicationList,
-                },
-                {
-                  date: "April 5, 2024",
-                  time: "2:00 PM",
-                  doctor: "Dr. Michael Chen",
-                  specialty: "Primary Care Check-up",
-                  location: "Family Medicine Clinic",
-                  address: "456 Health Plaza, Building A",
-                  preparation: t.appointmentPrepFasting,
-                },
-              ].map((apt, index) => (
-                <Card key={index}>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="font-heading text-lg font-semibold mb-1">{apt.specialty}</h3>
-                        <p className="text-muted-foreground">{apt.doctor}</p>
+            {structuredAppointments.length > 0 ? (
+              <div className="grid gap-4">
+                {structuredAppointments.map((apt, index) => (
+                  <Card key={index}>
+                    <CardContent className="pt-6">
+                      <div className="prose prose-sm max-w-none">
+                        <p>{apt.rawText}</p>
                       </div>
-                      <Badge variant="outline">{apt.date}</Badge>
-                    </div>
-
-                    <div className="grid sm:grid-cols-2 gap-4 mb-4">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{apt.time}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{apt.location}</span>
-                      </div>
-                    </div>
-
-                    <div className="mb-4">
-                      <p className="text-sm text-muted-foreground mb-1">{t.address}</p>
-                      <p className="text-sm">{apt.address}</p>
-                    </div>
-
-                    <div className="mb-4">
-                      <p className="text-sm font-medium text-muted-foreground mb-1">{t.preparationNotes}</p>
-                      <p className="text-sm">{apt.preparation}</p>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {t.directions}
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Calendar className="h-4 w-4 mr-1" />
-                        {t.addToCalendar}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : parsedSections.appointments ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {parsedSections.appointments}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-muted-foreground">No appointment information available</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Diet & Activity Tab */}
           <TabsContent value="diet-activity" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.dietActivityGuidelines}</h2>
 
+            {parsedSections.dietActivity ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {parsedSections.dietActivity}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
             <div className="grid md:grid-cols-2 gap-6">
               {/* Diet Guidelines */}
               <Card>
@@ -996,12 +938,23 @@ EMERGENCY CONTACTS:
                 </CardContent>
               </Card>
             </div>
+            )}
           </TabsContent>
 
           {/* Warning Signs Tab */}
           <TabsContent value="warnings" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.whenToSeekHelp}</h2>
 
+            {parsedSections.warningsSigns ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {parsedSections.warningsSigns}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
             <Card className="border-red-200 bg-red-50">
               <CardHeader>
                 <CardTitle className="font-heading text-red-800 flex items-center gap-2">
@@ -1077,6 +1030,8 @@ EMERGENCY CONTACTS:
                 </div>
               </CardContent>
             </Card>
+            </>
+            )}
           </TabsContent>
         </Tabs>
       </div>
