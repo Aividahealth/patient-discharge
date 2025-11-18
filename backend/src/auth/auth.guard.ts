@@ -140,7 +140,7 @@ export class AuthGuard implements CanActivate {
           username: jwtPayload.username,
           name: jwtPayload.name,
           role: jwtPayload.role,
-          tenantId: jwtPayload.tenantId,
+          tenantId: jwtPayload.tenantId ?? undefined, // Convert null to undefined
         };
         this.logger.debug(
           `✅ App JWT authentication successful for user: ${jwtPayload.username} (${jwtPayload.userId}) in tenant: ${jwtPayload.tenantId}`,

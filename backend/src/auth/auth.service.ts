@@ -112,9 +112,11 @@ export class AuthService {
 
     // Generate JWT token
     const now = Math.floor(Date.now() / 1000);
+    // Use user.tenantId if available, otherwise use request.tenantId (for system_admin)
+    const tenantId = user.tenantId || request.tenantId;
     const payload: JWTPayload = {
       userId: user.id,
-      tenantId: user.tenantId,
+      tenantId: tenantId,
       username: user.username,
       name: user.name,
       role: user.role,
@@ -178,7 +180,7 @@ export class AuthService {
         expiresIn: this.jwtExpiresIn,
         user: {
           id: user.id,
-          tenantId: user.tenantId,
+          tenantId: tenantId,
           username: user.username,
           name: user.name,
           role: user.role,

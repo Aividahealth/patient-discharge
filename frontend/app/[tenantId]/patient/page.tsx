@@ -41,11 +41,12 @@ import {
   X,
   Phone,
   Loader2,
+  LogOut,
 } from "lucide-react"
 
 export default function PatientDashboard() {
   const searchParams = useSearchParams()
-  const { login: contextLogin, token, user, tenant, isAuthenticated } = useTenant()
+  const { login: contextLogin, logout, token, user, tenant, isAuthenticated } = useTenant()
 
   const [patientId, setPatientId] = useState<string | null>(null)
   const [compositionId, setCompositionId] = useState<string | null>(null)
@@ -704,6 +705,15 @@ EMERGENCY CONTACTS:
               </div>
               )}
               <FeedbackButton userType="patient" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => logout()}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Logout</span>
+              </Button>
               <Avatar className="h-8 w-8">
                 <AvatarImage src="/patient-avatar.png" />
                 <AvatarFallback>JS</AvatarFallback>
