@@ -97,6 +97,8 @@ export function parseDischargeIntoSections(content: string): DischargeSections {
 export interface Medication {
   name: string;
   dose?: string;
+  frequency?: string;
+  howToTake?: string;
   instructions: string;
 }
 
@@ -123,55 +125,53 @@ export function extractMedications(medicationsSection: string): Medication[] {
   const medications: Medication[] = [];
   
   try {
-    // Match patterns like:
-    // - Metoprolol succinate (a medicine...) — take 50 mg by mouth once daily.
-    // - Aspirin 81mg - Take once daily with food
-    const lines = medicationsSection.split('\n');
+    // Split by patterns that indicate a new medication:
+    // - Lines starting with **MedicationName** or bold markers
+    // - Bullet points followed by medication names
+    const text = medicationsSection;
     
-    for (const line of lines) {
-      const trimmed = line.trim();
+    // Split on patterns like "**MedicationName:**" or "- **MedicationName"
+    // But keep the entire medication entry together
+    const medSections = text.split(/\n(?=[-•*]\s*\*\*|\*\*(?:[A-Z]|New |Dose:))/);
+    
+    for (const section of medSections) {
+      const trimmed = section.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.toLowerCase().includes('special instructions medications')) continue;
       
-      // Skip empty lines or section headers
-      if (!trimmed || trimmed.startsWith('#')) continue;
+      // Extract medication name (look for **Name:** or **Name**)
+      const nameMatch = trimmed.match(/\*\*([^*:]+?)(?::|\*\*)/);
+      let medName = nameMatch ? cleanMarkdown(nameMatch[1]) : 'Medication';
       
-      // Match bullet points or numbered lists
-      const bulletMatch = trimmed.match(/^[-•*]\s*(.+)$/);
-      const numberMatch = trimmed.match(/^\d+\.\s*(.+)$/);
-      
-      const content = bulletMatch?.[1] || numberMatch?.[1] || trimmed;
-      
-      if (content) {
-        // Try to extract name and dose
-        // Pattern: "MedicationName (description) — take dose instructions"
-        const medMatch = content.match(/^([^—\-–]+)[\s—\-–]+(.+)$/);
-        
-        if (medMatch) {
-          const nameWithDose = medMatch[1].trim();
-          const instructions = medMatch[2].trim();
-          
-          // Try to extract dose from name
-          const doseMatch = nameWithDose.match(/^(.+?)\s+(\d+\s*mg)(.*)$/i);
-          
-          if (doseMatch) {
-            medications.push({
-              name: cleanMarkdown((doseMatch[1] + doseMatch[3]).trim()),
-              dose: cleanMarkdown(doseMatch[2].trim()),
-              instructions: cleanMarkdown(instructions),
-            });
-          } else {
-            medications.push({
-              name: cleanMarkdown(nameWithDose),
-              instructions: cleanMarkdown(instructions),
-            });
-          }
-        } else {
-          // Fallback: treat entire line as medication entry
-          medications.push({
-            name: 'Medication',
-            instructions: cleanMarkdown(content),
-          });
-        }
+      // Skip if this is just a section header like "New" or "Dose:"
+      if (medName.toLowerCase() === 'new' || medName.toLowerCase() === 'dose') {
+        continue;
       }
+      
+      // Clean the full text
+      const cleanedText = cleanMarkdown(trimmed);
+      
+      // Try to extract dose (look for patterns like "40 mg", "5 mg", etc.)
+      const doseMatch = cleanedText.match(/(\d+\s*mg)/i);
+      const dose = doseMatch ? doseMatch[1] : undefined;
+      
+      // Try to extract frequency (once daily, twice daily, etc.)
+      const frequencyMatch = cleanedText.match(/(once|twice|three times|[\d]+\s*times?)\s*(daily|a day|per day)/i);
+      const frequency = frequencyMatch ? frequencyMatch[0] : undefined;
+      
+      // Try to extract "how to take" method (by mouth, injection, etc.)
+      const methodMatch = cleanedText.match(/(by mouth|as an injection|under the skin|with food|sublingual)/i);
+      const howToTake = methodMatch ? methodMatch[0] : undefined;
+      
+      // The full instructions are the cleaned text
+      const instructions = cleanedText;
+      
+      medications.push({
+        name: medName,
+        dose,
+        frequency,
+        howToTake,
+        instructions,
+      });
     }
   } catch (error) {
     console.error('[Parse] Failed to extract medications:', error);
@@ -197,37 +197,38 @@ export function extractAppointments(appointmentsSection: string): Appointment[] 
   const appointments: Appointment[] = [];
   
   try {
-    const lines = appointmentsSection.split('\n');
+    // Split by patterns that indicate a new appointment:
+    // - Lines starting with **ClinicName:** or bold markers
+    // - Bullet points followed by appointment details
+    const text = appointmentsSection;
     
-    for (const line of lines) {
-      const trimmed = line.trim();
-      
-      // Skip empty lines or section headers
+    // Split on patterns like "**Clinic Name:**" to keep each appointment together
+    const apptSections = text.split(/\n(?=[-•*]\s*\*\*|\*\*[A-Z])/);
+    
+    for (const section of apptSections) {
+      const trimmed = section.trim();
       if (!trimmed || trimmed.startsWith('#')) continue;
       
-      // Match bullet points or numbered lists
-      const bulletMatch = trimmed.match(/^[-•*]\s*(.+)$/);
-      const numberMatch = trimmed.match(/^\d+\.\s*(.+)$/);
+      const cleanedText = cleanMarkdown(trimmed);
       
-      const content = bulletMatch?.[1] || numberMatch?.[1] || trimmed;
+      // Try to extract clinic/specialty from patterns like "**Orthopedic Clinic:**" or "**Primary Care Provider (PCP):**"
+      const specialtyMatch = trimmed.match(/\*\*([^:*]+?)(?::|\*\*)/);
+      const specialty = specialtyMatch ? cleanMarkdown(specialtyMatch[1]) : undefined;
       
-      if (content) {
-        const cleanedText = cleanMarkdown(content);
-        
-        // Try to extract clinic/specialty from patterns like "**Orthopedic Clinic:**" or "**Primary Care Provider (PCP):**"
-        const specialtyMatch = content.match(/\*\*([^:]+):\*\*/);
-        const specialty = specialtyMatch ? cleanMarkdown(specialtyMatch[1]) : undefined;
-        
-        // Try to extract timing like "in 2 weeks", "in 1 to 2 weeks"
-        const dateMatch = cleanedText.match(/in (\d+(?:\s+to\s+\d+)?\s+(?:week|day|month)s?)/i);
-        const date = dateMatch ? dateMatch[1] : undefined;
-        
-        appointments.push({
-          specialty,
-          date,
-          rawText: cleanedText,
-        });
-      }
+      // Try to extract timing like "in 2 weeks", "in 1 to 2 weeks"
+      const dateMatch = cleanedText.match(/in (\d+(?:\s+to\s+\d+)?\s+(?:week|day|month)s?)/i);
+      const date = dateMatch ? dateMatch[1] : undefined;
+      
+      // Try to extract location/address
+      const locationMatch = cleanedText.match(/(?:at|location:|address:)\s*([^.]+)/i);
+      const location = locationMatch ? locationMatch[1].trim() : undefined;
+      
+      appointments.push({
+        specialty,
+        date,
+        location,
+        rawText: cleanedText,
+      });
     }
   } catch (error) {
     console.error('[Parse] Failed to extract appointments:', error);

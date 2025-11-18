@@ -825,37 +825,53 @@ EMERGENCY CONTACTS:
             </div>
 
             {structuredMedications.length > 0 ? (
-            <div className="grid gap-4">
+              <div className="grid gap-4">
                 {structuredMedications.map((med, index) => (
                   <Card key={`med-${index}`} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6">
+                    <CardContent className="pt-6">
                       <div className="flex items-start gap-4">
                         <div className="flex-shrink-0 mt-1">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <Pill className="h-5 w-5 text-blue-600" />
-                        </div>
+                          <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Pill className="h-6 w-6 text-blue-600" />
                           </div>
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 mb-3">
                             <h3 className="font-heading text-xl font-semibold text-gray-900">{med.name}</h3>
                             {med.dose && (
-                              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm">
+                              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium px-3 py-1">
                                 {med.dose}
                               </Badge>
                             )}
                           </div>
-                          <div className="space-y-2">
-                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                              <p className="text-sm font-semibold text-gray-700 mb-2">How to take:</p>
-                              <p className="text-sm text-gray-900 leading-relaxed">{med.instructions}</p>
-                        </div>
+                          
+                          {/* Medication Details */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            {med.frequency && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Clock className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-700"><strong>Frequency:</strong> {med.frequency}</span>
+                              </div>
+                            )}
+                            {med.howToTake && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Pill className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-700"><strong>How:</strong> {med.howToTake}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Full Instructions */}
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <p className="text-sm font-semibold text-gray-700 mb-2">Complete Instructions:</p>
+                            <p className="text-sm text-gray-900 leading-relaxed">{med.instructions}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             ) : parsedSections.medications ? (
               <Card>
                 <CardContent className="pt-6">
@@ -900,16 +916,21 @@ EMERGENCY CONTACTS:
                             {apt.specialty}
                           </h3>
                         )}
-                        {apt.date && (
-                          <div className="flex items-center gap-2 mb-3">
-                            <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-sm">
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          {apt.date && (
+                            <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-sm font-medium px-3 py-1">
                               <Clock className="h-3 w-3 mr-1" />
                               In {apt.date}
                             </Badge>
-                          </div>
-                        )}
+                          )}
+                          {apt.location && (
+                            <Badge variant="outline" className="text-sm">
+                              📍 {apt.location}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                          <p className="text-sm text-gray-900 leading-relaxed">{apt.rawText}</p>
+                          <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-line">{apt.rawText}</p>
                         </div>
                       </div>
                     </div>
@@ -939,10 +960,22 @@ EMERGENCY CONTACTS:
             <h2 className="font-heading text-2xl">{t.dietActivityGuidelines}</h2>
 
             {parsedSections.dietActivity ? (
-              <Card>
+              <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="pt-6">
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                    {parsedSections.dietActivity}
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-1">
+                      <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                        <Utensils className="h-6 w-6 text-orange-600" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">Your Diet & Activity Plan</h3>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
+                          {parsedSections.dietActivity}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1031,10 +1064,28 @@ EMERGENCY CONTACTS:
             <h2 className="font-heading text-2xl">{t.whenToSeekHelp}</h2>
 
             {parsedSections.warningsSigns ? (
-              <Card>
+              <Card className="hover:shadow-md transition-shadow border-red-200">
                 <CardContent className="pt-6">
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                    {parsedSections.warningsSigns}
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-1">
+                      <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                        <AlertTriangle className="h-6 w-6 text-red-600" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">When to Call for Help</h3>
+                      <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                        <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
+                          {parsedSections.warningsSigns}
+                        </div>
+                      </div>
+                      <div className="mt-4 flex gap-3">
+                        <Badge className="bg-red-600 text-white hover:bg-red-700">
+                          <Phone className="h-3 w-3 mr-1" />
+                          Call 911 for emergencies
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
