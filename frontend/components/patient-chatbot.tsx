@@ -154,93 +154,91 @@ export function PatientChatbot({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <Card className="w-full max-w-md h-[600px] flex flex-col">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-              <Bot className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <CardTitle className="font-heading text-lg">Care Assistant</CardTitle>
+    <Card className="w-full h-[600px] flex flex-col">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+            <Bot className="h-4 w-4 text-primary-foreground" />
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
+          <CardTitle className="font-heading text-lg">Care Assistant</CardTitle>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </CardHeader>
 
-        <CardContent className="flex-1 flex flex-col p-0">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {message.role === "assistant" && (
-                  <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-                    <Bot className="h-4 w-4" />
-                  </div>
-                )}
-                <div
-                  className={`max-w-[80%] p-3 rounded-lg text-sm ${
-                    message.role === "user" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
-                  }`}
-                >
-                  <p>{message.content}</p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-                {message.role === "user" && (
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                    <User className="h-4 w-4 text-primary-foreground" />
-                  </div>
-                )}
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex gap-3 justify-start">
+      <CardContent className="flex-1 flex flex-col p-0 min-h-0">
+        {/* Messages - Fixed height with scroll */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              {message.role === "assistant" && (
                 <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
                   <Bot className="h-4 w-4" />
                 </div>
-                <div className="bg-accent text-accent-foreground p-3 rounded-lg text-sm">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
-                    <div
-                      className="w-2 h-2 bg-current rounded-full animate-bounce"
-                      style={{ animationDelay: "0.1s" }}
-                    />
-                    <div
-                      className="w-2 h-2 bg-current rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    />
-                  </div>
+              )}
+              <div
+                className={`max-w-[80%] p-3 rounded-lg text-sm break-words overflow-wrap-anywhere ${
+                  message.role === "user" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
+                }`}
+              >
+                <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                <p className="text-xs opacity-70 mt-1">
+                  {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+              {message.role === "user" && (
+                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                  <User className="h-4 w-4 text-primary-foreground" />
+                </div>
+              )}
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex gap-3 justify-start">
+              <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                <Bot className="h-4 w-4" />
+              </div>
+              <div className="bg-accent text-accent-foreground p-3 rounded-lg text-sm">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  />
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="border-t p-4">
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask about your medications, appointments, or recovery..."
-                disabled={isLoading}
-                className="flex-1"
-              />
-              <Button onClick={handleSend} disabled={isLoading || !input.trim()} size="sm">
-                <Send className="h-4 w-4" />
-              </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              For urgent medical concerns, call 911 or your doctor immediately
-            </p>
+          )}
+        </div>
+
+        {/* Input - Fixed at bottom */}
+        <div className="border-t p-4 flex-shrink-0">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Ask about your medications, appointments, or recovery..."
+              disabled={isLoading}
+              className="flex-1"
+            />
+            <Button onClick={handleSend} disabled={isLoading || !input.trim()} size="sm">
+              <Send className="h-4 w-4" />
+            </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            For urgent medical concerns, call 911 or your doctor immediately
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

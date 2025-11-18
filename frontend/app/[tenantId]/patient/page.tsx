@@ -52,7 +52,6 @@ export default function PatientDashboard() {
   const [language, setLanguage] = useState("en")
   const [viewTranslated, setViewTranslated] = useState(false)
   const [checkedMeds, setCheckedMeds] = useState<Record<string, boolean>>({})
-  const [showChat, setShowChat] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [dischargeSummary, setDischargeSummary] = useState<string>("")
@@ -663,7 +662,7 @@ EMERGENCY CONTACTS:
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-6 h-auto p-1">
             <TabsTrigger value="overview" className="flex flex-col gap-1 py-3">
               <Heart className="h-4 w-4" />
               <span className="text-xs">{t.overview}</span>
@@ -683,6 +682,10 @@ EMERGENCY CONTACTS:
             <TabsTrigger value="warnings" className="flex flex-col gap-1 py-3">
               <AlertTriangle className="h-4 w-4" />
               <span className="text-xs">{t.warningsSigns}</span>
+            </TabsTrigger>
+            <TabsTrigger value="chat" className="flex flex-col gap-1 py-3">
+              <MessageCircle className="h-4 w-4" />
+              <span className="text-xs">Chat</span>
             </TabsTrigger>
           </TabsList>
 
@@ -752,7 +755,7 @@ EMERGENCY CONTACTS:
                   <Button
                     className="w-full justify-start bg-transparent"
                     variant="outline"
-                    onClick={() => setShowChat(true)}
+                    onClick={() => setActiveTab("chat")}
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
                     {t.askQuestion}
@@ -1033,27 +1036,21 @@ EMERGENCY CONTACTS:
             </>
             )}
           </TabsContent>
+
+          {/* Chat Tab */}
+          <TabsContent value="chat" className="space-y-6">
+            <PatientChatbot 
+              isOpen={true} 
+              onClose={() => setActiveTab("overview")} 
+              patientData={patientData}
+              dischargeSummary={dischargeSummary}
+              dischargeInstructions={dischargeInstructions}
+              compositionId={compositionId || ''}
+              patientId={patientId || ''}
+            />
+          </TabsContent>
         </Tabs>
       </div>
-
-      {/* Floating Chat Button */}
-      <TenantButton
-        tenantVariant="primary"
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg"
-        onClick={() => setShowChat(true)}
-      >
-        <MessageCircle className="h-6 w-6" />
-      </TenantButton>
-
-      <PatientChatbot 
-        isOpen={showChat} 
-        onClose={() => setShowChat(false)} 
-        patientData={patientData}
-        dischargeSummary={dischargeSummary}
-        dischargeInstructions={dischargeInstructions}
-        compositionId={compositionId || ''}
-        patientId={patientId || ''}
-      />
       
       <CommonFooter />
       </div>
