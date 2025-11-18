@@ -61,8 +61,11 @@ export default function PatientDashboard() {
   const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
   const [patientName, setPatientName] = useState<string>("")
   const [parsedSections, setParsedSections] = useState<DischargeSections>({})
+  const [translatedParsedSections, setTranslatedParsedSections] = useState<DischargeSections>({})
   const [structuredMedications, setStructuredMedications] = useState<Medication[]>([])
+  const [translatedStructuredMedications, setTranslatedStructuredMedications] = useState<Medication[]>([])
   const [structuredAppointments, setStructuredAppointments] = useState<Appointment[]>([])
+  const [translatedStructuredAppointments, setTranslatedStructuredAppointments] = useState<Appointment[]>([])
   const { exportToPDF} = usePDFExport()
 
   // Auto-login with patient credentials if not authenticated
@@ -97,7 +100,11 @@ export default function PatientDashboard() {
 
     if (pid) setPatientId(pid)
     if (cid) setCompositionId(cid)
-    if (lang) setPreferredLanguage(lang)
+    if (lang) {
+      setPreferredLanguage(lang)
+      // Default to showing translated content if preferred language is non-English
+      setViewTranslated(lang !== 'en')
+    }
   }, [searchParams])
 
   // Auto-fetch compositionId if only patientId is provided
@@ -252,8 +259,29 @@ export default function PatientDashboard() {
           if (translated?.content) {
             // Parse the combined translated content
             const parts = translated.content.content.split('\n\n---\n\n')
-            setTranslatedSummary(parts[0] || "")
-            setTranslatedInstructions(parts[1] || "")
+            const translatedSummaryText = parts[0] || ""
+            const translatedInstructionsText = parts[1] || ""
+            
+            setTranslatedSummary(translatedSummaryText)
+            setTranslatedInstructions(translatedInstructionsText)
+            
+            // Parse translated instructions into structured sections
+            console.log('[Patient Portal] Parsing translated instructions into sections...')
+            const translatedSections = parseDischargeIntoSections(translatedInstructionsText)
+            setTranslatedParsedSections(translatedSections)
+            
+            // Extract structured medications and appointments from translated content
+            if (translatedSections.medications) {
+              const translatedMeds = extractMedications(translatedSections.medications)
+              setTranslatedStructuredMedications(translatedMeds)
+              console.log('[Patient Portal] Extracted translated medications:', translatedMeds.length)
+            }
+            
+            if (translatedSections.appointments) {
+              const translatedAppts = extractAppointments(translatedSections.appointments)
+              setTranslatedStructuredAppointments(translatedAppts)
+              console.log('[Patient Portal] Extracted translated appointments:', translatedAppts.length)
+            }
           }
         }
 
@@ -654,21 +682,27 @@ EMERGENCY CONTACTS:
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Language Toggle */}
+              {/* Language Toggle - Only show if preferred language is non-English */}
+              {preferredLanguage && preferredLanguage !== 'en' && (
               <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-transparent border border-border rounded-md px-2 py-1 text-sm"
-                >
-                  {Object.entries(SUPPORTED_LANGUAGES).map(([code, lang]) => (
-                    <option key={code} value={code}>
-                      {lang.nativeName}
-                    </option>
-                  ))}
-                </select>
+                  <Button
+                    variant={!viewTranslated ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewTranslated(false)}
+                    className="px-3"
+                  >
+                    English
+                  </Button>
+                  <Button
+                    variant={viewTranslated ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewTranslated(true)}
+                    className="px-3"
+                  >
+                    {SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.nativeName || preferredLanguage}
+                  </Button>
               </div>
+              )}
               <FeedbackButton userType="patient" />
               <Avatar className="h-8 w-8">
                 <AvatarImage src="/patient-avatar.png" />
@@ -755,16 +789,6 @@ EMERGENCY CONTACTS:
                     <TenantBadge tenantVariant="light">
                       AI Generated
                     </TenantBadge>
-                      {preferredLanguage && preferredLanguage !== 'en' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setViewTranslated(!viewTranslated)}
-                        >
-                          <Globe className="h-4 w-4 mr-2" />
-                          {viewTranslated ? 'View Original' : `View ${SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.name}`}
-                        </Button>
-                      )}
                   </div>
                     
                     <div className="space-y-4">
@@ -860,9 +884,9 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
-            {structuredMedications.length > 0 ? (
+            {(viewTranslated ? translatedStructuredMedications : structuredMedications).length > 0 ? (
             <div className="grid gap-4">
-                {structuredMedications.map((med, index) => (
+                {(viewTranslated ? translatedStructuredMedications : structuredMedications).map((med, index) => (
                   <Card key={`med-${index}`} className="hover:shadow-md transition-shadow">
                   <CardContent className="pt-6">
                       <div className="flex items-start gap-4">
@@ -901,18 +925,18 @@ EMERGENCY CONTACTS:
                           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                             <p className="text-sm font-semibold text-gray-700 mb-2">Complete Instructions:</p>
                             <p className="text-sm text-gray-900 leading-relaxed">{med.instructions}</p>
-                          </div>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
-            ) : parsedSections.medications ? (
+            ) : (viewTranslated ? translatedParsedSections.medications : parsedSections.medications) ? (
               <Card>
                 <CardContent className="pt-6">
                   <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                    {parsedSections.medications}
+                    {viewTranslated ? translatedParsedSections.medications : parsedSections.medications}
                   </div>
                 </CardContent>
               </Card>
@@ -935,9 +959,9 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
-            {structuredAppointments.length > 0 ? (
+            {(viewTranslated ? translatedStructuredAppointments : structuredAppointments).length > 0 ? (
             <div className="grid gap-4">
-                {structuredAppointments.map((apt, index) => (
+                {(viewTranslated ? translatedStructuredAppointments : structuredAppointments).map((apt, index) => (
                 <Card key={index} className="hover:shadow-md transition-shadow">
                   <CardContent className="pt-6">
                     <div className="flex items-start gap-4">
@@ -974,11 +998,11 @@ EMERGENCY CONTACTS:
                 </Card>
               ))}
             </div>
-            ) : parsedSections.appointments ? (
+            ) : (viewTranslated ? translatedParsedSections.appointments : parsedSections.appointments) ? (
               <Card>
                 <CardContent className="pt-6">
                   <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                    {parsedSections.appointments}
+                    {viewTranslated ? translatedParsedSections.appointments : parsedSections.appointments}
                   </div>
                 </CardContent>
               </Card>
@@ -995,7 +1019,7 @@ EMERGENCY CONTACTS:
           <TabsContent value="diet-activity" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.dietActivityGuidelines}</h2>
 
-            {parsedSections.dietActivity ? (
+            {(viewTranslated ? translatedParsedSections.dietActivity : parsedSections.dietActivity) ? (
               <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-4">
@@ -1008,7 +1032,7 @@ EMERGENCY CONTACTS:
                       <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">Your Diet & Activity Plan</h3>
                       <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                         <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
-                          {parsedSections.dietActivity}
+                          {viewTranslated ? translatedParsedSections.dietActivity : parsedSections.dietActivity}
                         </div>
                       </div>
                     </div>
@@ -1099,7 +1123,7 @@ EMERGENCY CONTACTS:
           <TabsContent value="warnings" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.whenToSeekHelp}</h2>
 
-            {parsedSections.warningsSigns ? (
+            {(viewTranslated ? translatedParsedSections.warningsSigns : parsedSections.warningsSigns) ? (
               <Card className="hover:shadow-md transition-shadow border-red-200">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-4">
@@ -1112,7 +1136,7 @@ EMERGENCY CONTACTS:
                       <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">When to Call for Help</h3>
                       <div className="bg-red-50 p-4 rounded-lg border border-red-200">
                         <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
-                          {parsedSections.warningsSigns}
+                          {viewTranslated ? translatedParsedSections.warningsSigns : parsedSections.warningsSigns}
                         </div>
                       </div>
                       <div className="mt-4 flex gap-3">
