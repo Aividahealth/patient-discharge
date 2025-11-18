@@ -59,6 +59,7 @@ export default function PatientDashboard() {
   const [translatedSummary, setTranslatedSummary] = useState<string>("")
   const [translatedInstructions, setTranslatedInstructions] = useState<string>("")
   const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
+  const [patientName, setPatientName] = useState<string>("")
   const { exportToPDF } = usePDFExport()
 
   // Auto-login with patient credentials if not authenticated
@@ -118,6 +119,42 @@ export default function PatientDashboard() {
       console.log('[Patient Portal] Fetching patient details...')
       setIsLoadingData(true)
       try {
+        // Fetch patient name from FHIR Patient resource
+        const getBackendUrl = () => {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            return 'http://localhost:3000'
+          }
+          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+        }
+
+        const patientResponse = await fetch(
+          `${getBackendUrl()}/google/fhir/Patient/${patientId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'X-Tenant-ID': tenant.id,
+            },
+          }
+        )
+
+        if (patientResponse.ok) {
+          const patientResource = await patientResponse.json()
+          console.log('[Patient Portal] Patient resource fetched:', patientResource)
+          
+          // Extract patient name from FHIR Patient resource
+          if (patientResource.name && patientResource.name.length > 0) {
+            const name = patientResource.name[0]
+            const fullName = name.text || `${name.given?.join(' ') || ''} ${name.family || ''}`.trim()
+            setPatientName(fullName)
+            console.log('[Patient Portal] Patient name:', fullName)
+          }
+        } else {
+          console.warn('[Patient Portal] Failed to fetch patient resource:', patientResponse.statusText)
+        }
+
+        // Fetch discharge summary and instructions
         const details = await getPatientDetails(
           patientId,
           compositionId,
@@ -162,7 +199,7 @@ export default function PatientDashboard() {
 
   // Mock patient data for UI elements (will be replaced with real data later)
   const patientData = {
-    name: user?.name || "Patient",
+    name: patientName || user?.name || "Patient",
     medications: [
       {
         name: "Metoprolol",
