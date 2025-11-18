@@ -19,7 +19,26 @@ Use everyday words without losing medical accuracy.
 Keep **all** numbers, dates, names, medications, dosages, vital signs, and follow-up instructions **exactly as written**. 
 Do not delete, infer, or rephrase key facts. 
 Never add new data or summarize away details.
-### 4. Organize Using This Exact Structure
+### 4. Simplify Without Interpreting
+Do not say whether any value is high, low, or normal. 
+  Example: "Sodium 132" → :white_check_mark: OK. 
+  "Sodium was slightly low" → :no_entry_sign: Not allowed.
+Preserve Clinical Meaning Exactly. 
+  Do not add, omit, or infer anything that isn't in the original text. 
+  Keep all diagnoses, procedures, medications, and instructions intact.
+Expand Medical Abbreviations. 
+  Replace or expand jargon (e.g., "Na" → "sodium," "K" → "potassium," "HCO₃" → "bicarbonate," "CXR" → "chest X-ray").
+Use a Personalized Yet Professional Tone. 
+  Write as if a clinician is explaining the care plan to the patient or family:
+  - Prefer "you" or "your child" where appropriate.
+  - Be warm, clear, and respectful — never robotic.
+  - Avoid stating demographics (e.g., "You are a 12-year-old with sickle cell disease").
+  - If relevant, rephrase naturally: "You were admitted for pain caused by sickle cell disease."
+Keep the Same Perspective as the Original. 
+  If the note says "the patient," keep it that way. 
+  If it's addressed to the patient, keep "you." 
+  Consistency is key.
+### 5. Organize Using This Exact Structure
 ## Overview
 Reasons for Hospital Stay 
 What Happened During Your Stay 
