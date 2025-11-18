@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +13,9 @@ import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
+import { useTenant } from "@/contexts/tenant-context"
+import { login } from "@/lib/api/auth"
+import { getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import {
@@ -29,16 +33,109 @@ import {
   CheckCircle2,
   X,
   Phone,
+  Loader2,
 } from "lucide-react"
 
 export default function PatientDashboard() {
+  const searchParams = useSearchParams()
+  const { login: contextLogin, token, user, tenant, isAuthenticated } = useTenant()
+
+  const [patientId, setPatientId] = useState<string | null>(null)
+  const [compositionId, setCompositionId] = useState<string | null>(null)
   const [language, setLanguage] = useState("en")
+  const [viewTranslated, setViewTranslated] = useState(false)
   const [checkedMeds, setCheckedMeds] = useState<Record<string, boolean>>({})
   const [showChat, setShowChat] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  const [isLoadingData, setIsLoadingData] = useState(true)
+  const [patientData, setPatientData] = useState<any>(null)
+  const [dischargeSummary, setDischargeSummary] = useState<string>("")
+  const [dischargeInstructions, setDischargeInstructions] = useState<string>("")
+  const [translatedSummary, setTranslatedSummary] = useState<string>("")
+  const [translatedInstructions, setTranslatedInstructions] = useState<string>("")
+  const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
 
-  const patientData = {
-    name: "John Smith",
+  // Auto-login with patient credentials if not authenticated
+  useEffect(() => {
+    const autoLogin = async () => {
+      if (!isAuthenticated) {
+        try {
+          const authData = await login({
+            tenantId: 'demo',
+            username: 'patient',
+            password: 'Adyar2Austin'
+          })
+          contextLogin(authData)
+        } catch (error) {
+          console.error('Auto-login failed:', error)
+        }
+      }
+    }
+    autoLogin()
+  }, [isAuthenticated, contextLogin])
+
+  // Get patientId and compositionId from URL parameters
+  useEffect(() => {
+    const pid = searchParams.get('patientId')
+    const cid = searchParams.get('compositionId')
+    const lang = searchParams.get('language')
+
+    if (pid) setPatientId(pid)
+    if (cid) setCompositionId(cid)
+    if (lang) setPreferredLanguage(lang)
+  }, [searchParams])
+
+  // Fetch patient's discharge summary and instructions
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      if (!patientId || !compositionId || !token || !tenant) {
+        setIsLoadingData(false)
+        return
+      }
+
+      setIsLoadingData(true)
+      try {
+        const details = await getPatientDetails(
+          patientId,
+          compositionId,
+          token,
+          tenant.id
+        )
+
+        // Set discharge summary and instructions
+        setDischargeSummary(details.simplifiedSummary?.text || details.rawSummary?.text || "")
+        setDischargeInstructions(details.simplifiedInstructions?.text || details.rawInstructions?.text || "")
+
+        // Fetch translated content if preferred language is set and not English
+        if (preferredLanguage && preferredLanguage !== 'en') {
+          const translated = await getTranslatedContent(
+            compositionId,
+            preferredLanguage,
+            token,
+            tenant.id
+          )
+
+          if (translated?.content) {
+            // Parse the combined translated content
+            const parts = translated.content.content.split('\n\n---\n\n')
+            setTranslatedSummary(parts[0] || "")
+            setTranslatedInstructions(parts[1] || "")
+          }
+        }
+
+        setIsLoadingData(false)
+      } catch (error) {
+        console.error('Failed to fetch patient data:', error)
+        setIsLoadingData(false)
+      }
+    }
+
+    fetchPatientData()
+  }, [patientId, compositionId, token, tenant, preferredLanguage])
+
+  // Mock patient data for UI elements (will be replaced with real data later)
+  const mockPatientData = {
+    name: user?.name || "Patient",
     medications: [
       {
         name: "Metoprolol",
@@ -1040,6 +1137,28 @@ EMERGENCY CONTACTS:
 
   const t = translations[language as keyof typeof translations]
 
+  // Show loading state while fetching data
+  if (isLoadingData) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen bg-background flex flex-col">
+          <CommonHeader title="Patient Portal" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-muted-foreground">Loading your discharge information...</p>
+            </div>
+          </div>
+          <CommonFooter />
+        </div>
+      </AuthGuard>
+    )
+  }
+
+  // Get display content based on whether translated view is active
+  const displaySummary = (viewTranslated && translatedSummary) ? translatedSummary : dischargeSummary
+  const displayInstructions = (viewTranslated && translatedInstructions) ? translatedInstructions : dischargeInstructions
+
   return (
     <AuthGuard>
       <div className="min-h-screen bg-background flex flex-col">
@@ -1059,25 +1178,21 @@ EMERGENCY CONTACTS:
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Language Toggle */}
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-transparent border border-border rounded-md px-2 py-1 text-sm"
+              {/* Language Toggle - only show if translated content is available */}
+              {preferredLanguage && preferredLanguage !== 'en' && translatedSummary && (
+                <Button
+                  variant={viewTranslated ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setViewTranslated(!viewTranslated)}
                 >
-                  {Object.entries(languages).map(([code, name]) => (
-                    <option key={code} value={code}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <Globe className="h-4 w-4 mr-2" />
+                  {viewTranslated ? `Viewing in ${languages[preferredLanguage as keyof typeof languages] || preferredLanguage}` : 'View Translation'}
+                </Button>
+              )}
               <FeedbackButton userType="patient" />
               <Avatar className="h-8 w-8">
                 <AvatarImage src="/patient-avatar.png" />
-                <AvatarFallback>JS</AvatarFallback>
+                <AvatarFallback>{user?.name?.charAt(0) || 'P'}</AvatarFallback>
               </Avatar>
             </div>
           </div>
@@ -1145,23 +1260,43 @@ EMERGENCY CONTACTS:
                   <CardTitle className="font-heading">{t.recoverySummary}</CardTitle>
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                      AI Generated
+                      {viewTranslated ? 'AI Translated' : 'AI Simplified'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      This content has been simplified using artificial intelligence
+                      {viewTranslated
+                        ? 'This content has been translated using artificial intelligence'
+                        : 'This content has been simplified using artificial intelligence'
+                      }
                     </span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">{t.reasonForStay}</h4>
-                    <p className="text-muted-foreground">{t.reasonText}</p>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h4 className="font-medium mb-2">{t.whatHappened}</h4>
-                    <p className="text-muted-foreground">{t.whatHappenedText}</p>
-                  </div>
+                  {displaySummary ? (
+                    <div className="prose prose-sm max-w-none">
+                      <div className="whitespace-pre-wrap text-muted-foreground">
+                        {displaySummary}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <h4 className="font-medium mb-2">{t.reasonForStay}</h4>
+                      <p className="text-muted-foreground">{t.reasonText}</p>
+                      <Separator className="my-4" />
+                      <h4 className="font-medium mb-2">{t.whatHappened}</h4>
+                      <p className="text-muted-foreground">{t.whatHappenedText}</p>
+                    </div>
+                  )}
+                  {displayInstructions && (
+                    <>
+                      <Separator />
+                      <div className="prose prose-sm max-w-none">
+                        <h4 className="font-medium mb-2">Discharge Instructions</h4>
+                        <div className="whitespace-pre-wrap text-muted-foreground">
+                          {displayInstructions}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1552,7 +1687,15 @@ EMERGENCY CONTACTS:
         <MessageCircle className="h-6 w-6" />
       </Button>
 
-      <PatientChatbot isOpen={showChat} onClose={() => setShowChat(false)} patientData={patientData} />
+      <PatientChatbot
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+        patientData={mockPatientData}
+        dischargeSummary={dischargeSummary}
+        dischargeInstructions={dischargeInstructions}
+        compositionId={compositionId || ''}
+        patientId={patientId || ''}
+      />
       
       <CommonFooter />
       </div>

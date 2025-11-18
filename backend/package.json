@@ -25,6 +25,7 @@
     "update-demo-languages": "ts-node scripts/update-demo-languages.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
     "@google-cloud/firestore": "^7.10.0",
     "@google-cloud/pubsub": "^5.2.0",
     "@google-cloud/storage": "^7.7.0",
