@@ -1051,7 +1051,15 @@ EMERGENCY CONTACTS:
         <MessageCircle className="h-6 w-6" />
       </TenantButton>
 
-      <PatientChatbot isOpen={showChat} onClose={() => setShowChat(false)} patientData={patientData} />
+      <PatientChatbot 
+        isOpen={showChat} 
+        onClose={() => setShowChat(false)} 
+        patientData={patientData}
+        dischargeSummary={dischargeSummary}
+        dischargeInstructions={dischargeInstructions}
+        compositionId={compositionId || ''}
+        patientId={patientId || ''}
+      />
       
       <CommonFooter />
       </div>

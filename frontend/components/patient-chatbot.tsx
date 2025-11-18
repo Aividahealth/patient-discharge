@@ -69,8 +69,26 @@ export function PatientChatbot({
       const token = authData ? JSON.parse(authData).token : null
       const tenantId = authData ? JSON.parse(authData).tenant.id : 'demo'
 
-      // Use environment variable for chatbot service URL
-      const chatbotUrl = process.env.NEXT_PUBLIC_CHATBOT_SERVICE_URL || '/api/chat'
+      // Determine the backend API base URL
+      const getBackendUrl = () => {
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          return 'http://localhost:3000'
+        }
+        return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+      }
+
+      // Call the backend patient-chatbot endpoint
+      const chatbotUrl = `${getBackendUrl()}/api/patient-chatbot/chat`
+
+      console.log('[Chatbot] Sending message to backend:', chatbotUrl)
+      console.log('[Chatbot] Message context:', {
+        patientId,
+        compositionId,
+        hasSummary: !!dischargeSummary,
+        hasInstructions: !!dischargeInstructions,
+        hasToken: !!token,
+        tenantId
+      })
 
       const response = await fetch(chatbotUrl, {
         method: "POST",
