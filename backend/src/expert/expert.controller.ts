@@ -199,6 +199,7 @@ export class ExpertController {
   @Get('feedback/summary/:summaryId')
   async getFeedbackForSummary(
     @Param('summaryId') summaryId: string,
+    @TenantContext() ctx: TenantContextType,
     @Query('reviewType') reviewType?: string,
     @Query('includeStats') includeStats?: string,
     @Query('includeFeedback') includeFeedback?: string,
@@ -206,7 +207,6 @@ export class ExpertController {
     @Query('offset') offset?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
-    @TenantContext() ctx: TenantContextType,
   ) {
     try {
       this.logger.log(`Getting feedback for summary: ${summaryId}`);
