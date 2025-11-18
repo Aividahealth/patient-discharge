@@ -45,11 +45,56 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check if account is active
+    if (!user.isActive) {
+      this.logger.warn(`Account is disabled for user: ${request.username}`);
+      throw new UnauthorizedException('Account is disabled. Please contact your administrator.');
+    }
+
+    // Check if account is locked
+    if (user.isLocked) {
+      this.logger.warn(`Account is locked for user: ${request.username} (locked at: ${user.lockedAt})`);
+      throw new UnauthorizedException('Account is locked due to multiple failed login attempts. Please contact your administrator to unlock your account.');
+    }
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(request.password, user.passwordHash);
     if (!isPasswordValid) {
-      this.logger.warn(`Invalid password for user: ${request.username}`);
+      this.logger.warn(`Invalid password for user: ${request.username} (attempt ${user.failedLoginAttempts + 1}/3)`);
+
+      // Increment failed login attempts
+      const newFailedAttempts = user.failedLoginAttempts + 1;
+      const shouldLock = newFailedAttempts >= 3;
+
+      await this.userService.update(user.id, {
+        failedLoginAttempts: newFailedAttempts,
+        lastFailedLoginAt: new Date(),
+        ...(shouldLock && {
+          isLocked: true,
+          lockedAt: new Date(),
+          lockedReason: 'Exceeded maximum failed login attempts (3)',
+        }),
+      });
+
+      if (shouldLock) {
+        this.logger.warn(`🔒 Account locked for user: ${request.username} after ${newFailedAttempts} failed attempts`);
+        throw new UnauthorizedException('Account is locked due to multiple failed login attempts. Please contact your administrator to unlock your account.');
+      }
+
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Reset failed login attempts on successful login
+    if (user.failedLoginAttempts > 0) {
+      await this.userService.update(user.id, {
+        failedLoginAttempts: 0,
+        lastSuccessfulLoginAt: new Date(),
+      });
+    } else {
+      // Just update last successful login
+      await this.userService.update(user.id, {
+        lastSuccessfulLoginAt: new Date(),
+      });
     }
 
     // Verify tenant exists (check Firestore first, then YAML config)

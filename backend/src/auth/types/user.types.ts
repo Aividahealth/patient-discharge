@@ -1,16 +1,31 @@
-export type UserRole = 'patient' | 'clinician' | 'expert' | 'admin';
+export type UserRole = 'patient' | 'clinician' | 'expert' | 'tenant_admin' | 'system_admin';
 
 export interface User {
   id: string;
-  tenantId: string;
+  tenantId: string | null; // null for system_admin only
   username: string;
   passwordHash: string; // bcrypt hash
   name: string;
   email?: string;
   role: UserRole;
   linkedPatientId?: string; // For patient role
+
+  // Account Status
+  isActive: boolean; // Account enabled/disabled
+  isLocked: boolean; // Account locked due to failed attempts
+  lockedAt?: Date; // When account was locked
+  lockedReason?: string; // Reason for lock
+
+  // Failed Login Tracking
+  failedLoginAttempts: number; // Counter (0-3)
+  lastFailedLoginAt?: Date; // Last failed attempt
+  lastSuccessfulLoginAt?: Date; // Last successful login
+
+  // Audit Fields
   createdAt: Date;
   updatedAt: Date;
+  createdBy?: string; // Admin who created user
+  lastUpdatedBy?: string; // Admin who last modified
 }
 
 export interface LoginRequest {

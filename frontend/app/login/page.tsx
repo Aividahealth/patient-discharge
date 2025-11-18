@@ -48,11 +48,35 @@ export default function LoginPage() {
       await login(authData)
 
       // Redirect based on user role
-      const portal = authData.user.role
+      // Handle new role names and legacy admin role
+      const portal = authData.user.role === 'tenant_admin' ? 'admin' : authData.user.role
       router.push(`/${tenantId}/${portal}`)
     } catch (error) {
       console.error('[Login] Error:', error)
-      setLoginError(error instanceof Error ? error.message : "Login failed. Please try again.")
+
+      // Parse error message from API for better user experience
+      let errorMessage = "Login failed. Please try again."
+
+      if (error instanceof Error) {
+        const msg = error.message
+
+        // Check for specific error messages from backend
+        if (msg.includes('Account is locked')) {
+          errorMessage = "Your account has been locked due to multiple failed login attempts. Please contact your administrator to unlock your account."
+        } else if (msg.includes('Account is disabled')) {
+          errorMessage = "Your account has been disabled. Please contact your administrator for assistance."
+        } else if (msg.includes('Invalid credentials')) {
+          errorMessage = "Invalid username or password. Please try again."
+        } else if (msg.includes('Tenant') && msg.includes('not found')) {
+          errorMessage = "Tenant not found. Please check your tenant ID and try again."
+        } else if (msg.includes('Token has expired')) {
+          errorMessage = "Your session has expired. Please log in again."
+        } else {
+          errorMessage = msg
+        }
+      }
+
+      setLoginError(errorMessage)
     } finally {
       setIsLoggingIn(false)
     }
