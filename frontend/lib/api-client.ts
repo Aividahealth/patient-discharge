@@ -14,7 +14,7 @@ function getApiBaseUrl(): string {
     return 'http://localhost:3000'
   }
 
-  return 'https://patient-discharge-backend-647433528821.us-central1.run.app'
+  return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
 }
 
 const API_BASE_URL = getApiBaseUrl()

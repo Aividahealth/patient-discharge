@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Loader2, Star, CheckCircle } from "lucide-react"
-import { getDischargeSummaryContent, DischargeSummaryContent } from "@/lib/discharge-summaries"
+import { getDischargeSummaryContent, DischargeSummaryContent, getTranslatedContent } from "@/lib/discharge-summaries"
 import { submitFeedback } from "@/lib/expert-api"
 import { useToast } from "@/hooks/use-toast"
 
@@ -108,7 +108,7 @@ export default function ExpertReviewPage() {
     if (!language) return
 
     try {
-      const translated = await getDischargeSummaryContent(summaryId, 'translated', language).catch((err) => {
+      const translated = await getTranslatedContent(summaryId, language).catch((err) => {
         console.error('Failed to load translated version:', err)
         return null
       })

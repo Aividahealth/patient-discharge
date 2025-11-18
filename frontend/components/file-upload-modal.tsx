@@ -61,7 +61,13 @@ async function extractTextFromPDF(file: File): Promise<string> {
   try {
     const pdfjsLib = await loadPDFJS()
     const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    const pdf = await pdfjsLib.getDocument({
+      data: arrayBuffer,
+      // Provide CMap and standard font data to improve text extraction on some PDFs
+      cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/standard_fonts/'
+    }).promise
 
     let fullText = ''
 
@@ -75,7 +81,15 @@ async function extractTextFromPDF(file: File): Promise<string> {
       fullText += pageText + '\n\n'
     }
 
-    return fullText.trim()
+    const trimmed = fullText.trim()
+    if (!trimmed) {
+      // Likely an image-only (scanned) PDF with no text layer
+      throw new Error(
+        'This PDF does not contain extractable text (likely a scanned image). ' +
+        'Please upload a .txt/.md version, or use an OCR-processed PDF.'
+      )
+    }
+    return trimmed
   } catch (error) {
     console.error('[PDF Extraction] Error:', error)
     throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -140,6 +154,7 @@ interface PatientData {
     name: string
     id?: string
   }
+  preferredLanguage?: string
 }
 
 export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUploadModalProps) {
@@ -290,6 +305,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
               name: patientFormData.attendingPhysician?.name || '',
               id: patientFormData.attendingPhysician?.id || `physician-${Date.now()}`
             },
+            preferredLanguage: patientFormData.preferredLanguage || undefined,
             avatar: undefined // Optional field
           };
 
@@ -539,6 +555,24 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
                       attendingPhysician: { name: e.target.value }
                     })}
                   />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="preferredLanguage">Preferred Language</Label>
+                  <select
+                    id="preferredLanguage"
+                    className="w-full border rounded-md h-9 px-3 text-sm"
+                    value={patientFormData.preferredLanguage || ''}
+                    onChange={(e) => setPatientFormData({ ...patientFormData, preferredLanguage: e.target.value })}
+                  >
+                    <option value="">Select language</option>
+                    <option value="es">Spanish</option>
+                    <option value="vi">Vietnamese</option>
+                    <option value="fr">French</option>
+                    <option value="hi">Hindi</option>
+                    <option value="zh">Mandarin</option>
+                  </select>
                 </div>
               </div>
             </CardContent>

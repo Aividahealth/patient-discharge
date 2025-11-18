@@ -40,9 +40,9 @@ if [ -z "$LOCATION" ]; then
     echo -e "${YELLOW}LOCATION not set, using default: ${LOCATION}${NC}"
 fi
 
-# Check if MODEL_NAME is set (optional, default to gemini-1.5-pro)
+# Check if MODEL_NAME is set (optional, default to gemini-2.5-pro)
 if [ -z "$MODEL_NAME" ]; then
-    MODEL_NAME="gemini-1.5-pro"
+    MODEL_NAME="gemini-2.5-pro"
     echo -e "${YELLOW}MODEL_NAME not set, using default: ${MODEL_NAME}${NC}"
 fi
 
@@ -114,6 +114,26 @@ gcloud services enable storage.googleapis.com --project="$PROJECT_ID"
 echo -e "${GREEN}✓ APIs enabled${NC}"
 echo ""
 
+# Resolve backend/FHIR API URLs (prefer env; else auto-detect Cloud Run service URL)
+if [ -z "$BACKEND_API_URL" ]; then
+    SERVICE_NAME="${BACKEND_SERVICE_NAME:-patient-discharge-backend-dev}"
+    SERVICE_REGION="${BACKEND_SERVICE_REGION:-$REGION}"
+    echo -e "${YELLOW}BACKEND_API_URL not set. Attempting to detect Cloud Run service URL for ${SERVICE_NAME}...${NC}"
+    BACKEND_API_URL=$(gcloud run services describe "$SERVICE_NAME" --region="$SERVICE_REGION" --format='value(status.url)' --project="$PROJECT_ID" 2>/dev/null || echo "")
+    if [ -z "$BACKEND_API_URL" ]; then
+        echo -e "${RED}Could not determine BACKEND_API_URL. Please export BACKEND_API_URL with your Cloud Run URL and retry.${NC}"
+        exit 1
+    fi
+fi
+echo -e "${GREEN}Using Backend API URL: ${BACKEND_API_URL}${NC}"
+
+if [ -z "$FHIR_API_BASE_URL" ]; then
+    FHIR_API_BASE_URL="$BACKEND_API_URL"
+    echo -e "${YELLOW}FHIR_API_BASE_URL not set. Using BACKEND_API_URL: ${FHIR_API_BASE_URL}${NC}"
+else
+    echo -e "${GREEN}Using FHIR API URL: ${FHIR_API_BASE_URL}${NC}"
+fi
+
 # Deploy Cloud Function
 echo -e "${GREEN}Step 4: Deploying Cloud Function...${NC}"
 echo "This may take a few minutes..."
@@ -128,7 +148,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
     --trigger-bucket="$TRIGGER_BUCKET" \
     --memory="$MEMORY" \
     --timeout="$TIMEOUT" \
-    --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME}" \
+    --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},MODEL_NAME=${MODEL_NAME},BACKEND_API_URL=${BACKEND_API_URL},FHIR_API_BASE_URL=${FHIR_API_BASE_URL}" \
     --project="$PROJECT_ID"
 
 if [ $? -ne 0 ]; then

@@ -1,9 +1,9 @@
 import { CloudEvent } from '@google-cloud/functions-framework';
-import { SimplificationCompletedEvent } from '../common/common/types';
+import { SimplificationCompletedEvent, SimplifiedFile } from './common/types';
 import { TranslationService } from './translation.service';
 import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
-import { createLogger } from '../common/utils/logger';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('TranslationPubSubHandler');
 
@@ -38,11 +38,91 @@ export async function processSimplificationCompletedEvent(cloudEvent: CloudEvent
     // Initialize services
     initializeServices();
 
+    // Log the raw cloudEvent for debugging
+    logger.debug('Received CloudEvent', {
+      id: cloudEvent.id,
+      type: cloudEvent.type,
+      source: cloudEvent.source,
+      dataContentType: cloudEvent.datacontenttype,
+      hasData: !!cloudEvent.data,
+    });
+
     // Parse the Pub/Sub message
+    // For Gen2 Cloud Functions with Pub/Sub triggers, the CloudEvent.data can be:
+    // 1. An object with { message: { data: <base64>, attributes: {} } }
+    // 2. Or directly the message object { data: <base64>, attributes: {} }
     const messageData = cloudEvent.data as any;
-    const message: SimplificationCompletedEvent = JSON.parse(
-      Buffer.from(messageData.message.data, 'base64').toString()
-    );
+    
+    if (!messageData) {
+      throw new Error('CloudEvent data is undefined');
+    }
+
+    // Determine the format of cloudEvent.data
+    let messageJson: string;
+    const dataType = typeof messageData;
+    const isBuffer = Buffer.isBuffer(messageData);
+    const isString = dataType === 'string';
+    
+    if (isString) {
+      // CloudEvent.data is a string - could be JSON or base64
+      const dataString = messageData as string;
+      
+      // Check if it looks like base64 or JSON
+      if (dataString.trim().startsWith('{')) {
+        // Looks like JSON
+        messageJson = dataString;
+        logger.debug('CloudEvent data is a JSON string', {
+          length: messageJson.length,
+          preview: messageJson.substring(0, 100),
+        });
+      } else {
+        // Assume it's base64
+        messageJson = Buffer.from(dataString, 'base64').toString('utf-8');
+        logger.debug('CloudEvent data is a base64 string', {
+          base64Length: dataString.length,
+          decodedLength: messageJson.length,
+          preview: messageJson.substring(0, 100),
+        });
+      }
+    } else if (isBuffer) {
+      // CloudEvent.data is a Buffer
+      messageJson = messageData.toString('utf-8');
+      logger.debug('CloudEvent data is a Buffer', {
+        length: messageJson.length,
+        preview: messageJson.substring(0, 100),
+      });
+    } else if (messageData.message && messageData.message.data) {
+      // Wrapped format: cloudEvent.data.message.data (base64)
+      messageJson = Buffer.from(messageData.message.data, 'base64').toString();
+      logger.debug('Using wrapped format with base64: cloudEvent.data.message.data', {
+        length: messageJson.length,
+        preview: messageJson.substring(0, 100),
+      });
+    } else if (messageData.data) {
+      // Direct format: cloudEvent.data.data (base64)
+      messageJson = Buffer.from(messageData.data, 'base64').toString();
+      logger.debug('Using direct format with base64: cloudEvent.data.data', {
+        length: messageJson.length,
+        preview: messageJson.substring(0, 100),
+      });
+    } else {
+      // Unknown format
+      const errorDetails = {
+        dataType,
+        isBuffer,
+        isString,
+        hasMessage: !!messageData.message,
+        hasData: !!messageData.data,
+        length: messageData.length,
+        keys: isBuffer || isString ? 'buffer/string' : Object.keys(messageData).slice(0, 10),
+      };
+      
+      logger.error('CloudEvent data structure unknown', new Error('Unknown format'), errorDetails);
+      
+      throw new Error(`Unexpected CloudEvent data format. Type: ${dataType}, isBuffer: ${isBuffer}, isString: ${isString}`);
+    }
+
+    const message: SimplificationCompletedEvent = JSON.parse(messageJson);
 
     logger.info('Translation function triggered', {
       tenantId: message.tenantId,
@@ -107,12 +187,27 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     }
 
     // Step 2: Determine target language
-    // Priority: 1) Patient's preferred language (if supported), 2) First supported language
-    let targetLanguage = tenantConfig.translationConfig.supportedLanguages[0];
+    // Filter out English (source language) from supported languages
+    const sourceLanguage = 'en';
+    const targetLanguages = tenantConfig.translationConfig.supportedLanguages.filter(
+      (lang: string) => lang !== sourceLanguage
+    );
 
-    if (event.preferredLanguage) {
-      // Check if the preferred language is supported
-      if (tenantConfig.translationConfig.supportedLanguages.includes(event.preferredLanguage)) {
+    if (targetLanguages.length === 0) {
+      logger.warning('No target languages available after filtering source language, skipping translation', {
+        sourceLanguage,
+        supportedLanguages: tenantConfig.translationConfig.supportedLanguages,
+        compositionId: event.compositionId,
+      });
+      return;
+    }
+
+    // Priority: 1) Patient's preferred language (if supported), 2) First non-source language
+    let targetLanguage = targetLanguages[0];
+
+    if (event.preferredLanguage && event.preferredLanguage !== sourceLanguage) {
+      // Check if the preferred language is supported (and not the source language)
+      if (targetLanguages.includes(event.preferredLanguage)) {
         targetLanguage = event.preferredLanguage;
         logger.info('Using patient preferred language for translation', {
           preferredLanguage: event.preferredLanguage,
@@ -120,7 +215,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
           compositionId: event.compositionId,
         });
       } else {
-        logger.warning('Patient preferred language not supported, using default', {
+        logger.warning('Patient preferred language not supported or is source language, using default', {
           preferredLanguage: event.preferredLanguage,
           defaultLanguage: targetLanguage,
           supportedLanguages: tenantConfig.translationConfig.supportedLanguages,
@@ -129,7 +224,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
         });
       }
     } else {
-      logger.info('No patient preferred language provided, using first supported language', {
+      logger.info('No patient preferred language provided, using first non-source language', {
         targetLanguage,
         compositionId: event.compositionId,
       });
@@ -140,6 +235,26 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
       compositionId: event.compositionId,
     });
 
+    // Step 2: Fetch simplified content from FHIR (source of truth)
+    logger.debug('Step 2: Fetching simplified content from FHIR');
+    const simplifiedContent = await backendClient.getSimplifiedFromFhir(
+      event.compositionId,
+      tenantId
+    );
+
+    if (!simplifiedContent.dischargeSummary && !simplifiedContent.dischargeInstructions) {
+      logger.warning('No simplified content found in FHIR, skipping translation', {
+        compositionId: event.compositionId,
+        tenantId,
+      });
+      return;
+    }
+
+    logger.info('Simplified content fetched from FHIR', {
+      hasDischargeSummary: !!simplifiedContent.dischargeSummary,
+      hasDischargeInstructions: !!simplifiedContent.dischargeInstructions,
+    });
+
     const translatedResults: {
       dischargeSummary?: { content: string; language: string };
       dischargeInstructions?: { content: string; language: string };
@@ -148,20 +263,13 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     let totalTokensUsed = 0;
 
     // Translate discharge summary if available
-    const summaryFile = event.simplifiedFiles.find((f: any) => f.type === 'discharge-summary');
-    if (summaryFile) {
+    if (simplifiedContent.dischargeSummary) {
       logger.debug('Step 2a: Translating discharge summary');
-
-      // Read simplified content from GCS
-      const simplifiedContent = await storageService.readSimplifiedFile(
-        tenantConfig.buckets.simplifiedBucket,
-        summaryFile.simplifiedPath
-      );
 
       // Translate the content
       const translationResult = await translationService.translateContent({
-        content: simplifiedContent,
-        fileName: summaryFile.simplifiedPath,
+        content: simplifiedContent.dischargeSummary.content,
+        fileName: `${event.compositionId}-discharge-summary-simplified.md`,
         targetLanguage,
       });
 
@@ -172,26 +280,19 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
 
       logger.info('Discharge summary translated successfully', {
         targetLanguage,
-        originalLength: simplifiedContent.length,
+        originalLength: simplifiedContent.dischargeSummary.content.length,
         translatedLength: translationResult.translatedContent.length,
       });
     }
 
     // Translate discharge instructions if available
-    const instructionsFile = event.simplifiedFiles.find((f: any) => f.type === 'discharge-instructions');
-    if (instructionsFile) {
+    if (simplifiedContent.dischargeInstructions) {
       logger.debug('Step 2b: Translating discharge instructions');
-
-      // Read simplified content from GCS
-      const simplifiedContent = await storageService.readSimplifiedFile(
-        tenantConfig.buckets.simplifiedBucket,
-        instructionsFile.simplifiedPath
-      );
 
       // Translate the content
       const translationResult = await translationService.translateContent({
-        content: simplifiedContent,
-        fileName: instructionsFile.simplifiedPath,
+        content: simplifiedContent.dischargeInstructions.content,
+        fileName: `${event.compositionId}-discharge-instructions-simplified.md`,
         targetLanguage,
       });
 
@@ -202,7 +303,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
 
       logger.info('Discharge instructions translated successfully', {
         targetLanguage,
-        originalLength: simplifiedContent.length,
+        originalLength: simplifiedContent.dischargeInstructions.content.length,
         translatedLength: translationResult.translatedContent.length,
       });
     }

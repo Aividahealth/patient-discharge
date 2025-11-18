@@ -42,7 +42,7 @@ export class ConfigController {
         },
         translationConfig: {
           enabled: tenantConfig?.config?.translationEnabled ?? true,
-          targetLanguages: tenantConfig?.features?.supportedLanguages || ['en', 'es', 'zh'],
+          supportedLanguages: tenantConfig?.features?.supportedLanguages || ['en', 'es', 'zh'],
         },
       };
 
@@ -69,6 +69,7 @@ export class ConfigController {
    * GET /api/config
    * Get tenant configuration and branding for the tenant specified in X-Tenant-ID header
    */
+  @Public()
   @Get('config')
   async getConfig(
     @TenantContext() ctx: TenantContextType,

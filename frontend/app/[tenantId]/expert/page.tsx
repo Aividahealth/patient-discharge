@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2, BarChart } from "lucide-react"
-import { getReviewList, ReviewSummary, ReviewType } from "@/lib/expert-api"
+import { getReviewList, getFeedbackStats, ReviewSummary, ReviewType } from "@/lib/expert-api"
 import { QualityMetricsCard } from "@/components/quality-metrics-card"
 import { useTenant } from "@/contexts/tenant-context"
 import { getLanguageName } from "@/lib/constants/languages"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { CommonHeader } from "@/components/common-header"
 import { ReviewTable, ColumnRenderers } from "@/components/review-table"
 import {
   AlertDialog,
@@ -34,7 +35,7 @@ export default function ExpertPortalPage() {
   const [filter, setFilter] = useState<'all' | 'no_reviews' | 'low_rating'>('all')
   const [activeTab, setActiveTab] = useState<'medical' | 'language'>('medical')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [patientToDelete, setPatientToDelete] = useState<{ id: string; name?: string } | null>(null)
+  const [patientToDelete, setPatientToDelete] = useState<{ id: string; compositionId: string; name?: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
 
   // Redirect to login if not authenticated
@@ -64,8 +65,43 @@ export default function ExpertPortalPage() {
         getReviewList({ type: 'simplification', filter, limit: 50, tenantId, token }),
         getReviewList({ type: 'translation', filter, limit: 50, tenantId, token })
       ])
-      setMedicalSummaries(medicalResponse.summaries)
-      setLanguageSummaries(languageResponse.summaries)
+
+      // Fetch stats for each summary in parallel
+      const fetchStatsForSummaries = async (summaries: ReviewSummary[], reviewType: ReviewType) => {
+        const statsPromises = summaries.map(async (summary) => {
+          try {
+            const statsResponse = await getFeedbackStats(
+              summary.compositionId,
+              { reviewType, includeStats: true, includeFeedback: false },
+              { tenantId, token }
+            )
+            return {
+              ...summary,
+              stats: statsResponse.stats,
+              // Update reviewCount and avgRating from stats if available
+              reviewCount: statsResponse.stats?.totalReviews ?? summary.reviewCount ?? 0,
+              avgRating: reviewType === 'simplification' 
+                ? statsResponse.stats?.simplificationRating ?? summary.avgRating
+                : statsResponse.stats?.translationRating ?? summary.avgRating,
+              latestReviewDate: statsResponse.stats?.latestReviewDate 
+                ? new Date(statsResponse.stats.latestReviewDate) 
+                : summary.latestReviewDate,
+            }
+          } catch (error) {
+            console.error(`[ExpertPortal] Failed to fetch stats for ${summary.compositionId}:`, error)
+            return summary
+          }
+        })
+        return Promise.all(statsPromises)
+      }
+
+      const [medicalWithStats, languageWithStats] = await Promise.all([
+        fetchStatsForSummaries(medicalResponse.summaries, 'simplification'),
+        fetchStatsForSummaries(languageResponse.summaries, 'translation')
+      ])
+
+      setMedicalSummaries(medicalWithStats)
+      setLanguageSummaries(languageWithStats)
     } catch (error) {
       console.error('[ExpertPortal] Failed to load summaries:', error)
     } finally {
@@ -79,32 +115,62 @@ export default function ExpertPortalPage() {
   }
 
   const confirmDeletePatient = (summary: ReviewSummary) => {
-    setPatientToDelete({ id: summary.id, name: summary.patientName })
+    setPatientToDelete({ 
+      id: summary.id, 
+      compositionId: summary.compositionId,
+      name: summary.patientName 
+    })
     setDeleteDialogOpen(true)
   }
 
-  const handleDeletePatient = async () => {
+  const handleDeletePatient = async (retryCount = 0) => {
     if (!patientToDelete || !tenantId || !token) return
     try {
       setDeleting(true)
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
-      const resp = await fetch(`${apiUrl}/google/fhir/Patient/${patientToDelete.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': tenantId,
-        },
-      })
-      if (!resp.ok) {
-        const msg = await resp.text().catch(() => resp.statusText)
-        throw new Error(`Failed to delete patient: ${resp.status} ${msg}`)
+      
+      // Use cascading delete endpoint that handles DocumentReferences, Composition, and Patient
+      const deleteResp = await fetch(
+        `${apiUrl}/google/fhir/Patient/${patientToDelete.id}/with-dependencies?compositionId=${patientToDelete.compositionId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-Tenant-ID': tenantId,
+          },
+        }
+      )
+      
+      if (!deleteResp.ok) {
+        const errorData = await deleteResp.json().catch(() => ({ message: deleteResp.statusText }))
+        const errorMsg = errorData.message || `Failed to delete: ${deleteResp.status} ${deleteResp.statusText}`
+        throw new Error(errorMsg)
       }
-      await loadSummaries()
-      setDeleteDialogOpen(false)
-      setPatientToDelete(null)
+      
+      const result = await deleteResp.json()
+      console.log('[ExpertPortal] Delete result:', result)
+      
+      // Check if deletion was successful
+      if (result.success) {
+        await loadSummaries()
+        setDeleteDialogOpen(false)
+        setPatientToDelete(null)
+      } else if (result.retryable && retryCount < 2) {
+        // Partial deletion - automatically retry once
+        console.log('[ExpertPortal] Partial deletion detected, retrying...', result)
+        // Wait a moment for resources to be fully cleaned up
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Retry the deletion
+        return handleDeletePatient(retryCount + 1)
+      } else {
+        // Failed and not retryable, or too many retries
+        const errorMsg = result.message || 'Failed to delete patient. Some resources may have been partially deleted.'
+        throw new Error(errorMsg)
+      }
     } catch (e) {
-      console.error('[ExpertPortal] Failed to delete patient:', e)
+      console.error('[ExpertPortal] Failed to delete:', e)
+      alert(e instanceof Error ? e.message : 'Failed to delete. Please try again.')
     } finally {
       setDeleting(false)
     }
@@ -126,7 +192,9 @@ export default function ExpertPortalPage() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
+      <CommonHeader title="Expert Review Portal" />
+      
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
@@ -263,13 +331,49 @@ export default function ExpertPortalPage() {
                   {
                     key: 'reviewCount',
                     header: 'Reviews',
-                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount || 0)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="text-sm font-medium">
+                              {stats.simplificationReviews} simplification
+                            </div>
+                            {stats.translationReviews > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {stats.translationReviews} translation
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.count(summary.reviewCount || 0)
+                    }
                   },
                   {
                     key: 'rating',
                     header: 'Rating',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1">
+                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm font-medium">
+                                {stats.simplificationRating.toFixed(1)}
+                              </span>
+                            </div>
+                            {stats.translationRating > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Trans: {stats.translationRating.toFixed(1)}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    }
                   },
                   {
                     key: 'qualityMetrics',
@@ -285,8 +389,32 @@ export default function ExpertPortalPage() {
                   {
                     key: 'status',
                     header: 'Status',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.status(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      const reviewCount = stats?.totalReviews ?? summary.reviewCount ?? 0
+                      const avgRating = stats?.simplificationRating ?? summary.avgRating
+                      const hasIssues = stats?.hasHallucination || stats?.hasMissingInfo
+                      
+                      return (
+                        <div className="flex flex-col gap-1">
+                          {ColumnRenderers.status(reviewCount, avgRating)}
+                          {hasIssues && (
+                            <div className="flex gap-1 mt-1">
+                              {stats?.hasHallucination && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Hallucination
+                                </Badge>
+                              )}
+                              {stats?.hasMissingInfo && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Missing Info
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
                   },
                   {
                     key: 'latestReviewDate',
@@ -398,19 +526,79 @@ export default function ExpertPortalPage() {
                   {
                     key: 'reviewCount',
                     header: 'Reviews',
-                    render: (summary: ReviewSummary) => ColumnRenderers.count(summary.reviewCount || 0)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="text-sm font-medium">
+                              {stats.translationReviews} translation
+                            </div>
+                            {stats.simplificationReviews > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {stats.simplificationReviews} simplification
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.count(summary.reviewCount || 0)
+                    }
                   },
                   {
                     key: 'rating',
                     header: 'Rating',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      if (stats) {
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1">
+                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                              <span className="text-sm font-medium">
+                                {stats.translationRating.toFixed(1)}
+                              </span>
+                            </div>
+                            {stats.simplificationRating > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Simpl: {stats.simplificationRating.toFixed(1)}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      return ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
+                    }
                   },
                   {
                     key: 'status',
                     header: 'Status',
-                    render: (summary: ReviewSummary) =>
-                      ColumnRenderers.status(summary.reviewCount || 0, summary.avgRating)
+                    render: (summary: ReviewSummary) => {
+                      const stats = summary.stats
+                      const reviewCount = stats?.totalReviews ?? summary.reviewCount ?? 0
+                      const avgRating = stats?.translationRating ?? summary.avgRating
+                      const hasIssues = stats?.hasHallucination || stats?.hasMissingInfo
+                      
+                      return (
+                        <div className="flex flex-col gap-1">
+                          {ColumnRenderers.status(reviewCount, avgRating)}
+                          {hasIssues && (
+                            <div className="flex gap-1 mt-1">
+                              {stats?.hasHallucination && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Hallucination
+                                </Badge>
+                              )}
+                              {stats?.hasMissingInfo && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Missing Info
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
                   },
                   {
                     key: 'latestReviewDate',
@@ -447,11 +635,17 @@ export default function ExpertPortalPage() {
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Patient?</AlertDialogTitle>
+              <AlertDialogTitle>Delete Patient and Discharge Summary?</AlertDialogTitle>
               <AlertDialogDescription>
                 Are you sure you want to delete <strong>{patientToDelete?.name || 'this patient'}</strong>?
                 <br /><br />
-                This will call DELETE /google/fhir/Patient/{patientToDelete?.id} and cannot be undone.
+                This will delete:
+                <ul className="list-disc list-inside mt-2 space-y-1">
+                  <li>Composition: {patientToDelete?.compositionId}</li>
+                  <li>Patient: {patientToDelete?.id}</li>
+                </ul>
+                <br />
+                This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -461,7 +655,7 @@ export default function ExpertPortalPage() {
                 disabled={deleting}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {deleting ? 'Deleting…' : 'Delete Patient'}
+                {deleting ? 'Deleting…' : 'Delete Patient & Summary'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

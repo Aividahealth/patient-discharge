@@ -2,8 +2,8 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { TranslationService } from './translation.service';
 import { GCSService } from './gcs.service';
 import { FirestoreService } from './firestore.service';
-import { TranslationRequest, TranslationError } from '../common/types';
-import { createLogger } from '../common/utils/logger';
+import { TranslationRequest, TranslationError } from './common/types';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('TranslationFunction');
 

@@ -9,12 +9,34 @@ interface CommonHeaderProps {
   hideTenantInfo?: boolean // When true, always show Aivida branding
 }
 
+/**
+ * Normalize tenant logo path
+ * - If it's already a full URL (http/https), use it as-is
+ * - If it's a local path, extract filename and point to /tenant/ folder
+ */
+function normalizeTenantLogoPath(logoPath: string | undefined): string {
+  if (!logoPath) return '/aivida-logo.png'
+  
+  // If it's already a full URL (GCS or other external URL), use it as-is
+  if (logoPath.startsWith('http://') || logoPath.startsWith('https://')) {
+    return logoPath
+  }
+  
+  // For local paths, extract just the filename from the path
+  const filename = logoPath.split('/').pop() || logoPath
+  
+  // Return path pointing to /public/tenant/ folder
+  return `/tenant/${filename}`
+}
+
 export function CommonHeader({ title, hideTenantInfo = false }: CommonHeaderProps) {
   const { tenant } = useTenant()
 
   // Use tenant branding if available and not hidden, otherwise fall back to Aivida defaults
   const shouldShowTenant = !hideTenantInfo && tenant
-  const logo = shouldShowTenant ? tenant.branding?.logo : "/aivida-logo.png"
+  const logo = shouldShowTenant && tenant.branding?.logo 
+    ? normalizeTenantLogoPath(tenant.branding.logo)
+    : "/aivida-logo.png"
   const name = shouldShowTenant ? tenant.name : "Aivida Health"
 
   return (

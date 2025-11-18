@@ -28,7 +28,14 @@ export class FirestoreService {
         const config = this.configService.get();
         if (config.service_account_path) {
           // Resolve the path - handles both full paths and filenames
-          serviceAccountPath = resolveServiceAccountPath(config.service_account_path);
+          const resolved = resolveServiceAccountPath(config.service_account_path);
+          const fs = require('fs');
+          if (fs.existsSync(resolved)) {
+            serviceAccountPath = resolved;
+            this.logger.log(`Using Firestore service account for DischargeSummaries: ${resolved}`);
+          } else {
+            this.logger.log(`Firestore service account not found at ${resolved}, using Application Default Credentials`);
+          }
         }
       } catch (error) {
         // Config not loaded yet or running in Cloud Run with ADC

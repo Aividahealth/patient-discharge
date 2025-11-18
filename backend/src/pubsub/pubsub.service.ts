@@ -25,6 +25,7 @@ export interface EncounterExportEvent {
   exportTimestamp: string;
   status: 'success' | 'failed';
   error?: string;
+  preferredLanguage?: string;
 
   cernerEncounterId: string;
   googleEncounterId?: string;

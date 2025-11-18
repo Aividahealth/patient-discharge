@@ -93,3 +93,33 @@ export interface ReviewListResponse {
   summaries: ReviewSummary[];
   total: number;
 }
+
+export interface FeedbackStats {
+  totalReviews: number;
+  simplificationReviews: number;
+  translationReviews: number;
+  averageRating: number;
+  simplificationRating: number;
+  translationRating: number;
+  latestReviewDate: string | null;
+  latestSimplificationReview: string | null;
+  latestTranslationReview: string | null;
+  hasHallucination: boolean;
+  hasMissingInfo: boolean;
+  ratingDistribution: {
+    [key: string]: number;
+  };
+}
+
+export interface FeedbackResponse {
+  success: boolean;
+  summaryId: string;
+  stats?: FeedbackStats;
+  feedback: ExpertFeedback[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}

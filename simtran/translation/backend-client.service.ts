@@ -1,29 +1,34 @@
-import { createLogger } from '../common/utils/logger';
+import { createLogger } from './common/utils/logger';
+import { TenantConfig } from './common/types';
+import { GoogleAuth } from 'google-auth-library';
 
 const logger = createLogger('BackendClientService');
-
-export interface TenantConfig {
-  tenantId: string;
-  buckets: {
-    rawBucket: string;
-    simplifiedBucket: string;
-    translatedBucket: string;
-  };
-  translationConfig: {
-    enabled: boolean;
-    supportedLanguages: string[];
-  };
-}
 
 /**
  * Service for interacting with the Backend API
  */
 export class BackendClientService {
   private apiBaseUrl: string;
+  private auth: GoogleAuth;
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
+    this.auth = new GoogleAuth();
     logger.info('BackendClientService initialized', { apiBaseUrl });
+  }
+
+  /**
+   * Get ID token for authenticating to Backend
+   */
+  private async getIdToken(): Promise<string> {
+    try {
+      const client = await this.auth.getIdTokenClient(this.apiBaseUrl);
+      const tokenResponse = await client.idTokenProvider.fetchIdToken(this.apiBaseUrl);
+      return tokenResponse;
+    } catch (error) {
+      logger.error('Failed to get identity token', error as Error);
+      throw error;
+    }
   }
 
   /**
@@ -33,10 +38,14 @@ export class BackendClientService {
     logger.info('Fetching tenant configuration', { tenantId });
 
     try {
+      const idToken = await this.getIdToken();
+
       const response = await fetch(`${this.apiBaseUrl}/api/tenants/${tenantId}/config`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+          'X-Tenant-ID': tenantId,
         },
       });
 
@@ -44,7 +53,7 @@ export class BackendClientService {
         throw new Error(`Failed to fetch tenant config: ${response.statusText}`);
       }
 
-      const config = await response.json() as TenantConfig;
+      const config = (await response.json()) as TenantConfig;
 
       logger.info('Tenant configuration fetched successfully', {
         tenantId,
@@ -54,6 +63,81 @@ export class BackendClientService {
       return config;
     } catch (error) {
       logger.error('Failed to fetch tenant configuration', error as Error, { tenantId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get simplified content from FHIR via Backend API
+   */
+  async getSimplifiedFromFhir(
+    compositionId: string,
+    tenantId: string
+  ): Promise<{
+    dischargeSummary?: { content: string };
+    dischargeInstructions?: { content: string };
+  }> {
+    logger.info('Fetching simplified content from FHIR', {
+      compositionId,
+      tenantId,
+    });
+
+    try {
+      const idToken = await this.getIdToken();
+
+      const response = await fetch(
+        `${this.apiBaseUrl}/google/fhir/Composition/${compositionId}/simplified`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+            'X-Tenant-ID': tenantId,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch simplified content from FHIR: ${response.statusText}`);
+      }
+
+      const data = (await response.json()) as any;
+
+      // Extract simplified content from the response
+      const result: {
+        dischargeSummary?: { content: string };
+        dischargeInstructions?: { content: string };
+      } = {};
+
+      // Find simplified discharge summary
+      const simplifiedSummary = data.dischargeSummaries?.find((summary: any) =>
+        summary.tags?.some((tag: any) => tag.code === 'simplified-content')
+      );
+      if (simplifiedSummary?.text) {
+        result.dischargeSummary = { content: simplifiedSummary.text };
+      }
+
+      // Find simplified discharge instructions
+      const simplifiedInstructions = data.dischargeInstructions?.find((instr: any) =>
+        instr.tags?.some((tag: any) => tag.code === 'simplified-content')
+      );
+      if (simplifiedInstructions?.text) {
+        result.dischargeInstructions = { content: simplifiedInstructions.text };
+      }
+
+      logger.info('Simplified content fetched from FHIR successfully', {
+        compositionId,
+        tenantId,
+        hasDischargeSummary: !!result.dischargeSummary,
+        hasDischargeInstructions: !!result.dischargeInstructions,
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to fetch simplified content from FHIR', error as Error, {
+        compositionId,
+        tenantId,
+      });
       throw error;
     }
   }
@@ -85,16 +169,20 @@ export class BackendClientService {
     });
 
     try {
+      const idToken = await this.getIdToken();
+
       const response = await fetch(
-        `${this.apiBaseUrl}/api/compositions/${compositionId}/translated`,
+        `${this.apiBaseUrl}/api/fhir/composition/${compositionId}/translated`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
+            'X-Tenant-ID': tenantId,
           },
           body: JSON.stringify({
             tenantId,
-            ...translatedContent,
+            translatedContent,
           }),
         }
       );

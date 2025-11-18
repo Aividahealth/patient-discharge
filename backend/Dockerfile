@@ -37,11 +37,8 @@ COPY --from=builder /app/dist ./dist
 # Copy settings folder for configuration
 COPY --from=builder /app/.settings.dev ./.settings.dev
 
-# Expose port (Cloud Run will inject PORT env variable)
+# Expose port (Cloud Run will inject PORT env variable automatically)
 EXPOSE 8080
-
-# Set environment variable for port
-ENV PORT=8080
 
 # Start the application
 CMD ["node", "dist/main"]

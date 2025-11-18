@@ -30,6 +30,36 @@ export interface QualityMetrics {
   avgSentenceLength?: number;
 }
 
+export interface FeedbackStats {
+  totalReviews: number;
+  simplificationReviews: number;
+  translationReviews: number;
+  averageRating: number;
+  simplificationRating: number;
+  translationRating: number;
+  latestReviewDate: string | null;
+  latestSimplificationReview: string | null;
+  latestTranslationReview: string | null;
+  hasHallucination: boolean;
+  hasMissingInfo: boolean;
+  ratingDistribution: {
+    [key: string]: number;
+  };
+}
+
+export interface FeedbackResponse {
+  success: boolean;
+  summaryId: string;
+  stats?: FeedbackStats;
+  feedback: ExpertFeedback[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
 export interface ReviewSummary {
   id: string;                      // Patient ID
   compositionId: string;           // Composition ID for fetching content
@@ -51,6 +81,8 @@ export interface ReviewSummary {
   fileName?: string;               // For display purposes
   language?: string;               // Language for translation reviews
   qualityMetrics?: QualityMetrics; // Automated quality metrics
+  // Detailed stats from feedback API
+  stats?: FeedbackStats;
 }
 
 export interface ReviewListResponse {
@@ -215,4 +247,78 @@ export async function getFeedbackForSummary(
   }
 
   return response.json();
+}
+
+/**
+ * Get feedback statistics for a specific discharge summary
+ * Uses the new GET /expert/feedback/summary/:summaryId endpoint
+ */
+export async function getFeedbackStats(
+  summaryId: string,
+  options?: {
+    reviewType?: ReviewType;
+    includeStats?: boolean;
+    includeFeedback?: boolean;
+    limit?: number;
+    offset?: number;
+  },
+  auth?: { tenantId?: string; token?: string }
+): Promise<FeedbackResponse> {
+  const queryParams = new URLSearchParams();
+  
+  if (options?.reviewType) {
+    queryParams.append('reviewType', options.reviewType);
+  }
+  if (options?.includeStats !== undefined) {
+    queryParams.append('includeStats', options.includeStats.toString());
+  }
+  if (options?.includeFeedback !== undefined) {
+    queryParams.append('includeFeedback', options.includeFeedback.toString());
+  }
+  if (options?.limit) {
+    queryParams.append('limit', options.limit.toString());
+  }
+  if (options?.offset) {
+    queryParams.append('offset', options.offset.toString());
+  }
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+
+  if (auth?.token) {
+    headers['Authorization'] = `Bearer ${auth.token}`;
+  }
+  if (auth?.tenantId) {
+    headers['X-Tenant-ID'] = auth.tenantId;
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/expert/feedback/summary/${summaryId}?${queryParams.toString()}`,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error');
+    console.error('[ExpertAPI] getFeedbackStats failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      error: errorText
+    });
+    throw new Error(`Failed to fetch feedback stats: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  
+  // Transform dates in feedback array
+  if (data.feedback && Array.isArray(data.feedback)) {
+    data.feedback = data.feedback.map((fb: any) => ({
+      ...fb,
+      reviewDate: fb.reviewDate ? new Date(fb.reviewDate) : new Date(),
+      createdAt: fb.createdAt ? new Date(fb.createdAt) : new Date(),
+      updatedAt: fb.updatedAt ? new Date(fb.updatedAt) : undefined,
+    }));
+  }
+
+  return data;
 }

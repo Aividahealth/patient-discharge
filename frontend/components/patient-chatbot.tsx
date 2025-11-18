@@ -23,9 +23,21 @@ interface PatientChatbotProps {
     medications: Array<{ name: string; dose: string; instructions: string }>
     appointments: Array<{ date: string; doctor: string; specialty: string }>
   }
+  dischargeSummary: string
+  dischargeInstructions: string
+  compositionId: string
+  patientId: string
 }
 
-export function PatientChatbot({ isOpen, onClose, patientData }: PatientChatbotProps) {
+export function PatientChatbot({
+  isOpen,
+  onClose,
+  patientData,
+  dischargeSummary,
+  dischargeInstructions,
+  compositionId,
+  patientId,
+}: PatientChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -52,15 +64,56 @@ export function PatientChatbot({ isOpen, onClose, patientData }: PatientChatbotP
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/chat", {
+      // Get auth token from localStorage (assuming it's stored there)
+      const authData = localStorage.getItem('aivida_auth')
+      const token = authData ? JSON.parse(authData).token : null
+      const tenantId = authData ? JSON.parse(authData).tenant.id : 'demo'
+
+      // Determine the chatbot service URL
+      const getChatbotUrl = () => {
+        // Check for environment variable first
+        if (process.env.NEXT_PUBLIC_CHATBOT_SERVICE_URL) {
+          return process.env.NEXT_PUBLIC_CHATBOT_SERVICE_URL
+        }
+        
+        // Fallback for local development
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          return 'http://localhost:3000/api/patient-chatbot/chat'
+        }
+        
+        // Production fallback: Use the separate chatbot Cloud Run service
+        return 'https://patient-discharge-chatbot-647433528821.us-central1.run.app/api/patient-chatbot/chat'
+      }
+
+      const chatbotUrl = getChatbotUrl()
+
+      console.log('[Chatbot] Sending message to backend:', chatbotUrl)
+      console.log('[Chatbot] Message context:', {
+        patientId,
+        compositionId,
+        hasSummary: !!dischargeSummary,
+        hasInstructions: !!dischargeInstructions,
+        hasToken: !!token,
+        tenantId
+      })
+
+      const response = await fetch(chatbotUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token && { "Authorization": `Bearer ${token}` }),
+          ...(tenantId && { "X-Tenant-ID": tenantId }),
         },
         body: JSON.stringify({
           message: input,
-          patientData,
-          conversationHistory: messages,
+          patientId,
+          compositionId,
+          dischargeSummary,
+          dischargeInstructions,
+          conversationHistory: messages.map(m => ({
+            role: m.role,
+            content: m.content
+          })),
         }),
       })
 
@@ -70,7 +123,7 @@ export function PatientChatbot({ isOpen, onClose, patientData }: PatientChatbotP
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.message,
+        content: data.response || data.message,
         role: "assistant",
         timestamp: new Date(),
       }
@@ -101,93 +154,91 @@ export function PatientChatbot({ isOpen, onClose, patientData }: PatientChatbotP
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-      <Card className="w-full max-w-md h-[600px] flex flex-col">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-              <Bot className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <CardTitle className="font-heading text-lg">Care Assistant</CardTitle>
+    <Card className="w-full h-[600px] flex flex-col">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+            <Bot className="h-4 w-4 text-primary-foreground" />
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
+          <CardTitle className="font-heading text-lg">Care Assistant</CardTitle>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </CardHeader>
 
-        <CardContent className="flex-1 flex flex-col p-0">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {message.role === "assistant" && (
-                  <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
-                    <Bot className="h-4 w-4" />
-                  </div>
-                )}
-                <div
-                  className={`max-w-[80%] p-3 rounded-lg text-sm ${
-                    message.role === "user" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
-                  }`}
-                >
-                  <p>{message.content}</p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-                {message.role === "user" && (
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                    <User className="h-4 w-4 text-primary-foreground" />
-                  </div>
-                )}
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex gap-3 justify-start">
+      <CardContent className="flex-1 flex flex-col p-0 min-h-0">
+        {/* Messages - Fixed height with scroll */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              {message.role === "assistant" && (
                 <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
                   <Bot className="h-4 w-4" />
                 </div>
-                <div className="bg-accent text-accent-foreground p-3 rounded-lg text-sm">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
-                    <div
-                      className="w-2 h-2 bg-current rounded-full animate-bounce"
-                      style={{ animationDelay: "0.1s" }}
-                    />
-                    <div
-                      className="w-2 h-2 bg-current rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    />
-                  </div>
+              )}
+              <div
+                className={`max-w-[80%] p-3 rounded-lg text-sm break-words overflow-wrap-anywhere ${
+                  message.role === "user" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
+                }`}
+              >
+                <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                <p className="text-xs opacity-70 mt-1">
+                  {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              </div>
+              {message.role === "user" && (
+                <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                  <User className="h-4 w-4 text-primary-foreground" />
+                </div>
+              )}
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex gap-3 justify-start">
+              <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                <Bot className="h-4 w-4" />
+              </div>
+              <div className="bg-accent text-accent-foreground p-3 rounded-lg text-sm">
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  />
+                  <div
+                    className="w-2 h-2 bg-current rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  />
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="border-t p-4">
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask about your medications, appointments, or recovery..."
-                disabled={isLoading}
-                className="flex-1"
-              />
-              <Button onClick={handleSend} disabled={isLoading || !input.trim()} size="sm">
-                <Send className="h-4 w-4" />
-              </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              For urgent medical concerns, call 911 or your doctor immediately
-            </p>
+          )}
+        </div>
+
+        {/* Input - Fixed at bottom */}
+        <div className="border-t p-4 flex-shrink-0">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Ask about your medications, appointments, or recovery..."
+              disabled={isLoading}
+              className="flex-1"
+            />
+            <Button onClick={handleSend} disabled={isLoading || !input.trim()} size="sm">
+              <Send className="h-4 w-4" />
+            </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            For urgent medical concerns, call 911 or your doctor immediately
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

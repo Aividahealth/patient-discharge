@@ -23,7 +23,15 @@ export class UserService {
         const config = this.configService.get();
         if (config.firestore_service_account_path) {
           // Resolve the path - handles both full paths and filenames
-          serviceAccountPath = resolveServiceAccountPath(config.firestore_service_account_path);
+          const resolved = resolveServiceAccountPath(config.firestore_service_account_path);
+          // Only use if file exists; otherwise fall back to ADC
+          const fs = require('fs');
+          if (fs.existsSync(resolved)) {
+            serviceAccountPath = resolved;
+            this.logger.log(`Using Firestore service account for UserService: ${resolved}`);
+          } else {
+            this.logger.log(`Firestore service account not found at ${resolved}, using Application Default Credentials`);
+          }
         }
       } catch (error) {
         this.logger.log('Config not available, using Application Default Credentials');

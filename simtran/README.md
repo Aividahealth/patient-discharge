@@ -67,7 +67,7 @@ cd ../translation && npm install
 cd simplification
 export PROJECT_ID=your-project-id
 export LOCATION=us-central1
-export MODEL_NAME=gemini-1.5-pro
+export MODEL_NAME=gemini-2.5-pro
 ./deploy.sh
 
 # Deploy translation function
@@ -96,7 +96,7 @@ gsutil ls gs://discharge-summaries-translated/
 
 - `PROJECT_ID`: Google Cloud Project ID
 - `LOCATION`: Google Cloud region (default: us-central1)
-- `MODEL_NAME`: Vertex AI model name (default: gemini-1.5-pro)
+- `MODEL_NAME`: Vertex AI model name (default: gemini-2.5-pro)
 
 ### Buckets
 
@@ -150,7 +150,7 @@ gcloud functions logs read discharge-summary-translator \
 ## Features
 
 ### Simplification Function
-- **Vertex AI Integration**: Uses Gemini 1.5 Pro for medical content simplification
+- **Vertex AI Integration**: Uses Gemini 2.5 Pro for medical content simplification
 - **Anti-Hallucination**: Zero tolerance for adding information not in original
 - **Structured Output**: Organized into clear sections (Overview, Medications, etc.)
 - **Temperature 0.0**: Completely deterministic output

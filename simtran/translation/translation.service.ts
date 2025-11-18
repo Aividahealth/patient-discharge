@@ -1,7 +1,7 @@
 import { v2 } from '@google-cloud/translate';
-import { TranslationError, TranslationRequest, TranslationResponse } from '../common/types';
-import { getConfig } from '../common/utils/config';
-import { createLogger } from '../common/utils/logger';
+import { TranslationError, TranslationRequest, TranslationResponse } from './common/types';
+import { getConfig } from './common/utils/config';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('TranslationService');
 
