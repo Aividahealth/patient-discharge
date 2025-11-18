@@ -10,12 +10,17 @@ import {
   HttpStatus,
   Logger,
   Request,
+  UseGuards,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { UserService } from './user.service';
+import { Roles } from './decorators/roles.decorator';
+import { RolesGuard, TenantGuard } from './guards';
 import type { CreateUserRequest, UpdateUserRequest, UserResponse } from './types/user.types';
 
 @Controller('api/users')
+@UseGuards(RolesGuard, TenantGuard)
+@Roles('tenant_admin', 'system_admin')
 export class UsersController {
   private readonly logger = new Logger(UsersController.name);
 
@@ -24,6 +29,8 @@ export class UsersController {
   /**
    * GET /api/users
    * List all users for the authenticated tenant
+   * Requires: tenant_admin or system_admin role
+   * Protected by: RolesGuard, TenantGuard
    */
   @Get()
   async listUsers(@Request() req): Promise<UserResponse[]> {
@@ -38,7 +45,7 @@ export class UsersController {
 
       const users = await this.userService.findByTenant(tenantId);
 
-      // Map to response format (exclude passwordHash)
+      // Map to response format (exclude passwordHash and sensitive fields)
       return users.map(user => ({
         id: user.id,
         tenantId: user.tenantId,
@@ -47,8 +54,14 @@ export class UsersController {
         email: user.email,
         role: user.role,
         linkedPatientId: user.linkedPatientId,
+        isActive: user.isActive,
+        isLocked: user.isLocked,
+        failedLoginAttempts: user.failedLoginAttempts,
+        lastSuccessfulLoginAt: user.lastSuccessfulLoginAt,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        createdBy: user.createdBy,
+        lastUpdatedBy: user.lastUpdatedBy,
       }));
     } catch (error) {
       if (error instanceof HttpException) {
@@ -65,6 +78,8 @@ export class UsersController {
   /**
    * GET /api/users/:id
    * Get a specific user by ID
+   * Requires: tenant_admin or system_admin role
+   * Protected by: RolesGuard, TenantGuard
    */
   @Get(':id')
   async getUser(@Param('id') id: string, @Request() req): Promise<UserResponse> {
@@ -81,7 +96,7 @@ export class UsersController {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
-      // Verify user belongs to the same tenant
+      // Verify user belongs to the same tenant (TenantGuard already checked this)
       if (user.tenantId !== tenantId) {
         throw new HttpException('Unauthorized access to user', HttpStatus.FORBIDDEN);
       }
@@ -94,8 +109,14 @@ export class UsersController {
         email: user.email,
         role: user.role,
         linkedPatientId: user.linkedPatientId,
+        isActive: user.isActive,
+        isLocked: user.isLocked,
+        failedLoginAttempts: user.failedLoginAttempts,
+        lastSuccessfulLoginAt: user.lastSuccessfulLoginAt,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        createdBy: user.createdBy,
+        lastUpdatedBy: user.lastUpdatedBy,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -112,6 +133,8 @@ export class UsersController {
   /**
    * POST /api/users
    * Create a new user for the authenticated tenant
+   * Requires: tenant_admin or system_admin role
+   * Protected by: RolesGuard, TenantGuard
    */
   @Post()
   async createUser(
@@ -120,15 +143,10 @@ export class UsersController {
   ): Promise<UserResponse> {
     try {
       const tenantId = req.user?.tenantId;
-      const creatorRole = req.user?.role;
+      const creatorId = req.user?.userId;
 
       if (!tenantId) {
         throw new HttpException('Tenant ID not found in request', HttpStatus.BAD_REQUEST);
-      }
-
-      // Only admins can create users
-      if (creatorRole !== 'admin') {
-        throw new HttpException('Only administrators can create users', HttpStatus.FORBIDDEN);
       }
 
       // Validate request
@@ -151,7 +169,7 @@ export class UsersController {
       // Hash the password
       const passwordHash = await bcrypt.hash(request.password, 10);
 
-      // Create user
+      // Create user with new account status fields
       const user = await this.userService.create({
         tenantId,
         username: request.username,
@@ -160,9 +178,13 @@ export class UsersController {
         email: request.email,
         role: request.role,
         linkedPatientId: request.linkedPatientId,
+        isActive: true, // New users are active by default
+        isLocked: false,
+        failedLoginAttempts: 0,
+        createdBy: creatorId,
       });
 
-      this.logger.log(`Created user: ${user.id} (${user.username}) for tenant: ${tenantId}`);
+      this.logger.log(`Created user: ${user.id} (${user.username}) for tenant: ${tenantId} by admin: ${creatorId}`);
 
       return {
         id: user.id,
@@ -172,8 +194,14 @@ export class UsersController {
         email: user.email,
         role: user.role,
         linkedPatientId: user.linkedPatientId,
+        isActive: user.isActive,
+        isLocked: user.isLocked,
+        failedLoginAttempts: user.failedLoginAttempts,
+        lastSuccessfulLoginAt: user.lastSuccessfulLoginAt,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
+        createdBy: user.createdBy,
+        lastUpdatedBy: user.lastUpdatedBy,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -190,6 +218,8 @@ export class UsersController {
   /**
    * PUT /api/users/:id
    * Update an existing user
+   * Requires: tenant_admin or system_admin role
+   * Protected by: RolesGuard, TenantGuard
    */
   @Put(':id')
   async updateUser(
@@ -199,15 +229,10 @@ export class UsersController {
   ): Promise<UserResponse> {
     try {
       const tenantId = req.user?.tenantId;
-      const updaterRole = req.user?.role;
+      const updaterId = req.user?.userId;
 
       if (!tenantId) {
         throw new HttpException('Tenant ID not found in request', HttpStatus.BAD_REQUEST);
-      }
-
-      // Only admins can update users
-      if (updaterRole !== 'admin') {
-        throw new HttpException('Only administrators can update users', HttpStatus.FORBIDDEN);
       }
 
       // Check if user exists and belongs to this tenant
@@ -226,6 +251,7 @@ export class UsersController {
         email: request.email,
         role: request.role,
         linkedPatientId: request.linkedPatientId,
+        lastUpdatedBy: updaterId,
       };
 
       // If password is being updated, hash it
@@ -236,7 +262,7 @@ export class UsersController {
       // Update user
       const updatedUser = await this.userService.update(id, updateData);
 
-      this.logger.log(`Updated user: ${id} for tenant: ${tenantId}`);
+      this.logger.log(`Updated user: ${id} for tenant: ${tenantId} by admin: ${updaterId}`);
 
       return {
         id: updatedUser.id,
@@ -246,8 +272,14 @@ export class UsersController {
         email: updatedUser.email,
         role: updatedUser.role,
         linkedPatientId: updatedUser.linkedPatientId,
+        isActive: updatedUser.isActive,
+        isLocked: updatedUser.isLocked,
+        failedLoginAttempts: updatedUser.failedLoginAttempts,
+        lastSuccessfulLoginAt: updatedUser.lastSuccessfulLoginAt,
         createdAt: updatedUser.createdAt,
         updatedAt: updatedUser.updatedAt,
+        createdBy: updatedUser.createdBy,
+        lastUpdatedBy: updatedUser.lastUpdatedBy,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -264,21 +296,17 @@ export class UsersController {
   /**
    * DELETE /api/users/:id
    * Delete a user
+   * Requires: tenant_admin or system_admin role
+   * Protected by: RolesGuard, TenantGuard
    */
   @Delete(':id')
   async deleteUser(@Param('id') id: string, @Request() req): Promise<{ success: boolean; message: string }> {
     try {
       const tenantId = req.user?.tenantId;
-      const deleterRole = req.user?.role;
       const deleterId = req.user?.userId;
 
       if (!tenantId) {
         throw new HttpException('Tenant ID not found in request', HttpStatus.BAD_REQUEST);
-      }
-
-      // Only admins can delete users
-      if (deleterRole !== 'admin') {
-        throw new HttpException('Only administrators can delete users', HttpStatus.FORBIDDEN);
       }
 
       // Check if user exists and belongs to this tenant
@@ -299,7 +327,7 @@ export class UsersController {
       // Delete user
       await this.userService.delete(id);
 
-      this.logger.log(`Deleted user: ${id} (${existingUser.username}) from tenant: ${tenantId}`);
+      this.logger.log(`Deleted user: ${id} (${existingUser.username}) from tenant: ${tenantId} by admin: ${deleterId}`);
 
       return {
         success: true,

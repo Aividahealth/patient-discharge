@@ -2,18 +2,24 @@
 
 import { ApiClient } from '../api-client'
 
-export type UserRole = 'patient' | 'clinician' | 'expert' | 'admin'
+export type UserRole = 'patient' | 'clinician' | 'expert' | 'tenant_admin' | 'system_admin'
 
 export interface User {
   id: string
-  tenantId: string
+  tenantId: string | null // null for system_admin only
   username: string
   name: string
   email?: string
   role: UserRole
   linkedPatientId?: string
+  isActive: boolean
+  isLocked: boolean
+  failedLoginAttempts: number
+  lastSuccessfulLoginAt?: Date | string
   createdAt: Date | string
   updatedAt: Date | string
+  createdBy?: string
+  lastUpdatedBy?: string
 }
 
 export interface CreateUserRequest {

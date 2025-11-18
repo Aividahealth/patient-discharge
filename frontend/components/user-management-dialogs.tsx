@@ -125,7 +125,7 @@ export function AddUserDialog({ open, onOpenChange, onSubmit }: AddUserDialogPro
                   <SelectItem value="patient">Patient</SelectItem>
                   <SelectItem value="clinician">Clinician</SelectItem>
                   <SelectItem value="expert">Expert</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="tenant_admin">Tenant Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -249,7 +249,7 @@ export function EditUserDialog({ open, onOpenChange, user, onSubmit }: EditUserD
                   <SelectItem value="patient">Patient</SelectItem>
                   <SelectItem value="clinician">Clinician</SelectItem>
                   <SelectItem value="expert">Expert</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="tenant_admin">Tenant Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -40,7 +40,7 @@ export interface LoginResponse {
   expiresIn: number;
   user: {
     id: string;
-    tenantId: string;
+    tenantId: string | null; // null for system_admin
     username: string;
     name: string;
     role: string;
@@ -59,7 +59,7 @@ export interface LoginResponse {
 
 export interface JWTPayload {
   userId: string;
-  tenantId: string;
+  tenantId: string | null; // null for system_admin
   username: string;
   name: string;
   role: string;
@@ -97,13 +97,19 @@ export interface UpdateUserRequest {
 
 export interface UserResponse {
   id: string;
-  tenantId: string;
+  tenantId: string | null; // null for system_admin only
   username: string;
   name: string;
   email?: string;
   role: UserRole;
   linkedPatientId?: string;
+  isActive: boolean;
+  isLocked: boolean;
+  failedLoginAttempts: number;
+  lastSuccessfulLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
+  createdBy?: string;
+  lastUpdatedBy?: string;
 }
 

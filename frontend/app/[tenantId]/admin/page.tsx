@@ -917,14 +917,24 @@ export default function AdminDashboard() {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="text-right">
-                            <Badge variant={
-                              user.role === "admin" ? "default" :
-                              user.role === "clinician" ? "secondary" :
-                              user.role === "expert" ? "outline" :
-                              "outline"
-                            }>
-                              {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={
+                                user.role === "tenant_admin" || user.role === "system_admin" ? "default" :
+                                user.role === "clinician" ? "secondary" :
+                                user.role === "expert" ? "outline" :
+                                "outline"
+                              }>
+                                {user.role === "tenant_admin" ? "Tenant Admin" :
+                                 user.role === "system_admin" ? "System Admin" :
+                                 user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                              </Badge>
+                              {!user.isActive && (
+                                <Badge variant="destructive" className="text-xs">Inactive</Badge>
+                              )}
+                              {user.isLocked && (
+                                <Badge variant="destructive" className="text-xs">Locked</Badge>
+                              )}
+                            </div>
                             {user.linkedPatientId && (
                               <p className="text-xs text-muted-foreground mt-1">Patient ID: {user.linkedPatientId}</p>
                             )}
