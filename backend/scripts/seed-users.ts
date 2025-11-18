@@ -9,7 +9,7 @@ interface UserSeed {
   username: string;
   password: string; // Plain text password - will be hashed
   name: string;
-  role: 'patient' | 'clinician' | 'expert' | 'admin';
+  role: 'patient' | 'clinician' | 'expert' | 'tenant_admin' | 'system_admin';
   linkedPatientId?: string | null;
 }
 
@@ -43,8 +43,8 @@ const sampleUsers: UserSeed[] = [
     tenantId: 'demo',
     username: 'admin',
     password: 'Admin123!',
-    name: 'System Administrator',
-    role: 'admin',
+    name: 'Tenant Administrator',
+    role: 'tenant_admin',
     linkedPatientId: null,
   },
 ];
@@ -121,8 +121,16 @@ async function createUser(firestore: Firestore, user: UserSeed): Promise<void> {
       name: user.name,
       role: user.role,
       linkedPatientId: user.linkedPatientId,
+
+      // Account status
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
+
+      // Audit fields
       createdAt: new Date(),
       updatedAt: new Date(),
+      createdBy: 'seed-script',
     };
 
     const docRef = firestore.collection('users').doc();

@@ -42,7 +42,7 @@ export interface User {
   tenantId: string
   username: string
   name: string
-  role: 'patient' | 'clinician' | 'admin' | 'expert'
+  role: 'patient' | 'clinician' | 'expert' | 'tenant_admin' | 'system_admin'
   linkedPatientId?: string
 }
 
