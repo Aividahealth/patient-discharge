@@ -10,13 +10,19 @@ import {
   HttpStatus,
   HttpException,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { ExpertService } from './expert.service';
 import type { SubmitFeedbackDto, ReviewListQuery, UpdateFeedbackDto } from './expert.types';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard, TenantGuard } from '../auth/guards';
 
+// Expert endpoints require expert, tenant_admin, or system_admin role
 @Controller('expert')
+@UseGuards(RolesGuard, TenantGuard)
+@Roles('expert', 'tenant_admin', 'system_admin')
 export class ExpertController {
   private readonly logger = new Logger(ExpertController.name);
 

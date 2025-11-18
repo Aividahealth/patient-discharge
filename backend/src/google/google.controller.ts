@@ -1,10 +1,16 @@
-import { Controller, Get, Param, Post, Body, Put, Delete, Query, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Put, Delete, Query, HttpException, HttpStatus, Logger, UseGuards } from '@nestjs/common';
 import { GoogleService } from './google.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
 import { Public } from '../auth/auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard, TenantGuard, PatientResourceGuard } from '../auth/guards';
 
+// FHIR operations require clinician, expert, tenant_admin, or system_admin role by default
+// Some endpoints allow patient access with resource-level guards
 @Controller('google')
+@UseGuards(RolesGuard, TenantGuard)
+@Roles('clinician', 'expert', 'tenant_admin', 'system_admin')
 export class GoogleController {
   private readonly logger = new Logger(GoogleController.name);
 
@@ -138,8 +144,11 @@ export class GoogleController {
   /**
    * Get the most recent Composition for a patient
    * This allows the patient portal to work with just patientId (no compositionId needed)
+   * Patients can only access their own composition; clinicians/experts can access any
    */
   @Get('patient/:patientId/composition')
+  @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
+  @UseGuards(RolesGuard, TenantGuard, PatientResourceGuard)
   async getPatientComposition(
     @Param('patientId') patientId: string,
     @TenantContext() ctx: TenantContextType
