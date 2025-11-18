@@ -144,7 +144,13 @@ export default function ExpertReviewPage() {
         tenantId
       )
 
-      setRawText(details.rawSummary?.text || "")
+      // Combine raw summary and instructions
+      const rawCombined = [
+        details.rawSummary?.text || '',
+        details.rawInstructions?.text || ''
+      ].filter(Boolean).join('\n\n---\n\n')
+      
+      setRawText(rawCombined)
       
       // Combine simplified summary and instructions
       const simplifiedCombined = [
