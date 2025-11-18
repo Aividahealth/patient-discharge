@@ -187,12 +187,27 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
     }
 
     // Step 2: Determine target language
-    // Priority: 1) Patient's preferred language (if supported), 2) First supported language
-    let targetLanguage = tenantConfig.translationConfig.supportedLanguages[0];
+    // Filter out English (source language) from supported languages
+    const sourceLanguage = 'en';
+    const targetLanguages = tenantConfig.translationConfig.supportedLanguages.filter(
+      (lang: string) => lang !== sourceLanguage
+    );
 
-    if (event.preferredLanguage) {
-      // Check if the preferred language is supported
-      if (tenantConfig.translationConfig.supportedLanguages.includes(event.preferredLanguage)) {
+    if (targetLanguages.length === 0) {
+      logger.warning('No target languages available after filtering source language, skipping translation', {
+        sourceLanguage,
+        supportedLanguages: tenantConfig.translationConfig.supportedLanguages,
+        compositionId: event.compositionId,
+      });
+      return;
+    }
+
+    // Priority: 1) Patient's preferred language (if supported), 2) First non-source language
+    let targetLanguage = targetLanguages[0];
+
+    if (event.preferredLanguage && event.preferredLanguage !== sourceLanguage) {
+      // Check if the preferred language is supported (and not the source language)
+      if (targetLanguages.includes(event.preferredLanguage)) {
         targetLanguage = event.preferredLanguage;
         logger.info('Using patient preferred language for translation', {
           preferredLanguage: event.preferredLanguage,
@@ -200,7 +215,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
           compositionId: event.compositionId,
         });
       } else {
-        logger.warning('Patient preferred language not supported, using default', {
+        logger.warning('Patient preferred language not supported or is source language, using default', {
           preferredLanguage: event.preferredLanguage,
           defaultLanguage: targetLanguage,
           supportedLanguages: tenantConfig.translationConfig.supportedLanguages,
@@ -209,7 +224,7 @@ async function processTranslation(event: SimplificationCompletedEvent): Promise<
         });
       }
     } else {
-      logger.info('No patient preferred language provided, using first supported language', {
+      logger.info('No patient preferred language provided, using first non-source language', {
         targetLanguage,
         compositionId: event.compositionId,
       });

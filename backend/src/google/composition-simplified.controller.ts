@@ -14,6 +14,7 @@ export class CompositionSimplifiedController {
    * POST /api/fhir/composition/:compositionId/simplified
    * Write simplified content back to FHIR store
    * This endpoint is designed for service-to-service communication
+   * Service-to-service endpoint - uses @Public() with Google Auth ID tokens
    */
   @Public()
   @Post(':compositionId/simplified')
@@ -72,6 +73,7 @@ export class CompositionSimplifiedController {
    * POST /api/fhir/composition/:compositionId/translated
    * Write translated content back to FHIR store
    * This endpoint is designed for service-to-service communication
+   * Service-to-service endpoint - uses @Public() with Google Auth ID tokens
    */
   @Public()
   @Post(':compositionId/translated')

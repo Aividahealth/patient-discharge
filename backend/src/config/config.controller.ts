@@ -69,6 +69,7 @@ export class ConfigController {
    * GET /api/config
    * Get tenant configuration and branding for the tenant specified in X-Tenant-ID header
    */
+  @Public()
   @Get('config')
   async getConfig(
     @TenantContext() ctx: TenantContextType,

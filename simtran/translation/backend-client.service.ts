@@ -1,5 +1,6 @@
 import { createLogger } from './common/utils/logger';
 import { TenantConfig } from './common/types';
+import { GoogleAuth } from 'google-auth-library';
 
 const logger = createLogger('BackendClientService');
 
@@ -8,10 +9,26 @@ const logger = createLogger('BackendClientService');
  */
 export class BackendClientService {
   private apiBaseUrl: string;
+  private auth: GoogleAuth;
 
   constructor(apiBaseUrl: string) {
     this.apiBaseUrl = apiBaseUrl;
+    this.auth = new GoogleAuth();
     logger.info('BackendClientService initialized', { apiBaseUrl });
+  }
+
+  /**
+   * Get ID token for authenticating to Backend
+   */
+  private async getIdToken(): Promise<string> {
+    try {
+      const client = await this.auth.getIdTokenClient(this.apiBaseUrl);
+      const tokenResponse = await client.idTokenProvider.fetchIdToken(this.apiBaseUrl);
+      return tokenResponse;
+    } catch (error) {
+      logger.error('Failed to get identity token', error as Error);
+      throw error;
+    }
   }
 
   /**
@@ -21,10 +38,14 @@ export class BackendClientService {
     logger.info('Fetching tenant configuration', { tenantId });
 
     try {
+      const idToken = await this.getIdToken();
+
       const response = await fetch(`${this.apiBaseUrl}/api/tenants/${tenantId}/config`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+          'X-Tenant-ID': tenantId,
         },
       });
 
@@ -62,12 +83,15 @@ export class BackendClientService {
     });
 
     try {
+      const idToken = await this.getIdToken();
+
       const response = await fetch(
         `${this.apiBaseUrl}/google/fhir/Composition/${compositionId}/simplified`,
         {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
             'X-Tenant-ID': tenantId,
           },
         }
@@ -145,12 +169,15 @@ export class BackendClientService {
     });
 
     try {
+      const idToken = await this.getIdToken();
+
       const response = await fetch(
         `${this.apiBaseUrl}/api/fhir/composition/${compositionId}/translated`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
             'X-Tenant-ID': tenantId,
           },
           body: JSON.stringify({
