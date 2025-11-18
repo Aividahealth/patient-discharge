@@ -26,7 +26,8 @@
     "create-user": "ts-node scripts/create-user.ts",
     "unlock-user": "ts-node scripts/unlock-user.ts",
     "change-password": "ts-node scripts/change-password.ts",
-    "list-users": "ts-node scripts/list-users.ts"
+    "list-users": "ts-node scripts/list-users.ts",
+    "migrate-users": "ts-node scripts/migrate-users.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",
