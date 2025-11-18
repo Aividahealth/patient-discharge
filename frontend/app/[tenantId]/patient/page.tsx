@@ -825,26 +825,37 @@ EMERGENCY CONTACTS:
             </div>
 
             {structuredMedications.length > 0 ? (
-              <div className="grid gap-4">
+            <div className="grid gap-4">
                 {structuredMedications.map((med, index) => (
-                  <Card key={`med-${index}`} className="relative">
-                    <CardContent className="pt-6">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="font-heading text-lg font-semibold">{med.name}</h3>
-                            {med.dose && <Badge variant="secondary">{med.dose}</Badge>}
+                  <Card key={`med-${index}`} className="hover:shadow-md transition-shadow">
+                  <CardContent className="pt-6">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Pill className="h-5 w-5 text-blue-600" />
+                        </div>
                           </div>
-                          <div className="mb-4">
-                            <p className="text-sm font-medium text-muted-foreground mb-1">{t.specialInstructions}</p>
-                            <p className="text-sm">{med.instructions}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <h3 className="font-heading text-xl font-semibold text-gray-900">{med.name}</h3>
+                            {med.dose && (
+                              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm">
+                                {med.dose}
+                              </Badge>
+                            )}
                           </div>
+                          <div className="space-y-2">
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                              <p className="text-sm font-semibold text-gray-700 mb-2">How to take:</p>
+                              <p className="text-sm text-gray-900 leading-relaxed">{med.instructions}</p>
+                        </div>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
             ) : parsedSections.medications ? (
               <Card>
                 <CardContent className="pt-6">
@@ -873,17 +884,39 @@ EMERGENCY CONTACTS:
             </div>
 
             {structuredAppointments.length > 0 ? (
-              <div className="grid gap-4">
+            <div className="grid gap-4">
                 {structuredAppointments.map((apt, index) => (
-                  <Card key={index}>
-                    <CardContent className="pt-6">
-                      <div className="prose prose-sm max-w-none">
-                        <p>{apt.rawText}</p>
+                <Card key={index} className="hover:shadow-md transition-shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 mt-1">
+                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                          <Calendar className="h-5 w-5 text-green-600" />
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      <div className="flex-1 min-w-0">
+                        {apt.specialty && (
+                          <h3 className="font-heading text-xl font-semibold text-gray-900 mb-2">
+                            {apt.specialty}
+                          </h3>
+                        )}
+                        {apt.date && (
+                          <div className="flex items-center gap-2 mb-3">
+                            <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-sm">
+                              <Clock className="h-3 w-3 mr-1" />
+                              In {apt.date}
+                            </Badge>
+                          </div>
+                        )}
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <p className="text-sm text-gray-900 leading-relaxed">{apt.rawText}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
             ) : parsedSections.appointments ? (
               <Card>
                 <CardContent className="pt-6">

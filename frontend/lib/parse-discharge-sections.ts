@@ -100,6 +100,23 @@ export interface Medication {
   instructions: string;
 }
 
+/**
+ * Clean markdown formatting from text (remove **, *, etc.)
+ */
+export function cleanMarkdown(text: string): string {
+  if (!text) return '';
+  
+  return text
+    // Remove bold markdown
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    // Remove italic markdown
+    .replace(/\*(.+?)\*/g, '$1')
+    // Remove bullet points
+    .replace(/^[-•*]\s*/gm, '')
+    // Trim extra whitespace
+    .trim();
+}
+
 export function extractMedications(medicationsSection: string): Medication[] {
   if (!medicationsSection) return [];
 
@@ -137,21 +154,21 @@ export function extractMedications(medicationsSection: string): Medication[] {
           
           if (doseMatch) {
             medications.push({
-              name: (doseMatch[1] + doseMatch[3]).trim(),
-              dose: doseMatch[2].trim(),
-              instructions: instructions,
+              name: cleanMarkdown((doseMatch[1] + doseMatch[3]).trim()),
+              dose: cleanMarkdown(doseMatch[2].trim()),
+              instructions: cleanMarkdown(instructions),
             });
           } else {
             medications.push({
-              name: nameWithDose,
-              instructions: instructions,
+              name: cleanMarkdown(nameWithDose),
+              instructions: cleanMarkdown(instructions),
             });
           }
         } else {
           // Fallback: treat entire line as medication entry
           medications.push({
             name: 'Medication',
-            instructions: content,
+            instructions: cleanMarkdown(content),
           });
         }
       }
@@ -170,6 +187,7 @@ export interface Appointment {
   date?: string;
   doctor?: string;
   specialty?: string;
+  location?: string;
   rawText: string;
 }
 
@@ -194,9 +212,20 @@ export function extractAppointments(appointmentsSection: string): Appointment[] 
       const content = bulletMatch?.[1] || numberMatch?.[1] || trimmed;
       
       if (content) {
+        const cleanedText = cleanMarkdown(content);
+        
+        // Try to extract clinic/specialty from patterns like "**Orthopedic Clinic:**" or "**Primary Care Provider (PCP):**"
+        const specialtyMatch = content.match(/\*\*([^:]+):\*\*/);
+        const specialty = specialtyMatch ? cleanMarkdown(specialtyMatch[1]) : undefined;
+        
+        // Try to extract timing like "in 2 weeks", "in 1 to 2 weeks"
+        const dateMatch = cleanedText.match(/in (\d+(?:\s+to\s+\d+)?\s+(?:week|day|month)s?)/i);
+        const date = dateMatch ? dateMatch[1] : undefined;
+        
         appointments.push({
-          rawText: content,
-          // Could add more parsing for date/doctor extraction if needed
+          specialty,
+          date,
+          rawText: cleanedText,
         });
       }
     }
