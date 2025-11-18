@@ -136,6 +136,61 @@ export class GoogleController {
   }
 
   /**
+   * Get the most recent Composition for a patient
+   * This allows the patient portal to work with just patientId (no compositionId needed)
+   */
+  @Get('patient/:patientId/composition')
+  async getPatientComposition(
+    @Param('patientId') patientId: string,
+    @TenantContext() ctx: TenantContextType
+  ) {
+    try {
+      this.logger.log(`🔍 Finding composition for patient ${patientId}`);
+      
+      // Search for compositions by patient
+      const compositionSearch = await this.googleService.fhirSearch('Composition', {
+        subject: `Patient/${patientId}`,
+        _sort: '-date', // Sort by date descending (most recent first)
+        _count: 1 // Only get the most recent one
+      }, ctx);
+
+      if (!compositionSearch?.entry || compositionSearch.entry.length === 0) {
+        throw new HttpException(
+          {
+            message: 'No discharge composition found for this patient',
+            patientId,
+            tenantId: ctx.tenantId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      const composition = compositionSearch.entry[0].resource;
+      this.logger.log(`✅ Found composition ${composition.id} for patient ${patientId}`);
+
+      return {
+        compositionId: composition.id,
+        patientId,
+        date: composition.date,
+        title: composition.title,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error(`❌ Error finding composition for patient ${patientId}:`, error);
+      throw new HttpException(
+        {
+          message: error.message || 'Failed to find composition for patient',
+          patientId,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
    * Execute FHIR bundle request
    */
   @Post('fhir')

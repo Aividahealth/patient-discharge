@@ -100,6 +100,55 @@ export default function PatientDashboard() {
     if (lang) setPreferredLanguage(lang)
   }, [searchParams])
 
+  // Auto-fetch compositionId if only patientId is provided
+  useEffect(() => {
+    const fetchCompositionId = async () => {
+      // Only fetch if we have patientId but no compositionId
+      if (!patientId || compositionId || !token || !tenant) {
+        return
+      }
+
+      console.log('[Patient Portal] No compositionId provided, fetching from backend...')
+      
+      try {
+        const getBackendUrl = () => {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            return 'http://localhost:3000'
+          }
+          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+        }
+
+        const response = await fetch(
+          `${getBackendUrl()}/google/patient/${patientId}/composition`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'X-Tenant-ID': tenant.id,
+            },
+          }
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('[Patient Portal] Auto-fetched compositionId:', data.compositionId)
+          setCompositionId(data.compositionId)
+        } else {
+          console.error('[Patient Portal] Failed to fetch compositionId:', response.statusText)
+          alert('Could not find discharge information for this patient. Please contact support.')
+          setIsLoadingData(false)
+        }
+      } catch (error) {
+        console.error('[Patient Portal] Error fetching compositionId:', error)
+        alert('Could not load discharge information. Please try again or contact support.')
+        setIsLoadingData(false)
+      }
+    }
+
+    fetchCompositionId()
+  }, [patientId, compositionId, token, tenant])
+
   // Fetch patient's discharge summary and instructions
   useEffect(() => {
     const fetchPatientData = async () => {
