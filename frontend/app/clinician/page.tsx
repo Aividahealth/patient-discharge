@@ -1386,15 +1386,6 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">{t.medications}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {(() => {
-                                const medCount = currentPatient?.originalInstructionsParsed?.dischargeMedications
-                                  ? (currentPatient.originalInstructionsParsed.dischargeMedications.new?.length || 0) +
-                                    (currentPatient.originalInstructionsParsed.dischargeMedications.continued?.length || 0)
-                                  : 0;
-                                return `${medCount} ${t.medicationsListed}`;
-                              })()}
-                            </p>
                           </div>
                         </div>
                         <Switch
@@ -1413,12 +1404,6 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">Appointments</p>
-                            <p className="text-xs text-muted-foreground">
-                              {(() => {
-                                const apptCount = currentPatient?.originalInstructionsParsed?.followUpAppointments?.length || 0;
-                                return `${apptCount} ${t.appointmentsScheduled}`;
-                              })()}
-                            </p>
                           </div>
                         </div>
                         <Switch
