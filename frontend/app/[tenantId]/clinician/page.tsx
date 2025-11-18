@@ -913,18 +913,28 @@ export default function ClinicianDashboard() {
         }
       }
 
+      // Combine raw summary and instructions for display
+      const combinedRawText = [
+        rawSummary?.text || '',
+        rawInstructions?.text || ''
+      ].filter(Boolean).join('\n\n---\n\n');
+
       // Update the patient's medical data with the refreshed composition
       const updatedPatientData = {
         ...currentPatient,
         // Add parsed data for structured rendering
         originalSummaryParsed: parsedSummaryData,
         originalInstructionsParsed: parsedInstructionsData,
+        // Store combined raw content
+        rawSummaryText: rawSummary?.text || '',
+        rawInstructionsText: rawInstructions?.text || '',
+        combinedRawText: combinedRawText,
         // Store AI-simplified content
         aiSimplifiedSummary: aiSimplifiedSummaryText || null,
         aiSimplifiedInstructions: aiSimplifiedInstructionsText || null,
-        // Keep raw text as fallback
+        // Keep raw text as fallback (now includes both summary and instructions)
         originalSummary: {
-          diagnosis: { en: rawSummary?.text || currentPatient.originalSummary?.diagnosis?.en || 'Processing...' },
+          diagnosis: { en: combinedRawText || currentPatient.originalSummary?.diagnosis?.en || 'Processing...' },
           diagnosisText: { en: rawSummary?.text || currentPatient.originalSummary?.diagnosisText?.en || 'Processing...' },
           medications: { en: rawInstructions?.text || currentPatient.originalSummary?.medications?.en || 'Processing...' },
           followUp: { en: currentPatient.originalSummary?.followUp?.en || 'Processing...' },
@@ -1354,6 +1364,15 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                     <CardContent>
                       <div className="bg-muted/30 p-4 rounded-lg text-sm max-h-[70vh] overflow-y-auto">
                         {(() => {
+                          // First try to show combined raw text if available
+                          if ((currentPatient as any).combinedRawText) {
+                            return (
+                              <div className="whitespace-pre-wrap text-muted-foreground">
+                                {(currentPatient as any).combinedRawText}
+                              </div>
+                            );
+                          }
+
                           // Try to use structured renderer if parsed data is available
                           const parsedData = currentPatient.originalSummaryParsed;
                           if (parsedData) {
