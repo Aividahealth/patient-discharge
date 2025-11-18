@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +20,9 @@ import { tenantColors } from "@/lib/tenant-colors"
 import { patientTranslations } from "@/lib/translations"
 import { SUPPORTED_LANGUAGES } from "@/lib/constants/languages"
 import { usePDFExport } from "@/hooks/use-pdf-export"
+import { useTenant } from "@/contexts/tenant-context"
+import { login } from "@/lib/api/auth"
+import { getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
 import html2canvas from "html2canvas"
 import {
   Heart,
@@ -35,17 +39,130 @@ import {
   CheckCircle2,
   X,
   Phone,
+  Loader2,
 } from "lucide-react"
 
 export default function PatientDashboard() {
+  const searchParams = useSearchParams()
+  const { login: contextLogin, token, user, tenant, isAuthenticated } = useTenant()
+
+  const [patientId, setPatientId] = useState<string | null>(null)
+  const [compositionId, setCompositionId] = useState<string | null>(null)
   const [language, setLanguage] = useState("en")
+  const [viewTranslated, setViewTranslated] = useState(false)
   const [checkedMeds, setCheckedMeds] = useState<Record<string, boolean>>({})
   const [showChat, setShowChat] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
+  const [isLoadingData, setIsLoadingData] = useState(true)
+  const [dischargeSummary, setDischargeSummary] = useState<string>("")
+  const [dischargeInstructions, setDischargeInstructions] = useState<string>("")
+  const [translatedSummary, setTranslatedSummary] = useState<string>("")
+  const [translatedInstructions, setTranslatedInstructions] = useState<string>("")
+  const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
   const { exportToPDF } = usePDFExport()
 
+  // Auto-login with patient credentials if not authenticated
+  useEffect(() => {
+    const autoLogin = async () => {
+      if (!isAuthenticated) {
+        try {
+          console.log('[Patient Portal] Attempting auto-login for demo patient...')
+          const authData = await login({
+            tenantId: tenant?.id || 'demo',
+            username: 'patient',
+            password: 'Adyar2Austin'
+          })
+          console.log('[Patient Portal] Auto-login successful:', authData.user.name)
+          contextLogin(authData)
+        } catch (error) {
+          console.error('[Patient Portal] Auto-login failed:', error)
+          setIsLoadingData(false)
+        }
+      }
+    }
+    autoLogin()
+  }, [isAuthenticated, contextLogin, tenant])
+
+  // Get patientId and compositionId from URL parameters
+  useEffect(() => {
+    const pid = searchParams.get('patientId')
+    const cid = searchParams.get('compositionId')
+    const lang = searchParams.get('language')
+
+    console.log('[Patient Portal] URL parameters:', { patientId: pid, compositionId: cid, language: lang })
+
+    if (pid) setPatientId(pid)
+    if (cid) setCompositionId(cid)
+    if (lang) setPreferredLanguage(lang)
+  }, [searchParams])
+
+  // Fetch patient's discharge summary and instructions
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      console.log('[Patient Portal] Fetch check:', {
+        hasPatientId: !!patientId,
+        hasCompositionId: !!compositionId,
+        hasToken: !!token,
+        hasTenant: !!tenant,
+        patientId,
+        compositionId,
+        tenantId: tenant?.id
+      })
+
+      if (!patientId || !compositionId || !token || !tenant) {
+        console.log('[Patient Portal] Missing required data, stopping fetch')
+        setIsLoadingData(false)
+        return
+      }
+
+      console.log('[Patient Portal] Fetching patient details...')
+      setIsLoadingData(true)
+      try {
+        const details = await getPatientDetails(
+          patientId,
+          compositionId,
+          token,
+          tenant.id
+        )
+        console.log('[Patient Portal] Patient details fetched successfully')
+
+        // Set discharge summary and instructions
+        setDischargeSummary(details.simplifiedSummary?.text || details.rawSummary?.text || "")
+        setDischargeInstructions(details.simplifiedInstructions?.text || details.rawInstructions?.text || "")
+
+        // Fetch translated content if preferred language is set and not English
+        if (preferredLanguage && preferredLanguage !== 'en') {
+          const translated = await getTranslatedContent(
+            compositionId,
+            preferredLanguage,
+            token,
+            tenant.id
+          )
+
+          if (translated?.content) {
+            // Parse the combined translated content
+            const parts = translated.content.content.split('\n\n---\n\n')
+            setTranslatedSummary(parts[0] || "")
+            setTranslatedInstructions(parts[1] || "")
+          }
+        }
+
+        console.log('[Patient Portal] Data loaded, setting loading to false')
+        setIsLoadingData(false)
+      } catch (error) {
+        console.error('[Patient Portal] Failed to fetch patient data:', error)
+        // Show user-friendly error message
+        alert('Failed to load your discharge information. Please refresh the page or contact support.')
+        setIsLoadingData(false)
+      }
+    }
+
+    fetchPatientData()
+  }, [patientId, compositionId, token, tenant, preferredLanguage])
+
+  // Mock patient data for UI elements (will be replaced with real data later)
   const patientData = {
-    name: "John Smith",
+    name: user?.name || "Patient",
     medications: [
       {
         name: "Metoprolol",
@@ -387,6 +504,26 @@ EMERGENCY CONTACTS:
 
   const t = patientTranslations[language as keyof typeof patientTranslations]
 
+  // Show loading state while fetching patient data
+  if (isLoadingData) {
+    return (
+      <ErrorBoundary>
+        <AuthGuard>
+          <div className="min-h-screen bg-background flex flex-col">
+            <CommonHeader />
+            <main className="flex-1 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <p className="text-lg text-muted-foreground">Loading your discharge information...</p>
+              </div>
+            </main>
+            <CommonFooter />
+          </div>
+        </AuthGuard>
+      </ErrorBoundary>
+    )
+  }
+
   return (
     <ErrorBoundary>
       <AuthGuard>
@@ -499,16 +636,26 @@ EMERGENCY CONTACTS:
                       This content has been simplified using artificial intelligence
                     </span>
                   </div>
+                  {preferredLanguage && preferredLanguage !== 'en' && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewTranslated(!viewTranslated)}
+                      >
+                        <Globe className="h-4 w-4 mr-2" />
+                        {viewTranslated ? 'View Original' : `View ${SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.name}`}
+                      </Button>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">{t.reasonForStay}</h4>
-                    <p className="text-muted-foreground">{t.reasonText}</p>
-                  </div>
-                  <Separator />
-                  <div>
-                    <h4 className="font-medium mb-2">{t.whatHappened}</h4>
-                    <p className="text-muted-foreground">{t.whatHappenedText}</p>
+                  <div className="prose prose-sm max-w-none">
+                    {viewTranslated && translatedSummary ? (
+                      <div dangerouslySetInnerHTML={{ __html: translatedSummary.replace(/\n/g, '<br />') }} />
+                    ) : (
+                      <div dangerouslySetInnerHTML={{ __html: dischargeSummary.replace(/\n/g, '<br />') }} />
+                    )}
                   </div>
                 </CardContent>
               </Card>
