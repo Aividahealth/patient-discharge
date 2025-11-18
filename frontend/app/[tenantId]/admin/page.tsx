@@ -50,11 +50,12 @@ import {
   Brain,
   Zap,
   Star,
+  LogOut,
 } from "lucide-react"
 
 export default function AdminDashboard() {
   const params = useParams()
-  const { user, token, tenantId } = useTenant()
+  const { user, token, tenantId, logout } = useTenant()
   const { toast } = useToast()
 
   const [activeTab, setActiveTab] = useState("overview")
@@ -217,6 +218,10 @@ export default function AdminDashboard() {
                 <AvatarImage src="/admin-avatar.png" />
                 <AvatarFallback>AD</AvatarFallback>
               </Avatar>
+              <Button variant="ghost" size="sm" onClick={logout}>
+                <LogOut className="h-4 w-4" />
+                <span className="ml-2 hidden sm:inline">Logout</span>
+              </Button>
             </div>
           </div>
         </div>
