@@ -612,7 +612,9 @@ EMERGENCY CONTACTS:
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="font-heading text-2xl">{t.welcomeBack}</CardTitle>
+                <CardTitle className="font-heading text-2xl">
+                  Welcome back, {patientData.name}
+                </CardTitle>
                 <CardDescription className="text-base mt-1">{t.dischargedFrom}</CardDescription>
                 <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                   <span>{t.dischargeDate}</span>
