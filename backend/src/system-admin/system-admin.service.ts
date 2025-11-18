@@ -280,13 +280,17 @@ export class SystemAdminService {
       // Hash password
       const passwordHash = await this.authService.hashPassword(request.password);
 
-      // Create user with admin role
+      // Create user with tenant_admin role
       const user = await this.userService.create({
         tenantId: request.tenantId,
         username: request.username,
         passwordHash,
         name: request.name,
-        role: 'admin',
+        role: 'tenant_admin',
+        isActive: true,
+        isLocked: false,
+        failedLoginAttempts: 0,
+        createdBy: 'system_admin',
       });
 
       this.logger.log(`Created tenant admin: ${user.username} for tenant: ${request.tenantId}`);
@@ -345,7 +349,7 @@ export class SystemAdminService {
         patient: 0,
         clinician: 0,
         expert: 0,
-        admin: 0,
+        tenant_admin: 0,
       };
 
       usersSnapshot.forEach(doc => {

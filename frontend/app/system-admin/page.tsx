@@ -427,7 +427,7 @@ export default function SystemAdminPortal() {
                         </div>
                         <div className="p-3 bg-orange-50 rounded-md">
                           <div className="text-sm text-muted-foreground">Admins</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.admin}</div>
+                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.tenant_admin}</div>
                         </div>
                       </div>
                     </div>

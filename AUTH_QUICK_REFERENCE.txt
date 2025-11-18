@@ -1,0 +1,207 @@
+================================================================================
+        PATIENT DISCHARGE SYSTEM - AUTH & TECH STACK QUICK SUMMARY
+================================================================================
+
+TECH STACK
+──────────────────────────────────────────────────────────────────────────────
+Backend:     NestJS 11 + TypeScript + Node.js
+Frontend:    Next.js 15 + React 19 + TypeScript + Tailwind CSS
+Database:    Google Firestore (NoSQL, cloud-hosted)
+Cloud:       Google Cloud (Cloud Run, Vertex AI for Gemini)
+Auth:        JWT (24h expiry) + Google OIDC (service-to-service)
+Passwords:   bcrypt (10 salt rounds)
+
+AUTHENTICATION FLOW
+──────────────────────────────────────────────────────────────────────────────
+1. USER LOGIN
+   POST /api/auth/login {tenantId, username, password}
+   ↓
+2. BACKEND VALIDATES
+   - Find user in Firestore 'users' collection
+   - Compare password with bcrypt hash
+   - Verify tenant exists in Firestore
+   ↓
+3. GENERATE JWT TOKEN (24 hours)
+   {userId, tenantId, username, name, role, linkedPatientId, exp, iat}
+   ↓
+4. STORE LOCALLY
+   localStorage['aivida_auth'] = {token, user, tenant, expiresIn}
+   localStorage['aivida_auth_expiry'] = timestamp
+   ↓
+5. ALL REQUESTS INCLUDE
+   Authorization: Bearer {token}
+   X-Tenant-ID: demo
+
+DATABASE SCHEMA
+──────────────────────────────────────────────────────────────────────────────
+Firestore Collections:
+
+1. users
+   ├─ tenantId (indexed)
+   ├─ username (indexed)
+   ├─ passwordHash (bcrypt)
+   ├─ name
+   ├─ role (patient|clinician|expert|admin)
+   ├─ linkedPatientId
+   └─ timestamps
+
+2. config
+   ├─ id (tenantId as document ID)
+   ├─ name
+   ├─ status
+   ├─ branding {logo, favicon, colors}
+   ├─ features {aiGeneration, multiLanguage, ...}
+   ├─ config {simplificationEnabled, translationEnabled, ...}
+   └─ timestamps
+
+3. FHIR Collections
+   ├─ Composition (discharge summaries)
+   ├─ Patient (patient records)
+   ├─ Encounter (visits)
+   ├─ MedicationRequest (medications)
+   └─ ... (other FHIR resources)
+
+DEMO USERS
+──────────────────────────────────────────────────────────────────────────────
+Tenant:  demo
+Pass:    Adyar2Austin (all users)
+
+- patient   (Role: patient)     → Patient portal
+- clinician (Role: clinician)   → Clinician portal
+- expert    (Role: expert)      → Expert review portal
+- admin     (Role: admin)       → Admin dashboard
+
+MULTI-TENANCY
+──────────────────────────────────────────────────────────────────────────────
+Tenant isolation at 3 levels:
+
+1. URL Path:        /:tenantId/:portal
+                    /demo/patient
+                    /hospital-abc/clinician
+
+2. Token Payload:   {tenantId: "demo", ...}
+
+3. Request Header:  X-Tenant-ID: demo
+
+All requests validated against:
+✓ Token contains tenantId
+✓ Header matches token tenantId
+✓ Tenant exists in Firestore
+
+SECURITY FEATURES
+──────────────────────────────────────────────────────────────────────────────
+IMPLEMENTED:
+✅ bcrypt password hashing (10 rounds)
+✅ JWT token signing with secret key
+✅ Token expiration (24 hours)
+✅ CORS protection (origin whitelist)
+✅ Request header validation
+✅ Tenant validation on every request
+✅ Google OIDC verification (service accounts)
+✅ @Public() decorator for login endpoint
+
+MISSING FOR PRODUCTION:
+⚠️  Refresh token mechanism
+⚠️  Rate limiting on login
+⚠️  Token revocation/blacklisting
+⚠️  CSRF protection
+⚠️  Audit logging
+⚠️  2FA/MFA support
+⚠️  Input sanitization
+
+FRONTEND STATE MANAGEMENT
+──────────────────────────────────────────────────────────────────────────────
+Context:  TenantContext (React Context API)
+
+State:
+- tenantId     (extracted from URL path)
+- tenant       (config with branding, features)
+- user         (authenticated user info)
+- token        (JWT token)
+- isLoading    (loading state)
+- isAuthenticated (boolean)
+
+Functions:
+- login(authData)      → Store token & redirect
+- logout()             → Clear storage & redirect to /login
+- updateTenant(config) → Update tenant branding/features
+
+Storage:
+- localStorage['aivida_auth']        → Full auth object
+- localStorage['aivida_auth_expiry'] → Expiration timestamp
+
+API CLIENT
+──────────────────────────────────────────────────────────────────────────────
+Automatic headers on every request:
+Authorization: Bearer {token}
+X-Tenant-ID: {tenantId}
+Content-Type: application/json
+
+Usage:
+const client = createApiClient({ tenantId, token })
+const data = await client.get('/api/endpoint')
+
+KEY FILES
+──────────────────────────────────────────────────────────────────────────────
+Backend Auth:
+- /backend/src/auth/auth.controller.ts    → Login endpoint
+- /backend/src/auth/auth.service.ts       → JWT generation
+- /backend/src/auth/auth.guard.ts         → Auth middleware
+- /backend/src/auth/user.service.ts       → User operations
+
+Frontend Auth:
+- /frontend/contexts/tenant-context.tsx   → Auth state
+- /frontend/lib/api/auth.ts               → Auth functions
+- /frontend/components/auth-guard.tsx     → Protected routes
+
+Configuration:
+- /backend/src/config/config.service.ts   → Firestore config
+- /backend/scripts/seed-users.ts          → User seeding
+- /backend/scripts/seed-config.ts         → Config seeding
+
+ENVIRONMENT VARIABLES
+──────────────────────────────────────────────────────────────────────────────
+Backend:
+NODE_ENV=dev
+PORT=3000
+JWT_SECRET=your-secret-key-change-in-production
+GCP_PROJECT_ID=simtran-474018
+GCP_LOCATION=us-central1
+DEFAULT_GOOGLE_DATASET=aivida-dev
+DEFAULT_GOOGLE_FHIR_STORE=aivida
+
+Frontend:
+NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_CHATBOT_SERVICE_URL=http://localhost:3000/api/patient-chatbot/chat
+
+ARCHITECTURE DIAGRAM
+──────────────────────────────────────────────────────────────────────────────
+
+                    Browser / Client
+                    ┌──────────────────┐
+                    │   Next.js 15     │
+                    │   React 19       │
+                    │  TenantContext   │
+                    └────────┬─────────┘
+                             │
+              HTTP with JWT + X-Tenant-ID headers
+                             │
+                    ┌────────▼─────────┐
+                    │   NestJS 11      │
+                    │   Node.js/TS     │
+                    │  AuthGuard       │
+                    │  AuthService     │
+                    │  UserService     │
+                    └────────┬─────────┘
+                             │
+                    ┌────────▼──────────┐
+                    │  Google Firestore │
+                    │                   │
+                    │ - users           │
+                    │ - config          │
+                    │ - FHIR resources  │
+                    └───────────────────┘
+
+===============================================================================
+For detailed documentation, see: AUTH_AND_TECH_STACK.md
+===============================================================================

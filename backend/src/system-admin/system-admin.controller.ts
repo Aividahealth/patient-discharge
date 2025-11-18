@@ -9,7 +9,9 @@ import {
   UseGuards,
   Logger,
 } from '@nestjs/common';
-import { SystemAdminGuard } from '../auth/system-admin.guard';
+import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemAdminService } from './system-admin.service';
 import {
   CreateTenantRequest,
@@ -18,7 +20,8 @@ import {
 } from './system-admin.types';
 
 @Controller('system-admin')
-@UseGuards(SystemAdminGuard)
+@UseGuards(AuthGuard, RolesGuard)
+@Roles('system_admin')
 export class SystemAdminController {
   private readonly logger = new Logger(SystemAdminController.name);
 

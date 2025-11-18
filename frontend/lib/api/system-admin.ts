@@ -75,7 +75,7 @@ export interface TenantMetrics {
       patient: number
       clinician: number
       expert: number
-      admin: number
+      tenant_admin: number
     }
   }
   expertFeedback: {

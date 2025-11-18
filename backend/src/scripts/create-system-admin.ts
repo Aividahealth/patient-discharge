@@ -74,6 +74,9 @@ async function createSystemAdmin() {
       passwordHash,
       name,
       role: 'system_admin',
+      isActive: true,
+      isLocked: false,
+      failedLoginAttempts: 0,
       createdAt: now,
       updatedAt: now,
     });
