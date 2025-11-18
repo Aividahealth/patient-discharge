@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import { ExpertService } from './expert.service';
 import type { SubmitFeedbackDto, ReviewListQuery, UpdateFeedbackDto } from './expert.types';
-import { Public } from '../auth/auth.guard';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
 
@@ -36,14 +35,13 @@ export class ExpertController {
   /**
    * POST /expert/feedback
    * Submit expert feedback
-   * Supports both generic portal (no auth) and tenant-specific portal (with auth)
+   * Requires authentication - only authenticated experts can submit feedback
    */
-  @Public()
   @Post('feedback')
   @HttpCode(HttpStatus.CREATED)
   async submitFeedback(
     @Body() dto: SubmitFeedbackDto,
-    @TenantContext() ctx?: TenantContextType,
+    @TenantContext() ctx: TenantContextType,
   ) {
     try {
       this.logger.log(`Submitting feedback for summary: ${dto.dischargeSummaryId}`);
@@ -60,18 +58,16 @@ export class ExpertController {
         );
       }
 
-      // Verify composition exists (optional check - skip if no tenant context)
-      if (ctx) {
-        const compositionExists = await this.expertService.verifyCompositionExists(dto.dischargeSummaryId, ctx);
-        if (!compositionExists) {
-          throw new HttpException(
-            {
-              error: 'Not Found',
-              message: `Discharge summary with ID '${dto.dischargeSummaryId}' not found`,
-            },
-            HttpStatus.NOT_FOUND,
-          );
-        }
+      // Verify composition exists
+      const compositionExists = await this.expertService.verifyCompositionExists(dto.dischargeSummaryId, ctx);
+      if (!compositionExists) {
+        throw new HttpException(
+          {
+            error: 'Not Found',
+            message: `Discharge summary with ID '${dto.dischargeSummaryId}' not found`,
+          },
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       const feedback = await this.expertService.submitFeedback(dto);
@@ -98,8 +94,8 @@ export class ExpertController {
   /**
    * GET /expert/feedback/:id
    * Get feedback by ID
+   * Requires authentication
    */
-  @Public()
   @Get('feedback/:id')
   async getFeedbackById(@Param('id') id: string) {
     try {
@@ -135,8 +131,8 @@ export class ExpertController {
   /**
    * PUT /expert/feedback/:id
    * Update existing feedback
+   * Requires authentication
    */
-  @Public()
   @Put('feedback/:id')
   async updateFeedback(
     @Param('id') id: string,
@@ -192,8 +188,8 @@ export class ExpertController {
   /**
    * GET /expert/feedback/summary/:summaryId
    * Get feedback for a specific discharge summary with aggregated statistics
+   * Requires authentication
    */
-  @Public()
   @Get('feedback/summary/:summaryId')
   async getFeedbackForSummary(
     @Param('summaryId') summaryId: string,
@@ -204,7 +200,7 @@ export class ExpertController {
     @Query('offset') offset?: string,
     @Query('sortBy') sortBy?: string,
     @Query('sortOrder') sortOrder?: string,
-    @TenantContext() ctx?: TenantContextType,
+    @TenantContext() ctx: TenantContextType,
   ) {
     try {
       this.logger.log(`Getting feedback for summary: ${summaryId}`);
