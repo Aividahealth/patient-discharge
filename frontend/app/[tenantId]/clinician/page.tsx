@@ -36,10 +36,11 @@ import {
   Stethoscope,
   RefreshCw,
   Globe,
+  LogOut,
 } from "lucide-react"
 
 export default function ClinicianDashboard() {
-  const { tenant, tenantId, token, isLoading, isAuthenticated, user } = useTenant()
+  const { tenant, tenantId, token, isLoading, isAuthenticated, user, logout } = useTenant()
   const { exportToPDF } = usePDFExport()
   const router = useRouter()
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
@@ -1231,6 +1232,15 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                   ))}
                 </select>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => logout()}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Logout</span>
+              </Button>
             </div>
           </div>
         </div>
