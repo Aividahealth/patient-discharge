@@ -60,14 +60,17 @@ export default function PatientDashboard() {
     const autoLogin = async () => {
       if (!isAuthenticated) {
         try {
+          console.log('[Patient Portal] Attempting auto-login for demo patient...')
           const authData = await login({
             tenantId: 'demo',
             username: 'patient',
             password: 'Adyar2Austin'
           })
+          console.log('[Patient Portal] Auto-login successful:', authData.user.name)
           contextLogin(authData)
         } catch (error) {
-          console.error('Auto-login failed:', error)
+          console.error('[Patient Portal] Auto-login failed:', error)
+          setIsLoadingData(false)
         }
       }
     }
@@ -88,11 +91,22 @@ export default function PatientDashboard() {
   // Fetch patient's discharge summary and instructions
   useEffect(() => {
     const fetchPatientData = async () => {
+      console.log('[Patient Portal] Fetch check:', {
+        hasPatientId: !!patientId,
+        hasCompositionId: !!compositionId,
+        hasToken: !!token,
+        hasTenant: !!tenant,
+        patientId,
+        compositionId
+      })
+
       if (!patientId || !compositionId || !token || !tenant) {
+        console.log('[Patient Portal] Missing required data, stopping fetch')
         setIsLoadingData(false)
         return
       }
 
+      console.log('[Patient Portal] Fetching patient details...')
       setIsLoadingData(true)
       try {
         const details = await getPatientDetails(
@@ -101,6 +115,7 @@ export default function PatientDashboard() {
           token,
           tenant.id
         )
+        console.log('[Patient Portal] Patient details fetched successfully')
 
         // Set discharge summary and instructions
         setDischargeSummary(details.simplifiedSummary?.text || details.rawSummary?.text || "")
@@ -123,9 +138,12 @@ export default function PatientDashboard() {
           }
         }
 
+        console.log('[Patient Portal] Data loaded, setting loading to false')
         setIsLoadingData(false)
       } catch (error) {
-        console.error('Failed to fetch patient data:', error)
+        console.error('[Patient Portal] Failed to fetch patient data:', error)
+        // Show user-friendly error message
+        alert('Failed to load your discharge information. Please refresh the page or contact support.')
         setIsLoadingData(false)
       }
     }
