@@ -66,8 +66,16 @@ export class UserService {
       return {
         id: doc.docs[0].id,
         ...userData,
+        // Convert Firestore timestamps to Date objects
         createdAt: userData.createdAt?.toDate() || new Date(),
         updatedAt: userData.updatedAt?.toDate() || new Date(),
+        lockedAt: userData.lockedAt?.toDate(),
+        lastFailedLoginAt: userData.lastFailedLoginAt?.toDate(),
+        lastSuccessfulLoginAt: userData.lastSuccessfulLoginAt?.toDate(),
+        // Ensure lockout fields have defaults
+        isActive: userData.isActive ?? true,
+        isLocked: userData.isLocked ?? false,
+        failedLoginAttempts: userData.failedLoginAttempts ?? 0,
       } as User;
     } catch (error) {
       this.logger.error(`Error finding user by username: ${error.message}`);
@@ -93,8 +101,16 @@ export class UserService {
       return {
         id: doc.id,
         ...userData,
+        // Convert Firestore timestamps to Date objects
         createdAt: userData?.createdAt?.toDate() || new Date(),
         updatedAt: userData?.updatedAt?.toDate() || new Date(),
+        lockedAt: userData?.lockedAt?.toDate(),
+        lastFailedLoginAt: userData?.lastFailedLoginAt?.toDate(),
+        lastSuccessfulLoginAt: userData?.lastSuccessfulLoginAt?.toDate(),
+        // Ensure lockout fields have defaults
+        isActive: userData?.isActive ?? true,
+        isLocked: userData?.isLocked ?? false,
+        failedLoginAttempts: userData?.failedLoginAttempts ?? 0,
       } as User;
     } catch (error) {
       this.logger.error(`Error finding user by ID: ${error.message}`);

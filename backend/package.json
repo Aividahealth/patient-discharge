@@ -22,7 +22,11 @@
     "seed-users": "ts-node scripts/seed-users.ts",
     "seed-config": "ts-node scripts/seed-config.ts",
     "generate-service-token": "ts-node scripts/generate-service-token.ts",
-    "update-demo-languages": "ts-node scripts/update-demo-languages.ts"
+    "update-demo-languages": "ts-node scripts/update-demo-languages.ts",
+    "create-user": "ts-node scripts/create-user.ts",
+    "unlock-user": "ts-node scripts/unlock-user.ts",
+    "change-password": "ts-node scripts/change-password.ts",
+    "list-users": "ts-node scripts/list-users.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",
