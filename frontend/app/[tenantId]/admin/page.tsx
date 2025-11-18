@@ -836,30 +836,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* SSO Configuration */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">Single Sign-On (SSO)</CardTitle>
-                <CardDescription>Configure SAML/OIDC authentication for pilot deployment</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="saml-endpoint">SAML Endpoint URL</Label>
-                    <Input id="saml-endpoint" placeholder="https://your-idp.com/saml/sso" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label htmlFor="oidc-issuer">OIDC Issuer</Label>
-                    <Input id="oidc-issuer" placeholder="https://your-idp.com/auth/realms/hospital" className="mt-1" />
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch id="sso-enabled" />
-                  <Label htmlFor="sso-enabled">Enable SSO Authentication</Label>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* User List */}
             <Card>
               <CardHeader>
