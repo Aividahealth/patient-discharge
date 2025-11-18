@@ -153,17 +153,20 @@ export class SimplificationService {
         throw new VertexAIError(`Unexpected finish reason: ${candidate.finishReason}`, false);
       }
 
-      const simplifiedContent = candidate.content.parts.map((part: any) => part.text).join('');
+      const rawContent = candidate.content.parts.map((part: any) => part.text).join('');
 
-      if (!simplifiedContent || simplifiedContent.trim().length === 0) {
+      if (!rawContent || rawContent.trim().length === 0) {
         throw new VertexAIError('Empty response from Gemini API', false);
       }
+
+      // Normalize output: enforce one occurrence per section and prevent cross-section repeats
+      const simplifiedContent = this.normalizeSimplifiedMarkdown(rawContent.trim());
 
       // Extract token usage if available
       const tokensUsed = response.usageMetadata?.totalTokenCount;
 
       return {
-        simplifiedContent: simplifiedContent.trim(),
+        simplifiedContent,
         tokensUsed,
       };
     } catch (error) {
@@ -174,6 +177,94 @@ export class SimplificationService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new VertexAIError(`Gemini API error: ${errorMessage}`, this.isRetryableError(error));
     }
+  }
+
+  /**
+   * Normalize simplified markdown:
+   * - Keep only the first occurrence of each required section
+   * - Trim content in each section to exclude content belonging to other sections
+   * - Ensure sections are in the canonical order
+   */
+  private normalizeSimplifiedMarkdown(text: string): string {
+    const sectionOrder = ['Overview', 'Your Medications', 'Upcoming Appointments', 'Diet & Activity', 'Warning Signs'] as const;
+    type SectionName = typeof sectionOrder[number];
+
+    // Define header patterns (with or without markdown ##, optional colon)
+    const headerPatterns: Array<{ name: SectionName; regex: RegExp }> = [
+      { name: 'Overview', regex: /^(?:##\s*)?(?:Overview)\s*:?\s*$/i },
+      { name: 'Your Medications', regex: /^(?:##\s*)?(?:Your\s+Medications|Medications|Medication)\s*:?\s*$/i },
+      { name: 'Upcoming Appointments', regex: /^(?:##\s*)?(?:Upcoming\s+Appointments|Your\s+appointments|Appointments|Follow-?up(?:\s+appointments)?)\s*:?\s*$/i },
+      { name: 'Diet & Activity', regex: /^(?:##\s*)?(?:Diet\s*&?\s*Activity|Diet\s+and\s+Activity|Activity\s+guidelines|Activity)\s*:?\s*$/i },
+      { name: 'Warning Signs', regex: /^(?:##\s*)?(?:Warning\s+Signs)\s*:?\s*$/i },
+    ];
+
+    const lines = text.split('\n');
+
+    // Scan and capture only first occurrence per section
+    const captured: Record<SectionName, string[] | undefined> = {
+      'Overview': undefined,
+      'Your Medications': undefined,
+      'Upcoming Appointments': undefined,
+      'Diet & Activity': undefined,
+      'Warning Signs': undefined,
+    };
+
+    let current: SectionName | null = null;
+
+    const isHeaderLine = (line: string): SectionName | null => {
+      for (const { name, regex } of headerPatterns) {
+        if (regex.test(line.trim())) return name;
+      }
+      return null;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const headerName = isHeaderLine(raw);
+      if (headerName) {
+        // Switch to this section only if it's the first time we see it
+        current = captured[headerName] ? null : headerName;
+        // Initialize storage for first-time sections
+        if (current && !captured[current]) {
+          captured[current] = [];
+        }
+        continue;
+      }
+
+      // If currently capturing a section, append non-header lines
+      if (current) {
+        const potentialNextHeader = isHeaderLine(raw);
+        if (potentialNextHeader) {
+          // Next section header encountered; start handling on next iteration
+          current = captured[potentialNextHeader] ? null : potentialNextHeader;
+          if (current && !captured[current]) {
+            captured[current] = [];
+          }
+          continue;
+        }
+        captured[current]!.push(raw);
+      }
+    }
+
+    // Trim trailing empty lines in each captured section
+    for (const name of sectionOrder) {
+      const content = captured[name];
+      if (!content) continue;
+      while (content.length > 0 && content[content.length - 1].trim() === '') {
+        content.pop();
+      }
+    }
+
+    // Reassemble in canonical order with single H2 headers
+    const parts: string[] = [];
+    for (const name of sectionOrder) {
+      const content = captured[name];
+      if (!content || content.length === 0) continue;
+      parts.push(`## ${name}`, ...content, '');
+    }
+
+    const normalized = parts.join('\n').trim();
+    return normalized.length > 0 ? normalized : text;
   }
 
   /**

@@ -39,7 +39,7 @@ import {
 } from "lucide-react"
 
 export default function ClinicianDashboard() {
-  const { tenant, tenantId, token, isLoading, isAuthenticated } = useTenant()
+  const { tenant, tenantId, token, isLoading, isAuthenticated, user } = useTenant()
   const { exportToPDF } = usePDFExport()
   const router = useRouter()
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
@@ -49,11 +49,59 @@ export default function ClinicianDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoadingQueue, setIsLoadingQueue] = useState(true)
   const [isLoadingPatient, setIsLoadingPatient] = useState(false)
-  const [approvalStatus, setApprovalStatus] = useState({
-    medications: false,
-    appointments: false,
-    dietActivity: false,
+  const [isPublishing, setIsPublishing] = useState(false)
+  
+  // Section approvals with audit trail (timestamp and clinician info)
+  const [sectionApprovals, setSectionApprovals] = useState<{
+    medications: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+    appointments: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+    dietActivity: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+  }>({
+    medications: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
+    appointments: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
+    dietActivity: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
   })
+
+  // Additional clarifications
+  const [additionalClarifications, setAdditionalClarifications] = useState("")
+
+  // Redaction preferences
+  const [redactionPreferences, setRedactionPreferences] = useState({
+    redactRoomNumber: false,
+    redactMRN: false,
+    redactInsuranceInfo: false,
+  })
+
+  // Legacy approvalStatus for UI compatibility (derived from sectionApprovals)
+  const approvalStatus = {
+    medications: sectionApprovals.medications.approved,
+    appointments: sectionApprovals.appointments.approved,
+    dietActivity: sectionApprovals.dietActivity.approved,
+  }
 
   const [patients, setPatients] = useState<Array<{
     id: string;
@@ -429,6 +477,38 @@ export default function ClinicianDashboard() {
 
   const [patientMedicalData, setPatientMedicalData] = useState<Record<string, any>>({})
 
+  // Helper to strip a leading section header from AI content to avoid duplicate headings
+  const stripLeadingHeader = (text: string | undefined, patterns: RegExp[]): string => {
+    if (!text || typeof text !== 'string') return '';
+    const lines = text.split('\n');
+    if (lines.length === 0) return '';
+    const first = lines[0].trim();
+    if (patterns.some((p) => p.test(first))) {
+      return lines.slice(1).join('\n').trimStart();
+    }
+    return text;
+  };
+
+  // Keep only the overview portion by removing known section blocks that will be rendered separately
+  const extractOverviewOnly = (text: string | undefined): string => {
+    if (!text || typeof text !== 'string') return '';
+    const sectionPatterns: RegExp[] = [
+      /^(?:Your\s+medications|Medications|Medication):?/im,
+      /^(?:Your\s+appointments|Appointments|Follow-?up(?:\s+appointments)?):?/im,
+      /^(?:Activity(?:\s+guidelines)?|Diet\s*&?\s*Activity|Diet\s+and\s+activity|Activity\s+restrictions):?/im
+    ];
+    let cutIndex = -1;
+    for (const pattern of sectionPatterns) {
+      const match = pattern.exec(text);
+      if (match && typeof match.index === 'number') {
+        if (cutIndex === -1 || match.index < cutIndex) {
+          cutIndex = match.index;
+        }
+      }
+    }
+    return cutIndex === -1 ? text : text.slice(0, cutIndex).trimEnd();
+  };
+
   // Helper function to parse simplified instructions text into sections
   const parseSimplifiedInstructions = (instructionsText: string) => {
     if (!instructionsText) {
@@ -439,15 +519,17 @@ export default function ClinicianDashboard() {
       };
     }
 
-    // Try to parse sections based on common headers (case-insensitive, flexible matching)
-    // Match "Your medications:" or "Medications:" followed by content until next section
-    const medicationsMatch = instructionsText.match(/(?:Your\s+medications|Medications|Medication):?\s*\n?\s*(.*?)(?=\n?\s*(?:Your\s+appointments|Appointments|Follow-up|Activity|Activity\s+guidelines|$))/is);
+    // Try to parse sections based on markdown headers (## Header) or plain text headers
+    // Extract content AFTER the header line until the next section
     
-    // Match "Your appointments:" or "Appointments:" followed by content until activity section
-    const appointmentsMatch = instructionsText.match(/(?:Your\s+appointments|Appointments|Follow-up\s+appointments|Follow-up):?\s*\n?\s*(.*?)(?=\n?\s*(?:Activity|Activity\s+guidelines|Diet|$))/is);
+    // Match "## Your Medications" or "Your medications:" and capture content after the header line
+    const medicationsMatch = instructionsText.match(/(?:^|\n)(?:##\s*)?(?:Your\s+medications|Medications|Medication):?\s*\n(.*?)(?=\n(?:##\s*)?(?:Your\s+appointments|Upcoming\s+appointments|Appointments|Follow-up|Activity|Diet\s*&?\s*Activity|Warning\s+Signs|$))/is);
     
-    // Match "Activity guidelines:" or "Activity:" followed by content until end
-    const activityMatch = instructionsText.match(/(?:Activity\s+guidelines|Activity|Diet\s+and\s+activity|Activity\s+restrictions):?\s*\n?\s*(.*?)$/is);
+    // Match "## Upcoming Appointments" or "Your appointments:" and capture content after the header line
+    const appointmentsMatch = instructionsText.match(/(?:^|\n)(?:##\s*)?(?:Upcoming\s+appointments|Your\s+appointments|Appointments|Follow-up\s+appointments|Follow-up):?\s*\n(.*?)(?=\n(?:##\s*)?(?:Activity|Activity\s+guidelines|Diet\s*&?\s*Activity|Warning\s+Signs|$))/is);
+    
+    // Match "## Diet & Activity" or "Activity guidelines:" and capture content after the header line
+    const activityMatch = instructionsText.match(/(?:^|\n)(?:##\s*)?(?:Diet\s*&?\s*Activity|Activity\s+guidelines|Activity|Diet\s+and\s+activity|Activity\s+restrictions):?\s*\n(.*?)(?=\n(?:##\s*)?(?:Warning\s+Signs|Emergency\s+Contacts|$))/is);
 
     return {
       medications: medicationsMatch ? medicationsMatch[1].trim() : '',
@@ -483,6 +565,11 @@ export default function ClinicianDashboard() {
           instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
         );
 
+        console.log('[DEBUG] Simplified Summary length:', simplifiedSummary?.text?.length || 0);
+        console.log('[DEBUG] Simplified Summary preview:', simplifiedSummary?.text?.substring(0, 200));
+        console.log('[DEBUG] Simplified Instructions length:', simplifiedInstructions?.text?.length || 0);
+        console.log('[DEBUG] Simplified Instructions preview:', simplifiedInstructions?.text?.substring(0, 200));
+        
         return {
           summary: simplifiedSummary?.text || '',
           instructions: simplifiedInstructions?.text || ''
@@ -721,6 +808,33 @@ export default function ClinicianDashboard() {
     }
   }, [selectedPatient, patients, token, tenantId]);
 
+  // Reset approval state and clarifications when patient changes
+  useEffect(() => {
+    setSectionApprovals({
+      medications: {
+        approved: false,
+        approvedAt: null,
+        approvedBy: null,
+      },
+      appointments: {
+        approved: false,
+        approvedAt: null,
+        approvedBy: null,
+      },
+      dietActivity: {
+        approved: false,
+        approvedAt: null,
+        approvedBy: null,
+      },
+    })
+    setAdditionalClarifications("")
+    setRedactionPreferences({
+      redactRoomNumber: false,
+      redactMRN: false,
+      redactInsuranceInfo: false,
+    })
+  }, [selectedPatient])
+
   const getCurrentPatientData = () => {
     return selectedPatient ? patientMedicalData[selectedPatient] : null
   }
@@ -799,18 +913,28 @@ export default function ClinicianDashboard() {
         }
       }
 
+      // Combine raw summary and instructions for display
+      const combinedRawText = [
+        rawSummary?.text || '',
+        rawInstructions?.text || ''
+      ].filter(Boolean).join('\n\n---\n\n');
+
       // Update the patient's medical data with the refreshed composition
       const updatedPatientData = {
         ...currentPatient,
         // Add parsed data for structured rendering
         originalSummaryParsed: parsedSummaryData,
         originalInstructionsParsed: parsedInstructionsData,
+        // Store combined raw content
+        rawSummaryText: rawSummary?.text || '',
+        rawInstructionsText: rawInstructions?.text || '',
+        combinedRawText: combinedRawText,
         // Store AI-simplified content
         aiSimplifiedSummary: aiSimplifiedSummaryText || null,
         aiSimplifiedInstructions: aiSimplifiedInstructionsText || null,
-        // Keep raw text as fallback
+        // Keep raw text as fallback (now includes both summary and instructions)
         originalSummary: {
-          diagnosis: { en: rawSummary?.text || currentPatient.originalSummary?.diagnosis?.en || 'Processing...' },
+          diagnosis: { en: combinedRawText || currentPatient.originalSummary?.diagnosis?.en || 'Processing...' },
           diagnosisText: { en: rawSummary?.text || currentPatient.originalSummary?.diagnosisText?.en || 'Processing...' },
           medications: { en: rawInstructions?.text || currentPatient.originalSummary?.medications?.en || 'Processing...' },
           followUp: { en: currentPatient.originalSummary?.followUp?.en || 'Processing...' },
@@ -841,8 +965,111 @@ export default function ClinicianDashboard() {
     }
   };
 
-  const toggleApproval = (section: keyof typeof approvalStatus) => {
-    setApprovalStatus((prev) => ({ ...prev, [section]: !prev[section] }))
+  const toggleApproval = (section: 'medications' | 'appointments' | 'dietActivity') => {
+    setSectionApprovals((prev) => {
+      const currentApproval = prev[section].approved
+      const newApproval = !currentApproval
+      
+      return {
+        ...prev,
+        [section]: {
+          approved: newApproval,
+          approvedAt: newApproval ? new Date().toISOString() : null,
+          approvedBy: newApproval && user ? {
+            id: user.id,
+            name: user.name,
+          } : null,
+        },
+      }
+    })
+  }
+
+  const handlePublish = async () => {
+    if (!currentPatient || !currentPatient.compositionId || !token || !tenantId || !user) {
+      console.error('[ClinicianPortal] Missing required data for publish')
+      return
+    }
+
+    // Validate all sections are approved
+    if (!sectionApprovals.medications.approved || 
+        !sectionApprovals.appointments.approved || 
+        !sectionApprovals.dietActivity.approved) {
+      alert('Please approve all required sections before publishing.')
+      return
+    }
+
+    setIsPublishing(true)
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+      const clarificationsText = additionalClarifications.trim() || "None"
+
+      const requestBody = {
+        additionalClarifications: clarificationsText,
+        publish: true,
+        sectionApprovals: {
+          medications: {
+            approved: sectionApprovals.medications.approved,
+            approvedAt: sectionApprovals.medications.approvedAt!,
+            approvedBy: sectionApprovals.medications.approvedBy!,
+          },
+          appointments: {
+            approved: sectionApprovals.appointments.approved,
+            approvedAt: sectionApprovals.appointments.approvedAt!,
+            approvedBy: sectionApprovals.appointments.approvedBy!,
+          },
+          dietActivity: {
+            approved: sectionApprovals.dietActivity.approved,
+            approvedAt: sectionApprovals.dietActivity.approvedAt!,
+            approvedBy: sectionApprovals.dietActivity.approvedBy!,
+          },
+        },
+        redactionPreferences: {
+          redactRoomNumber: redactionPreferences.redactRoomNumber,
+          redactMRN: redactionPreferences.redactMRN,
+          redactInsuranceInfo: redactionPreferences.redactInsuranceInfo,
+        },
+        clinician: {
+          id: user.id,
+          name: user.name,
+          email: user.username, // Using username as email if available
+        },
+      }
+
+      const response = await fetch(
+        `${apiUrl}/api/discharge-summary/${currentPatient.compositionId}/publish`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'X-Tenant-ID': tenantId,
+          },
+          body: JSON.stringify(requestBody),
+        }
+      )
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }))
+        throw new Error(errorData.message || `Failed to publish: ${response.status} ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('[ClinicianPortal] Publish successful:', result)
+
+      // Show success message
+      alert('Discharge summary published successfully!')
+
+      // Optionally reload the patient data or refresh the queue
+      if (currentPatient.compositionId) {
+        await refreshComposition()
+      }
+    } catch (error) {
+      console.error('[ClinicianPortal] Failed to publish:', error)
+      alert(error instanceof Error ? error.message : 'Failed to publish discharge summary. Please try again.')
+    } finally {
+      setIsPublishing(false)
+    }
   }
 
   const printDischargeSummary = () => {
@@ -1135,8 +1362,17 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="bg-muted/30 p-4 rounded-lg text-sm max-h-96 overflow-y-auto">
+                      <div className="bg-muted/30 p-4 rounded-lg text-sm max-h-[70vh] overflow-y-auto">
                         {(() => {
+                          // First try to show combined raw text if available
+                          if ((currentPatient as any).combinedRawText) {
+                            return (
+                              <div className="whitespace-pre-wrap text-muted-foreground">
+                                {(currentPatient as any).combinedRawText}
+                              </div>
+                            );
+                          }
+
                           // Try to use structured renderer if parsed data is available
                           const parsedData = currentPatient.originalSummaryParsed;
                           if (parsedData) {
@@ -1156,19 +1392,19 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                             <div className="space-y-4">
                               <div>
                                 <h4 className="font-medium mb-2">{t.dischargeDiagnosis}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}
                                 </p>
                               </div>
                               <div>
                                 <h4 className="font-medium mb-2">{t.historyExamination || 'History & Examination'}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {currentPatient.originalSummary?.diagnosisText?.[language as keyof typeof currentPatient.originalSummary.diagnosisText] || 'N/A'}
                                 </p>
                               </div>
                               <div>
                                 <h4 className="font-medium mb-2">{t.medications}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {(() => {
                                     const medications = currentPatient.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications];
                                     if (!medications || typeof medications !== 'string') return 'N/A';
@@ -1184,7 +1420,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               </div>
                               <div>
                                 <h4 className="font-medium mb-2">{t.followUp}</h4>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground whitespace-pre-wrap">
                                   {(() => {
                                     const followUp = currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp];
                                     if (!followUp || typeof followUp !== 'string') return 'N/A';
@@ -1313,7 +1549,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           </div>
                         </div>
                       ) : (
-                        <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-96 overflow-y-auto">
+                        <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-[70vh] overflow-y-auto">
                           <div>
                             <h4 className="font-medium mb-2">{t.whatHappenedDuringStay}</h4>
                             <MarkdownRenderer
@@ -1321,9 +1557,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                                 const overview = currentPatient?.patientFriendly?.overview;
                                 if (!overview) return '';
                                 if (typeof overview === 'string') {
-                                  return overview;
+                                  return extractOverviewOnly(overview);
                                 }
-                                return overview[language as keyof typeof overview] || overview.en || '';
+                                const raw = overview[language as keyof typeof overview] || overview.en || '';
+                                return extractOverviewOnly(raw);
                               })()}
                             />
                           </div>
@@ -1333,10 +1570,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               content={(() => {
                                 const medications = currentPatient?.patientFriendly?.medications;
                                 if (!medications) return '';
-                                if (typeof medications === 'string') {
-                                  return medications;
-                                }
-                                return medications[language as keyof typeof medications] || medications.en || '';
+                                const raw = typeof medications === 'string'
+                                  ? medications
+                                  : (medications[language as keyof typeof medications] || medications.en || '');
+                                return stripLeadingHeader(raw, [/^(?:Your\s+medications|Medications|Medication):?\s*$/i]);
                               })()}
                             />
                           </div>
@@ -1346,10 +1583,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               content={(() => {
                                 const appointments = currentPatient?.patientFriendly?.appointments;
                                 if (!appointments) return '';
-                                if (typeof appointments === 'string') {
-                                  return appointments;
-                                }
-                                return appointments[language as keyof typeof appointments] || appointments.en || '';
+                                const raw = typeof appointments === 'string'
+                                  ? appointments
+                                  : (appointments[language as keyof typeof appointments] || appointments.en || '');
+                                return stripLeadingHeader(raw, [/^(?:Your\s+appointments|Appointments|Follow-?up(?:\s+appointments)?):?\s*$/i]);
                               })()}
                             />
                           </div>
@@ -1359,10 +1596,10 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                               content={(() => {
                                 const activity = currentPatient?.patientFriendly?.activity;
                                 if (!activity) return '';
-                                if (typeof activity === 'string') {
-                                  return activity;
-                                }
-                                return activity[language as keyof typeof activity] || activity.en || '';
+                                const raw = typeof activity === 'string'
+                                  ? activity
+                                  : (activity[language as keyof typeof activity] || activity.en || '');
+                                return stripLeadingHeader(raw, [/^(?:Activity(?:\s+guidelines)?|Diet\s+and\s+activity|Activity\s+restrictions):?\s*$/i]);
                               })()}
                             />
                           </div>
@@ -1392,7 +1629,6 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">{t.medications}</p>
-                            <p className="text-xs text-muted-foreground">3 {t.medicationsListed}</p>
                           </div>
                         </div>
                         <Switch
@@ -1411,7 +1647,6 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">Appointments</p>
-                            <p className="text-xs text-muted-foreground">2 {t.appointmentsScheduled}</p>
                           </div>
                         </div>
                         <Switch
@@ -1453,19 +1688,37 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                         <Label htmlFor="sensitive-info">{t.redactSensitiveInfo}</Label>
                         <div className="mt-2 space-y-2">
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-room" />
+                            <Switch 
+                              id="redact-room" 
+                              checked={redactionPreferences.redactRoomNumber}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactRoomNumber: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-room" className="text-sm">
                               {t.roomNumber}
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-mrn" />
+                            <Switch 
+                              id="redact-mrn" 
+                              checked={redactionPreferences.redactMRN}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactMRN: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-mrn" className="text-sm">
                               {t.medicalRecordNumber}
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-insurance" />
+                            <Switch 
+                              id="redact-insurance" 
+                              checked={redactionPreferences.redactInsuranceInfo}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactInsuranceInfo: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-insurance" className="text-sm">
                               {t.insuranceInformation}
                             </Label>
@@ -1479,6 +1732,8 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           className="mt-2"
                           rows={4}
                           placeholder={t.addNotes}
+                          value={additionalClarifications}
+                          onChange={(e) => setAdditionalClarifications(e.target.value)}
                         />
                       </div>
                     </div>
@@ -1503,11 +1758,12 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
-                      disabled={!Object.values(approvalStatus).every(Boolean)}
+                      disabled={!Object.values(approvalStatus).every(Boolean) || isPublishing}
+                      onClick={handlePublish}
                       className="bg-green-600 hover:bg-green-700"
                     >
                       <Send className="h-4 w-4 mr-2" />
-                      {t.publishToPatient}
+                      {isPublishing ? 'Publishing...' : t.publishToPatient}
                     </Button>
                   </div>
                 </div>

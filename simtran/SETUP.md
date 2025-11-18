@@ -117,7 +117,7 @@ Update `.env`:
 ```env
 PROJECT_ID=your-actual-project-id
 LOCATION=us-central1
-MODEL_NAME=gemini-1.5-pro
+MODEL_NAME=gemini-2.5-pro
 ```
 
 ### 4.3 Build the Project
@@ -180,7 +180,7 @@ chmod +x deploy.sh
 # Export required variables
 export PROJECT_ID=your-project-id
 export LOCATION=us-central1
-export MODEL_NAME=gemini-1.5-pro
+export MODEL_NAME=gemini-2.5-pro
 
 # Run deployment
 ./deploy.sh
@@ -326,7 +326,7 @@ gcloud access-context-manager perimeters create discharge-perimeter \
 For faster, cheaper processing:
 ```bash
 # Redeploy with Gemini Flash
-export MODEL_NAME=gemini-1.5-flash
+export MODEL_NAME=gemini-2.5-pro
 ./deploy.sh
 ```
 

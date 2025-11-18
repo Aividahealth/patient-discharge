@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +20,10 @@ import { tenantColors } from "@/lib/tenant-colors"
 import { patientTranslations } from "@/lib/translations"
 import { SUPPORTED_LANGUAGES } from "@/lib/constants/languages"
 import { usePDFExport } from "@/hooks/use-pdf-export"
+import { useTenant } from "@/contexts/tenant-context"
+import { login } from "@/lib/api/auth"
+import { getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
+import { parseDischargeIntoSections, extractMedications, extractAppointments, type DischargeSections, type Medication, type Appointment } from "@/lib/parse-discharge-sections"
 import html2canvas from "html2canvas"
 import {
   Heart,
@@ -35,17 +40,267 @@ import {
   CheckCircle2,
   X,
   Phone,
+  Loader2,
 } from "lucide-react"
 
 export default function PatientDashboard() {
-  const [language, setLanguage] = useState("en")
-  const [checkedMeds, setCheckedMeds] = useState<Record<string, boolean>>({})
-  const [showChat, setShowChat] = useState(false)
-  const [activeTab, setActiveTab] = useState("overview")
-  const { exportToPDF } = usePDFExport()
+  const searchParams = useSearchParams()
+  const { login: contextLogin, token, user, tenant, isAuthenticated } = useTenant()
 
+  const [patientId, setPatientId] = useState<string | null>(null)
+  const [compositionId, setCompositionId] = useState<string | null>(null)
+  const [language, setLanguage] = useState("en")
+  const [viewTranslated, setViewTranslated] = useState(false)
+  const [checkedMeds, setCheckedMeds] = useState<Record<string, boolean>>({})
+  const [activeTab, setActiveTab] = useState("overview")
+  const [isLoadingData, setIsLoadingData] = useState(true)
+  const [dischargeSummary, setDischargeSummary] = useState<string>("")
+  const [dischargeInstructions, setDischargeInstructions] = useState<string>("")
+  const [translatedSummary, setTranslatedSummary] = useState<string>("")
+  const [translatedInstructions, setTranslatedInstructions] = useState<string>("")
+  const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
+  const [patientName, setPatientName] = useState<string>("")
+  const [parsedSections, setParsedSections] = useState<DischargeSections>({})
+  const [translatedParsedSections, setTranslatedParsedSections] = useState<DischargeSections>({})
+  const [structuredMedications, setStructuredMedications] = useState<Medication[]>([])
+  const [translatedStructuredMedications, setTranslatedStructuredMedications] = useState<Medication[]>([])
+  const [structuredAppointments, setStructuredAppointments] = useState<Appointment[]>([])
+  const [translatedStructuredAppointments, setTranslatedStructuredAppointments] = useState<Appointment[]>([])
+  const { exportToPDF} = usePDFExport()
+
+  // Auto-login with patient credentials if not authenticated
+  useEffect(() => {
+    const autoLogin = async () => {
+      if (!isAuthenticated) {
+        try {
+          console.log('[Patient Portal] Attempting auto-login for demo patient...')
+          const authData = await login({
+            tenantId: tenant?.id || 'demo',
+            username: 'patient',
+            password: 'Adyar2Austin'
+          })
+          console.log('[Patient Portal] Auto-login successful:', authData.user.name)
+          contextLogin(authData)
+        } catch (error) {
+          console.error('[Patient Portal] Auto-login failed:', error)
+          setIsLoadingData(false)
+        }
+      }
+    }
+    autoLogin()
+  }, [isAuthenticated, contextLogin, tenant])
+
+  // Get patientId and compositionId from URL parameters
+  useEffect(() => {
+    const pid = searchParams.get('patientId')
+    const cid = searchParams.get('compositionId')
+    const lang = searchParams.get('language')
+
+    console.log('[Patient Portal] URL parameters:', { patientId: pid, compositionId: cid, language: lang })
+
+    if (pid) setPatientId(pid)
+    if (cid) setCompositionId(cid)
+    if (lang) {
+      setPreferredLanguage(lang)
+      // Default to showing translated content if preferred language is non-English
+      setViewTranslated(lang !== 'en')
+    }
+  }, [searchParams])
+
+  // Auto-fetch compositionId if only patientId is provided
+  useEffect(() => {
+    const fetchCompositionId = async () => {
+      // Only fetch if we have patientId but no compositionId
+      if (!patientId || compositionId || !token || !tenant) {
+        return
+      }
+
+      console.log('[Patient Portal] No compositionId provided, fetching from backend...')
+      
+      try {
+        const getBackendUrl = () => {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            return 'http://localhost:3000'
+          }
+          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+        }
+
+        const response = await fetch(
+          `${getBackendUrl()}/google/patient/${patientId}/composition`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'X-Tenant-ID': tenant.id,
+            },
+          }
+        )
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log('[Patient Portal] Auto-fetched compositionId:', data.compositionId)
+          setCompositionId(data.compositionId)
+        } else {
+          console.error('[Patient Portal] Failed to fetch compositionId:', response.statusText)
+          alert('Could not find discharge information for this patient. Please contact support.')
+          setIsLoadingData(false)
+        }
+      } catch (error) {
+        console.error('[Patient Portal] Error fetching compositionId:', error)
+        alert('Could not load discharge information. Please try again or contact support.')
+        setIsLoadingData(false)
+      }
+    }
+
+    fetchCompositionId()
+  }, [patientId, compositionId, token, tenant])
+
+  // Fetch patient's discharge summary and instructions
+  useEffect(() => {
+    const fetchPatientData = async () => {
+      console.log('[Patient Portal] Fetch check:', {
+        hasPatientId: !!patientId,
+        hasCompositionId: !!compositionId,
+        hasToken: !!token,
+        hasTenant: !!tenant,
+        patientId,
+        compositionId,
+        tenantId: tenant?.id
+      })
+
+      if (!patientId || !compositionId || !token || !tenant) {
+        console.log('[Patient Portal] Missing required data, stopping fetch')
+        setIsLoadingData(false)
+        return
+      }
+
+      console.log('[Patient Portal] Fetching patient details...')
+      setIsLoadingData(true)
+      try {
+        // Fetch patient name from FHIR Patient resource
+        const getBackendUrl = () => {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            return 'http://localhost:3000'
+          }
+          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+        }
+
+        const patientResponse = await fetch(
+          `${getBackendUrl()}/google/fhir/Patient/${patientId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+              'X-Tenant-ID': tenant.id,
+            },
+          }
+        )
+
+        if (patientResponse.ok) {
+          const patientResource = await patientResponse.json()
+          console.log('[Patient Portal] Patient resource fetched:', patientResource)
+          
+          // Extract patient name from FHIR Patient resource
+          if (patientResource.name && patientResource.name.length > 0) {
+            const name = patientResource.name[0]
+            const fullName = name.text || `${name.given?.join(' ') || ''} ${name.family || ''}`.trim()
+            setPatientName(fullName)
+            console.log('[Patient Portal] Patient name:', fullName)
+          }
+        } else {
+          console.warn('[Patient Portal] Failed to fetch patient resource:', patientResponse.statusText)
+        }
+
+        // Fetch discharge summary and instructions
+        const details = await getPatientDetails(
+          patientId,
+          compositionId,
+          token,
+          tenant.id
+        )
+        console.log('[Patient Portal] Patient details fetched successfully')
+
+        // Set discharge summary and instructions
+        const summaryText = details.simplifiedSummary?.text || details.rawSummary?.text || ""
+        const instructionsText = details.simplifiedInstructions?.text || details.rawInstructions?.text || ""
+        
+        setDischargeSummary(summaryText)
+        setDischargeInstructions(instructionsText)
+
+        // Parse the simplified instructions into structured sections
+        console.log('[Patient Portal] Parsing discharge instructions into sections...')
+        const sections = parseDischargeIntoSections(instructionsText)
+        setParsedSections(sections)
+        
+        // Extract structured medications and appointments
+        if (sections.medications) {
+          const meds = extractMedications(sections.medications)
+          setStructuredMedications(meds)
+          console.log('[Patient Portal] Extracted medications:', meds.length)
+        }
+        
+        if (sections.appointments) {
+          const appts = extractAppointments(sections.appointments)
+          setStructuredAppointments(appts)
+          console.log('[Patient Portal] Extracted appointments:', appts.length)
+        }
+
+        // Fetch translated content if preferred language is set and not English
+        if (preferredLanguage && preferredLanguage !== 'en') {
+          const translated = await getTranslatedContent(
+            compositionId,
+            preferredLanguage,
+            token,
+            tenant.id
+          )
+
+          if (translated?.content) {
+            // Parse the combined translated content
+            const parts = translated.content.content.split('\n\n---\n\n')
+            const translatedSummaryText = parts[0] || ""
+            const translatedInstructionsText = parts[1] || ""
+            
+            setTranslatedSummary(translatedSummaryText)
+            setTranslatedInstructions(translatedInstructionsText)
+            
+            // Parse translated instructions into structured sections
+            console.log('[Patient Portal] Parsing translated instructions into sections...')
+            const translatedSections = parseDischargeIntoSections(translatedInstructionsText)
+            setTranslatedParsedSections(translatedSections)
+            
+            // Extract structured medications and appointments from translated content
+            if (translatedSections.medications) {
+              const translatedMeds = extractMedications(translatedSections.medications)
+              setTranslatedStructuredMedications(translatedMeds)
+              console.log('[Patient Portal] Extracted translated medications:', translatedMeds.length)
+            }
+            
+            if (translatedSections.appointments) {
+              const translatedAppts = extractAppointments(translatedSections.appointments)
+              setTranslatedStructuredAppointments(translatedAppts)
+              console.log('[Patient Portal] Extracted translated appointments:', translatedAppts.length)
+            }
+          }
+        }
+
+        console.log('[Patient Portal] Data loaded, setting loading to false')
+        setIsLoadingData(false)
+      } catch (error) {
+        console.error('[Patient Portal] Failed to fetch patient data:', error)
+        // Show user-friendly error message
+        alert('Failed to load your discharge information. Please refresh the page or contact support.')
+        setIsLoadingData(false)
+      }
+    }
+
+    fetchPatientData()
+  }, [patientId, compositionId, token, tenant, preferredLanguage])
+
+  // Mock patient data for UI elements (will be replaced with real data later)
   const patientData = {
-    name: "John Smith",
+    name: patientName || user?.name || "Patient",
     medications: [
       {
         name: "Metoprolol",
@@ -387,6 +642,26 @@ EMERGENCY CONTACTS:
 
   const t = patientTranslations[language as keyof typeof patientTranslations]
 
+  // Show loading state while fetching patient data
+  if (isLoadingData) {
+    return (
+      <ErrorBoundary>
+        <AuthGuard>
+          <div className="min-h-screen bg-background flex flex-col">
+            <CommonHeader />
+            <main className="flex-1 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <p className="text-lg text-muted-foreground">Loading your discharge information...</p>
+              </div>
+            </main>
+            <CommonFooter />
+          </div>
+        </AuthGuard>
+      </ErrorBoundary>
+    )
+  }
+
   return (
     <ErrorBoundary>
       <AuthGuard>
@@ -407,21 +682,27 @@ EMERGENCY CONTACTS:
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Language Toggle */}
+              {/* Language Toggle - Only show if preferred language is non-English */}
+              {preferredLanguage && preferredLanguage !== 'en' && (
               <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-transparent border border-border rounded-md px-2 py-1 text-sm"
-                >
-                  {Object.entries(SUPPORTED_LANGUAGES).map(([code, lang]) => (
-                    <option key={code} value={code}>
-                      {lang.nativeName}
-                    </option>
-                  ))}
-                </select>
+                  <Button
+                    variant={!viewTranslated ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewTranslated(false)}
+                    className="px-3"
+                  >
+                    English
+                  </Button>
+                  <Button
+                    variant={viewTranslated ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewTranslated(true)}
+                    className="px-3"
+                  >
+                    {SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.nativeName || preferredLanguage}
+                  </Button>
               </div>
+              )}
               <FeedbackButton userType="patient" />
               <Avatar className="h-8 w-8">
                 <AvatarImage src="/patient-avatar.png" />
@@ -438,7 +719,9 @@ EMERGENCY CONTACTS:
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="font-heading text-2xl">{t.welcomeBack}</CardTitle>
+                <CardTitle className="font-heading text-2xl">
+                  Welcome back, {patientData.name}
+                </CardTitle>
                 <CardDescription className="text-base mt-1">{t.dischargedFrom}</CardDescription>
                 <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                   <span>{t.dischargeDate}</span>
@@ -462,7 +745,7 @@ EMERGENCY CONTACTS:
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-6 h-auto p-1">
             <TabsTrigger value="overview" className="flex flex-col gap-1 py-3">
               <Heart className="h-4 w-4" />
               <span className="text-xs">{t.overview}</span>
@@ -483,43 +766,81 @@ EMERGENCY CONTACTS:
               <AlertTriangle className="h-4 w-4" />
               <span className="text-xs">{t.warningsSigns}</span>
             </TabsTrigger>
+            <TabsTrigger value="chat" className="flex flex-col gap-1 py-3">
+              <MessageCircle className="h-4 w-4" />
+              <span className="text-xs">Chat</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">{t.recoverySummary}</CardTitle>
-                  <div className="flex items-center gap-2 mt-2">
+            {/* Recovery Summary Card */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 mt-1">
+                    <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                      <Heart className="h-6 w-6 text-purple-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                      <h3 className="font-heading text-xl font-semibold text-gray-900">{t.recoverySummary}</h3>
                     <TenantBadge tenantVariant="light">
                       AI Generated
                     </TenantBadge>
-                    <span className="text-xs text-muted-foreground">
-                      This content has been simplified using artificial intelligence
-                    </span>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">{t.reasonForStay}</h4>
-                    <p className="text-muted-foreground">{t.reasonText}</p>
+                    
+                    <div className="space-y-4">
+                      {/* Reasons for Hospital Stay */}
+                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                        <h4 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4" />
+                          Reasons for Hospital Stay
+                        </h4>
+                        <div className="text-sm text-gray-900 leading-relaxed prose prose-sm max-w-none">
+                          {viewTranslated && translatedSummary ? (
+                            <div dangerouslySetInnerHTML={{ __html: translatedSummary.split('What happened during your stay')[0].replace(/\n/g, '<br />') }} />
+                          ) : (
+                            <div dangerouslySetInnerHTML={{ __html: dischargeSummary.split('What happened during your stay')[0].replace(/\n/g, '<br />') }} />
+                          )}
                   </div>
-                  <Separator />
-                  <div>
-                    <h4 className="font-medium mb-2">{t.whatHappened}</h4>
-                    <p className="text-muted-foreground">{t.whatHappenedText}</p>
+                      </div>
+
+                      {/* What Happened During Your Stay */}
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          What Happened During Your Stay
+                        </h4>
+                        <div className="text-sm text-gray-900 leading-relaxed prose prose-sm max-w-none">
+                          {viewTranslated && translatedSummary ? (
+                            <div dangerouslySetInnerHTML={{ __html: (translatedSummary.split('What happened during your stay')[1] || translatedSummary).replace(/\n/g, '<br />') }} />
+                          ) : (
+                            <div dangerouslySetInnerHTML={{ __html: (dischargeSummary.split('What happened during your stay')[1] || dischargeSummary).replace(/\n/g, '<br />') }} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">{t.quickActions}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+            {/* Quick Actions Card */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 mt-1">
+                    <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                      <MessageCircle className="h-6 w-6 text-gray-600" />
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">{t.quickActions}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Button
-                    className="w-full justify-start bg-transparent"
+                        className="w-full justify-start"
                     variant="outline"
                     onClick={() => setActiveTab("medications")}
                   >
@@ -527,28 +848,30 @@ EMERGENCY CONTACTS:
                     {t.viewTodaysMeds}
                   </Button>
                   <Button
-                    className="w-full justify-start bg-transparent"
+                        className="w-full justify-start"
                     variant="outline"
                     onClick={() => setActiveTab("appointments")}
                   >
                     <Calendar className="h-4 w-4 mr-2" />
                     {t.nextAppointment}
                   </Button>
-                  <Button className="w-full justify-start bg-transparent" variant="outline">
+                      <Button className="w-full justify-start" variant="outline">
                     <Phone className="h-4 w-4 mr-2" />
                     {t.callNurse}
                   </Button>
                   <Button
-                    className="w-full justify-start bg-transparent"
+                        className="w-full justify-start"
                     variant="outline"
-                    onClick={() => setShowChat(true)}
+                        onClick={() => setActiveTab("chat")}
                   >
                     <MessageCircle className="h-4 w-4 mr-2" />
                     {t.askQuestion}
                   </Button>
+                    </div>
+                  </div>
+                </div>
                 </CardContent>
               </Card>
-            </div>
           </TabsContent>
 
           {/* Medications Tab */}
@@ -561,88 +884,47 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
+            {(viewTranslated ? translatedStructuredMedications : structuredMedications).length > 0 ? (
             <div className="grid gap-4">
-              {[
-                {
-                  id: "med1",
-                  name: "Metoprolol",
-                  dose: "25mg",
-                  frequency: t.twiceDaily,
-                  timing: t.morningEvening,
-                  instructions: t.medInstructionTakeWithFood,
-                  morning: true,
-                  evening: true,
-                },
-                {
-                  id: "med2",
-                  name: "Atorvastatin",
-                  dose: "20mg",
-                  frequency: t.onceDaily,
-                  timing: t.evening,
-                  instructions: t.medInstructionBedtimeGrapefruit,
-                  evening: true,
-                },
-                {
-                  id: "med3",
-                  name: "Aspirin",
-                  dose: "81mg",
-                  frequency: t.onceDaily,
-                  timing: t.morning,
-                  instructions: t.medInstructionTakeWithFoodStomach,
-                  morning: true,
-                },
-              ].map((med) => (
-                <Card key={med.id} className="relative">
+                {(viewTranslated ? translatedStructuredMedications : structuredMedications).map((med, index) => (
+                  <Card key={`med-${index}`} className="hover:shadow-md transition-shadow">
                   <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-heading text-lg font-semibold">{med.name}</h3>
-                          <Badge variant="secondary">{med.dose}</Badge>
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 mt-1">
+                          <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Pill className="h-6 w-6 text-blue-600" />
                         </div>
-                        <div className="grid sm:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">{t.frequency}</p>
-                            <p className="text-sm">{med.frequency}</p>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">{t.whenToTake}</p>
-                            <p className="text-sm">{med.timing}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-3">
+                            <h3 className="font-heading text-xl font-semibold text-gray-900">{med.name}</h3>
+                            {med.dose && (
+                              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium px-3 py-1">
+                                {med.dose}
+                              </Badge>
+                            )}
                           </div>
+                          
+                          {/* Medication Details */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            {med.frequency && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Clock className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-700"><strong>Frequency:</strong> {med.frequency}</span>
                         </div>
-                        <div className="mb-4">
-                          <p className="text-sm font-medium text-muted-foreground mb-1">{t.specialInstructions}</p>
-                          <p className="text-sm">{med.instructions}</p>
+                            )}
+                            {med.howToTake && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Pill className="h-4 w-4 text-gray-500" />
+                                <span className="text-gray-700"><strong>How:</strong> {med.howToTake}</span>
                         </div>
-                        <div className="flex gap-2">
-                          {med.morning && (
-                            <Button
-                              variant={checkedMeds[`${med.id}-morning`] ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => toggleMedication(`${med.id}-morning`)}
-                            >
-                              {checkedMeds[`${med.id}-morning`] ? (
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                              ) : (
-                                <Clock className="h-4 w-4 mr-1" />
-                              )}
-                              {t.morning}
-                            </Button>
                           )}
-                          {med.evening && (
-                            <Button
-                              variant={checkedMeds[`${med.id}-evening`] ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => toggleMedication(`${med.id}-evening`)}
-                            >
-                              {checkedMeds[`${med.id}-evening`] ? (
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                              ) : (
-                                <Clock className="h-4 w-4 mr-1" />
-                              )}
-                              {t.evening}
-                            </Button>
-                          )}
+                        </div>
+                          
+                          {/* Full Instructions */}
+                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <p className="text-sm font-semibold text-gray-700 mb-2">Complete Instructions:</p>
+                            <p className="text-sm text-gray-900 leading-relaxed">{med.instructions}</p>
                         </div>
                       </div>
                     </div>
@@ -650,6 +932,21 @@ EMERGENCY CONTACTS:
                 </Card>
               ))}
             </div>
+            ) : (viewTranslated ? translatedParsedSections.medications : parsedSections.medications) ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {viewTranslated ? translatedParsedSections.medications : parsedSections.medications}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-muted-foreground">No medication information available</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Appointments Tab */}
@@ -662,78 +959,87 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
+            {(viewTranslated ? translatedStructuredAppointments : structuredAppointments).length > 0 ? (
             <div className="grid gap-4">
-              {[
-                {
-                  date: "March 22, 2024",
-                  time: "10:30 AM",
-                  doctor: "Dr. Sarah Johnson",
-                  specialty: "Cardiology Follow-up",
-                  location: "General Hospital - Cardiology Clinic",
-                  address: "123 Medical Center Dr, Suite 200",
-                  preparation: t.appointmentPrepMedicationList,
-                },
-                {
-                  date: "April 5, 2024",
-                  time: "2:00 PM",
-                  doctor: "Dr. Michael Chen",
-                  specialty: "Primary Care Check-up",
-                  location: "Family Medicine Clinic",
-                  address: "456 Health Plaza, Building A",
-                  preparation: t.appointmentPrepFasting,
-                },
-              ].map((apt, index) => (
-                <Card key={index}>
+                {(viewTranslated ? translatedStructuredAppointments : structuredAppointments).map((apt, index) => (
+                <Card key={index} className="hover:shadow-md transition-shadow">
                   <CardContent className="pt-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="font-heading text-lg font-semibold mb-1">{apt.specialty}</h3>
-                        <p className="text-muted-foreground">{apt.doctor}</p>
-                      </div>
-                      <Badge variant="outline">{apt.date}</Badge>
-                    </div>
-
-                    <div className="grid sm:grid-cols-2 gap-4 mb-4">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{apt.time}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{apt.location}</span>
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 mt-1">
+                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                          <Calendar className="h-5 w-5 text-green-600" />
                       </div>
                     </div>
-
-                    <div className="mb-4">
-                      <p className="text-sm text-muted-foreground mb-1">{t.address}</p>
-                      <p className="text-sm">{apt.address}</p>
+                      <div className="flex-1 min-w-0">
+                        {apt.specialty && (
+                          <h3 className="font-heading text-xl font-semibold text-gray-900 mb-2">
+                            {apt.specialty}
+                          </h3>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          {apt.date && (
+                            <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-sm font-medium px-3 py-1">
+                              <Clock className="h-3 w-3 mr-1" />
+                              In {apt.date}
+                            </Badge>
+                          )}
+                          {apt.location && (
+                            <Badge variant="outline" className="text-sm">
+                              📍 {apt.location}
+                            </Badge>
+                          )}
+                      </div>
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-line">{apt.rawText}</p>
+                      </div>
                     </div>
-
-                    <div className="mb-4">
-                      <p className="text-sm font-medium text-muted-foreground mb-1">{t.preparationNotes}</p>
-                      <p className="text-sm">{apt.preparation}</p>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {t.directions}
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Calendar className="h-4 w-4 mr-1" />
-                        {t.addToCalendar}
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
+            ) : (viewTranslated ? translatedParsedSections.appointments : parsedSections.appointments) ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {viewTranslated ? translatedParsedSections.appointments : parsedSections.appointments}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <p className="text-muted-foreground">No appointment information available</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Diet & Activity Tab */}
           <TabsContent value="diet-activity" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.dietActivityGuidelines}</h2>
 
+            {(viewTranslated ? translatedParsedSections.dietActivity : parsedSections.dietActivity) ? (
+              <Card className="hover:shadow-md transition-shadow">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-1">
+                      <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                        <Utensils className="h-6 w-6 text-orange-600" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">Your Diet & Activity Plan</h3>
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
+                          {viewTranslated ? translatedParsedSections.dietActivity : parsedSections.dietActivity}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
             <div className="grid md:grid-cols-2 gap-6">
               {/* Diet Guidelines */}
               <Card>
@@ -810,12 +1116,41 @@ EMERGENCY CONTACTS:
                 </CardContent>
               </Card>
             </div>
+            )}
           </TabsContent>
 
           {/* Warning Signs Tab */}
           <TabsContent value="warnings" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.whenToSeekHelp}</h2>
 
+            {(viewTranslated ? translatedParsedSections.warningsSigns : parsedSections.warningsSigns) ? (
+              <Card className="hover:shadow-md transition-shadow border-red-200">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-1">
+                      <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
+                        <AlertTriangle className="h-6 w-6 text-red-600" />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">When to Call for Help</h3>
+                      <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                        <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
+                          {viewTranslated ? translatedParsedSections.warningsSigns : parsedSections.warningsSigns}
+                        </div>
+                      </div>
+                      <div className="mt-4 flex gap-3">
+                        <Badge className="bg-red-600 text-white hover:bg-red-700">
+                          <Phone className="h-3 w-3 mr-1" />
+                          Call 911 for emergencies
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
             <Card className="border-red-200 bg-red-50">
               <CardHeader>
                 <CardTitle className="font-heading text-red-800 flex items-center gap-2">
@@ -891,20 +1226,24 @@ EMERGENCY CONTACTS:
                 </div>
               </CardContent>
             </Card>
+            </>
+            )}
+          </TabsContent>
+
+          {/* Chat Tab */}
+          <TabsContent value="chat" className="space-y-6">
+            <PatientChatbot 
+              isOpen={true} 
+              onClose={() => setActiveTab("overview")} 
+              patientData={patientData}
+              dischargeSummary={dischargeSummary}
+              dischargeInstructions={dischargeInstructions}
+              compositionId={compositionId || ''}
+              patientId={patientId || ''}
+            />
           </TabsContent>
         </Tabs>
       </div>
-
-      {/* Floating Chat Button */}
-      <TenantButton
-        tenantVariant="primary"
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg"
-        onClick={() => setShowChat(true)}
-      >
-        <MessageCircle className="h-6 w-6" />
-      </TenantButton>
-
-      <PatientChatbot isOpen={showChat} onClose={() => setShowChat(false)} patientData={patientData} />
       
       <CommonFooter />
       </div>

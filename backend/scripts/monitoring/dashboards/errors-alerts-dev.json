@@ -1,0 +1,79 @@
+{
+  "displayName": "Errors & Alerts (Dev)",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 12,
+        "height": 4,
+        "widget": {
+          "title": "Error count by step",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_failed_frontend_upload\"" }
+                },
+                "plotType": "LINE"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_failed_backend_publish_to_topic\"" }
+                },
+                "plotType": "LINE"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_failed_simplify\"" }
+                },
+                "plotType": "LINE"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_failed_store_in_fhir\"" }
+                },
+                "plotType": "LINE"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_failed_publish_simplified\"" }
+                },
+                "plotType": "LINE"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_failed_translate\"" }
+                },
+                "plotType": "LINE"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_failed_store_translated_in_fhir\"" }
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "yAxis": { "label": "errors", "scale": "LINEAR" }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 4,
+        "width": 12,
+        "height": 4,
+        "widget": {
+          "title": "Recent failed pipeline instances",
+          "logsPanel": {
+            "filter": "jsonPayload.type=\"pipeline_event\" jsonPayload.status=\"failed\"",
+            "resourceNames": []
+          }
+        }
+      }
+    ]
+  }
+}
+
+

@@ -1,0 +1,106 @@
+{
+  "displayName": "Pipeline Overview (Dev)",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "xPos": 0,
+        "yPos": 0,
+        "width": 12,
+        "height": 4,
+        "widget": {
+          "title": "Documents processed (completed, total)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_total\""
+                  }
+                },
+                "plotType": "LINE"
+              }
+            ],
+            "timeshiftDuration": "0s",
+            "yAxis": {
+              "label": "count",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 0,
+        "yPos": 4,
+        "width": 6,
+        "height": 2,
+        "widget": {
+          "title": "Success rate (last 24h)",
+          "scorecard": {
+            "timeSeriesQuery": {
+              "timeSeriesQueryLanguage": "completed = fetch logging.googleapis.com/user/pipeline_completed_total | align rate(24h) | group_by [], [sum(value)]; failed = fetch logging.googleapis.com/user/pipeline_failed_total | align rate(24h) | group_by [], [sum(value)]; join completed, failed | ratio: div(val(0), add(val(0), val(1)))"
+            }
+          }
+        }
+      },
+      {
+        "xPos": 6,
+        "yPos": 4,
+        "width": 6,
+        "height": 4,
+        "widget": {
+          "title": "By step (stacked, completed)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_frontend_upload\"" }
+                },
+                "plotType": "STACKED_AREA"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_backend_publish_to_topic\"" }
+                },
+                "plotType": "STACKED_AREA"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_simplify\"" }
+                },
+                "plotType": "STACKED_AREA"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_store_in_fhir\"" }
+                },
+                "plotType": "STACKED_AREA"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_publish_simplified\"" }
+                },
+                "plotType": "STACKED_AREA"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_translate\"" }
+                },
+                "plotType": "STACKED_AREA"
+              },
+              {
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": { "filter": "metric.type=\"logging.googleapis.com/user/pipeline_completed_store_translated_in_fhir\"" }
+                },
+                "plotType": "STACKED_AREA"
+              }
+            ],
+            "yAxis": { "label": "count", "scale": "LINEAR" }
+          }
+        }
+      }
+    ]
+  }
+}
+
+

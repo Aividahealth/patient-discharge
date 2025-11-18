@@ -15,6 +15,7 @@ import { CommonFooter } from "@/components/common-footer"
 import { AuthGuard } from "@/components/auth-guard"
 import { FileUploadModal } from "@/components/file-upload-modal"
 import { MarkdownRenderer, markdownToHtml } from "@/components/markdown-renderer"
+import { useTenant } from "@/contexts/tenant-context"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas"
 import {
@@ -34,15 +35,64 @@ import {
 } from "lucide-react"
 
 export default function ClinicianDashboard() {
+  const { user } = useTenant()
   const [selectedPatient, setSelectedPatient] = useState<string | null>("patient-1")
   const [editMode, setEditMode] = useState(false)
   const [language, setLanguage] = useState("en")
   const [showUploadModal, setShowUploadModal] = useState(false)
-  const [approvalStatus, setApprovalStatus] = useState({
-    medications: false,
-    appointments: false,
-    dietActivity: false,
+  const [isPublishing, setIsPublishing] = useState(false)
+  
+  // Section approvals with audit trail (timestamp and clinician info)
+  const [sectionApprovals, setSectionApprovals] = useState<{
+    medications: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+    appointments: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+    dietActivity: {
+      approved: boolean;
+      approvedAt: string | null;
+      approvedBy: { id: string; name: string } | null;
+    };
+  }>({
+    medications: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
+    appointments: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
+    dietActivity: {
+      approved: false,
+      approvedAt: null,
+      approvedBy: null,
+    },
   })
+
+  // Additional clarifications
+  const [additionalClarifications, setAdditionalClarifications] = useState("")
+
+  // Redaction preferences
+  const [redactionPreferences, setRedactionPreferences] = useState({
+    redactRoomNumber: false,
+    redactMRN: false,
+    redactInsuranceInfo: false,
+  })
+
+  // Legacy approvalStatus for UI compatibility (derived from sectionApprovals)
+  const approvalStatus = {
+    medications: sectionApprovals.medications.approved,
+    appointments: sectionApprovals.appointments.approved,
+    dietActivity: sectionApprovals.dietActivity.approved,
+  }
   const [patientsList, setPatientsList] = useState([
     {
       id: "patient-1",
@@ -669,8 +719,97 @@ export default function ClinicianDashboard() {
 
   const currentPatient = getCurrentPatientData()
 
-  const toggleApproval = (section: keyof typeof approvalStatus) => {
-    setApprovalStatus((prev) => ({ ...prev, [section]: !prev[section] }))
+  const toggleApproval = (section: 'medications' | 'appointments' | 'dietActivity') => {
+    setSectionApprovals((prev) => {
+      const currentApproval = prev[section].approved
+      const newApproval = !currentApproval
+      
+      return {
+        ...prev,
+        [section]: {
+          approved: newApproval,
+          approvedAt: newApproval ? new Date().toISOString() : null,
+          approvedBy: newApproval && user ? {
+            id: user.id,
+            name: user.name,
+          } : null,
+        },
+      }
+    })
+  }
+
+  const handlePublish = async () => {
+    const currentPatient = patients.find(p => p.id === selectedPatient)
+    if (!currentPatient || !currentPatient.compositionId) {
+      console.error('[ClinicianPortal] Missing compositionId for publish')
+      alert('Cannot publish: Patient composition ID not found.')
+      return
+    }
+
+    // For generic page, we may not have token/tenantId/user
+    // This is a demo/mock page, so we'll show a message
+    if (!user) {
+      alert('Please log in to publish discharge summaries.')
+      return
+    }
+
+    // Validate all sections are approved
+    if (!sectionApprovals.medications.approved || 
+        !sectionApprovals.appointments.approved || 
+        !sectionApprovals.dietActivity.approved) {
+      alert('Please approve all required sections before publishing.')
+      return
+    }
+
+    setIsPublishing(true)
+
+    try {
+      // Note: Generic page may not have full API setup
+      // In a real scenario, this would call the API endpoint
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+      const clarificationsText = additionalClarifications.trim() || "None"
+
+      const requestBody = {
+        additionalClarifications: clarificationsText,
+        publish: true,
+        sectionApprovals: {
+          medications: {
+            approved: sectionApprovals.medications.approved,
+            approvedAt: sectionApprovals.medications.approvedAt!,
+            approvedBy: sectionApprovals.medications.approvedBy!,
+          },
+          appointments: {
+            approved: sectionApprovals.appointments.approved,
+            approvedAt: sectionApprovals.appointments.approvedAt!,
+            approvedBy: sectionApprovals.appointments.approvedBy!,
+          },
+          dietActivity: {
+            approved: sectionApprovals.dietActivity.approved,
+            approvedAt: sectionApprovals.dietActivity.approvedAt!,
+            approvedBy: sectionApprovals.dietActivity.approvedBy!,
+          },
+        },
+        redactionPreferences: {
+          redactRoomNumber: redactionPreferences.redactRoomNumber,
+          redactMRN: redactionPreferences.redactMRN,
+          redactInsuranceInfo: redactionPreferences.redactInsuranceInfo,
+        },
+        clinician: {
+          id: user.id,
+          name: user.name,
+          email: user.username, // Using username as email if available
+        },
+      }
+
+      // For demo purposes, just log the request
+      console.log('[ClinicianPortal] Publish request:', requestBody)
+      alert('Publish functionality requires full authentication. This is a demo page.')
+    } catch (error) {
+      console.error('[ClinicianPortal] Failed to publish:', error)
+      alert(error instanceof Error ? error.message : 'Failed to publish discharge summary. Please try again.')
+    } finally {
+      setIsPublishing(false)
+    }
   }
 
   const printDischargeSummary = () => {
@@ -1247,7 +1386,6 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">{t.medications}</p>
-                            <p className="text-xs text-muted-foreground">3 {t.medicationsListed}</p>
                           </div>
                         </div>
                         <Switch
@@ -1266,7 +1404,6 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                           />
                           <div>
                             <p className="font-medium text-sm">Appointments</p>
-                            <p className="text-xs text-muted-foreground">2 {t.appointmentsScheduled}</p>
                           </div>
                         </div>
                         <Switch
@@ -1308,19 +1445,37 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                         <Label htmlFor="sensitive-info">{t.redactSensitiveInfo}</Label>
                         <div className="mt-2 space-y-2">
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-room" />
+                            <Switch 
+                              id="redact-room" 
+                              checked={redactionPreferences.redactRoomNumber}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactRoomNumber: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-room" className="text-sm">
                               {t.roomNumber}
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-mrn" />
+                            <Switch 
+                              id="redact-mrn" 
+                              checked={redactionPreferences.redactMRN}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactMRN: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-mrn" className="text-sm">
                               {t.medicalRecordNumber}
                             </Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Switch id="redact-insurance" />
+                            <Switch 
+                              id="redact-insurance" 
+                              checked={redactionPreferences.redactInsuranceInfo}
+                              onCheckedChange={(checked) => 
+                                setRedactionPreferences(prev => ({ ...prev, redactInsuranceInfo: checked }))
+                              }
+                            />
                             <Label htmlFor="redact-insurance" className="text-sm">
                               {t.insuranceInformation}
                             </Label>
@@ -1334,6 +1489,8 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                           className="mt-2"
                           rows={4}
                           placeholder={t.addNotes}
+                          value={additionalClarifications}
+                          onChange={(e) => setAdditionalClarifications(e.target.value)}
                         />
                       </div>
                     </div>
@@ -1358,11 +1515,12 @@ ${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPat
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
-                      disabled={!Object.values(approvalStatus).every(Boolean)}
+                      disabled={!Object.values(approvalStatus).every(Boolean) || isPublishing}
+                      onClick={handlePublish}
                       className="bg-green-600 hover:bg-green-700"
                     >
                       <Send className="h-4 w-4 mr-2" />
-                      {t.publishToPatient}
+                      {isPublishing ? 'Publishing...' : t.publishToPatient}
                     </Button>
                   </div>
                 </div>

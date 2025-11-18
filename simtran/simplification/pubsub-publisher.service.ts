@@ -11,6 +11,8 @@ export interface SimplificationCompletedMessage {
   processingTimeMs: number;
   tokensUsed: number;
   timestamp: string;
+  patientId?: string;
+  preferredLanguage?: string;
 }
 
 /**

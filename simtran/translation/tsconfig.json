@@ -4,7 +4,7 @@
     "module": "commonjs",
     "lib": ["ES2022"],
     "outDir": "./lib",
-    "rootDir": "../",
+    "rootDir": "./",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -16,12 +16,12 @@
     "moduleResolution": "node",
     "baseUrl": "./",
     "paths": {
-      "@common/*": ["../common/*"]
+      "@common/*": ["./common/*"]
     }
   },
   "include": [
     "./**/*.ts",
-    "../common/**/*.ts"
+    "./common/**/*.ts"
   ],
   "exclude": [
     "node_modules",

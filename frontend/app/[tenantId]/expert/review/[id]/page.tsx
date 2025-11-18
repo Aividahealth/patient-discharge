@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ArrowLeft, Loader2, Star, CheckCircle } from "lucide-react"
-import { getDischargeSummaryContent, DischargeSummaryContent, getPatientDetails } from "@/lib/discharge-summaries"
+import { getDischargeSummaryContent, DischargeSummaryContent, getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
 import { submitFeedback } from "@/lib/expert-api"
 import { useToast } from "@/hooks/use-toast"
 import { TenantButton } from "@/components/tenant-button"
@@ -144,8 +144,22 @@ export default function ExpertReviewPage() {
         tenantId
       )
 
-      setRawText(details.rawSummary?.text || "")
-      setSimplifiedText(details.simplifiedSummary?.text || "")
+      // Combine raw summary and instructions
+      const rawCombined = [
+        details.rawSummary?.text || '',
+        details.rawInstructions?.text || ''
+      ].filter(Boolean).join('\n\n---\n\n')
+      
+      setRawText(rawCombined)
+      
+      // Combine simplified summary and instructions
+      const simplifiedCombined = [
+        details.simplifiedSummary?.text || '',
+        details.simplifiedInstructions?.text || ''
+      ].filter(Boolean).join('\n\n---\n\n')
+      
+      setSimplifiedText(simplifiedCombined)
+      
       if (details) {
         setPatientName(details.patientId || patientName)
       }
@@ -160,7 +174,7 @@ export default function ExpertReviewPage() {
     if (!language || !token || !tenantId) return
 
     try {
-      const translated = await getDischargeSummaryContent(summaryId, 'translated', language, token, tenantId).catch((err) => {
+      const translated = await getTranslatedContent(summaryId, language, token, tenantId).catch((err) => {
         console.error('Failed to load translated version:', err)
         return null
       })

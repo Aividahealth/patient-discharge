@@ -1,5 +1,5 @@
 import { Storage } from '@google-cloud/storage';
-import { createLogger } from '../common/utils/logger';
+import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('StorageService');
 

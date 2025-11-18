@@ -1,0 +1,27 @@
+displayName: "Dev Monitoring Policies"
+notificationChannels: []
+userLabels: {}
+conditions:
+  # High error rate > 10% over 15m for any step
+  - displayName: "High pipeline error rate (15m > 10%)"
+    conditionMonitoringQueryLanguage:
+      duration: "900s"
+      query: |
+        # Ratio of failed to total (completed+failed), using total counters
+        err = fetch logging.googleapis.com/user/pipeline_failed_total
+        | align rate(1m) | group_by [], [sum(value)]
+        ok = fetch logging.googleapis.com/user/pipeline_completed_total
+        | align rate(1m) | group_by [], [sum(value)]
+        | join err
+        | ratio: div(val(1), add(val(0), val(1)))
+        | condition ratio > 0.10
+      evaluationMissingData: EVALUATION_MISSING_DATA_INACTIVE
+  # Pipeline stalled: no completed documents over last 30m
+  - displayName: "Pipeline stalled (no completed in 30m)"
+    conditionAbsent:
+      filter: 'metric.type="logging.googleapis.com/user/pipeline_completed_total"'
+      duration: "1800s"
+enabled: true
+combiner: OR
+
+

@@ -2,6 +2,7 @@ import { Controller, Get, Param, Post, Body, Put, Delete, Query, HttpException, 
 import { GoogleService } from './google.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
+import { Public } from '../auth/auth.guard';
 
 @Controller('google')
 export class GoogleController {
@@ -40,14 +41,153 @@ export class GoogleController {
     return this.googleService.fhirUpdate(resourceType, id, body, ctx);
   }
 
+  /**
+   * Delete a Patient and all dependent resources (cascading delete)
+   * Deletes DocumentReferences, Composition, and Patient in the correct order
+   * NOTE: This route must be defined BEFORE the generic fhir/:resourceType/:id route
+   */
+  @Delete('fhir/Patient/:patientId/with-dependencies')
+  async deletePatientWithDependencies(
+    @Param('patientId') patientId: string,
+    @Query('compositionId') compositionId: string,
+    @TenantContext() ctx: TenantContextType,
+  ) {
+    if (!compositionId) {
+      throw new HttpException(
+        {
+          message: 'compositionId query parameter is required',
+          patientId,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      const result = await this.googleService.deletePatientWithDependencies(patientId, compositionId, ctx);
+      
+      if (!result.success) {
+        throw new HttpException(
+          {
+            message: 'Failed to delete patient and dependencies',
+            patientId,
+            compositionId,
+            deleted: result.deleted,
+            errors: result.errors,
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      return {
+        success: true,
+        message: 'Patient and all dependencies deleted successfully',
+        deleted: result.deleted,
+        errors: result.errors.length > 0 ? result.errors : undefined,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to delete patient with dependencies ${patientId} (tenant: ${ctx.tenantId}):`, error);
+      
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new HttpException(
+        {
+          message: error.message || 'Failed to delete patient and dependencies',
+          patientId,
+          compositionId,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Delete('fhir/:resourceType/:id')
-  fhirDelete(@Param('resourceType') resourceType: string, @Param('id') id: string, @TenantContext() ctx: TenantContextType) {
-    return this.googleService.fhirDelete(resourceType, id, ctx);
+  async fhirDelete(@Param('resourceType') resourceType: string, @Param('id') id: string, @TenantContext() ctx: TenantContextType) {
+    try {
+      const result = await this.googleService.fhirDelete(resourceType, id, ctx);
+      return { success: true, message: `${resourceType} deleted successfully`, data: result };
+    } catch (error) {
+      this.logger.error(`Failed to delete ${resourceType}/${id} (tenant: ${ctx.tenantId}):`, error);
+      
+      // Extract error details from the FHIR API response
+      const statusCode = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.issue?.[0]?.details?.text || 
+                          error.message || 
+                          'Failed to delete resource';
+      
+      throw new HttpException(
+        {
+          message: errorMessage,
+          resourceType,
+          id,
+          statusCode,
+          details: error.response?.data,
+        },
+        statusCode,
+      );
+    }
   }
 
   @Get('fhir/:resourceType')
   fhirSearch(@Param('resourceType') resourceType: string, @Query() query: any, @TenantContext() ctx: TenantContextType) {
     return this.googleService.fhirSearch(resourceType, query, ctx);
+  }
+
+  /**
+   * Get the most recent Composition for a patient
+   * This allows the patient portal to work with just patientId (no compositionId needed)
+   */
+  @Get('patient/:patientId/composition')
+  async getPatientComposition(
+    @Param('patientId') patientId: string,
+    @TenantContext() ctx: TenantContextType
+  ) {
+    try {
+      this.logger.log(`🔍 Finding composition for patient ${patientId}`);
+      
+      // Search for compositions by patient
+      const compositionSearch = await this.googleService.fhirSearch('Composition', {
+        subject: `Patient/${patientId}`,
+        _sort: '-date', // Sort by date descending (most recent first)
+        _count: 1 // Only get the most recent one
+      }, ctx);
+
+      if (!compositionSearch?.entry || compositionSearch.entry.length === 0) {
+        throw new HttpException(
+          {
+            message: 'No discharge composition found for this patient',
+            patientId,
+            tenantId: ctx.tenantId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      const composition = compositionSearch.entry[0].resource;
+      this.logger.log(`✅ Found composition ${composition.id} for patient ${patientId}`);
+
+      return {
+        compositionId: composition.id,
+        patientId,
+        date: composition.date,
+        title: composition.title,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error(`❌ Error finding composition for patient ${patientId}:`, error);
+      throw new HttpException(
+        {
+          message: error.message || 'Failed to find composition for patient',
+          patientId,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   /**
@@ -252,7 +392,9 @@ export class GoogleController {
 
   /**
    * Get Composition simplified binaries (filtered by discharge-summary-simplified and discharge-instructions-simplified tags)
+   * Service-to-service endpoint - uses @Public() to bypass auth for Cloud Function identity tokens
    */
+  @Public()
   @Get('fhir/Composition/:id/simplified')
   async getCompositionSimplifiedBinaries(
     @Param('id') id: string,
@@ -282,7 +424,9 @@ export class GoogleController {
 
   /**
    * Get Composition translated binaries (filtered by discharge-summary-translated and discharge-instructions-translated tags)
+   * Service-to-service endpoint - uses @Public() to bypass auth for Cloud Function identity tokens
    */
+  @Public()
   @Get('fhir/Composition/:id/translated')
   async getCompositionTranslatedBinaries(
     @Param('id') id: string,
