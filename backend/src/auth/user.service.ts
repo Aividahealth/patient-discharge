@@ -174,5 +174,51 @@ export class UserService {
       throw error;
     }
   }
+
+  /**
+   * Find all users by tenant ID
+   */
+  async findByTenant(tenantId: string): Promise<User[]> {
+    try {
+      const snapshot = await this.getFirestore()
+        .collection(this.collectionName)
+        .where('tenantId', '==', tenantId)
+        .get();
+
+      if (snapshot.empty) {
+        return [];
+      }
+
+      return snapshot.docs.map(doc => {
+        const userData = doc.data();
+        return {
+          id: doc.id,
+          ...userData,
+          createdAt: userData.createdAt?.toDate() || new Date(),
+          updatedAt: userData.updatedAt?.toDate() || new Date(),
+        } as User;
+      });
+    } catch (error) {
+      this.logger.error(`Error finding users by tenant: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a user
+   */
+  async delete(id: string): Promise<void> {
+    try {
+      await this.getFirestore()
+        .collection(this.collectionName)
+        .doc(id)
+        .delete();
+
+      this.logger.log(`Deleted user: ${id}`);
+    } catch (error) {
+      this.logger.error(`Error deleting user: ${error.message}`);
+      throw error;
+    }
+  }
 }
 

@@ -6,6 +6,7 @@ export interface User {
   username: string;
   passwordHash: string; // bcrypt hash
   name: string;
+  email?: string;
   role: UserRole;
   linkedPatientId?: string; // For patient role
 
@@ -39,7 +40,7 @@ export interface LoginResponse {
   expiresIn: number;
   user: {
     id: string;
-    tenantId: string;
+    tenantId: string | null; // null for system_admin
     username: string;
     name: string;
     role: string;
@@ -58,7 +59,7 @@ export interface LoginResponse {
 
 export interface JWTPayload {
   userId: string;
-  tenantId: string;
+  tenantId: string | null; // null for system_admin
   username: string;
   name: string;
   role: string;
@@ -75,5 +76,40 @@ export interface AuthPayload {
   name?: string;         // For user type
   role?: string;         // For user type
   tenantId?: string;
+}
+
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  linkedPatientId?: string;
+}
+
+export interface UpdateUserRequest {
+  name?: string;
+  email?: string;
+  role?: UserRole;
+  linkedPatientId?: string;
+  password?: string; // Optional password change
+}
+
+export interface UserResponse {
+  id: string;
+  tenantId: string | null; // null for system_admin only
+  username: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  linkedPatientId?: string;
+  isActive: boolean;
+  isLocked: boolean;
+  failedLoginAttempts: number;
+  lastSuccessfulLoginAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+  lastUpdatedBy?: string;
 }
 
