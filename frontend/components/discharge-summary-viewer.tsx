@@ -175,7 +175,7 @@ export function DischargeSummaryViewer({
           <CardContent className="flex-1">
             {rawContent?.content?.content ? (
               <>
-                <div className="bg-muted/30 p-4 rounded-lg max-h-[75vh] overflow-y-auto">
+                <div className="bg-muted/30 p-4 rounded-lg">
                   <div className="prose prose-sm max-w-none">
                     <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
                       {rawContent.content.content}
@@ -219,7 +219,7 @@ export function DischargeSummaryViewer({
           <CardContent className="flex-1">
             {simplifiedContent?.content?.content ? (
               <>
-                <div className="bg-muted/30 p-4 rounded-lg max-h-[75vh] overflow-y-auto">
+                <div className="bg-muted/30 p-4 rounded-lg">
                   <div className="prose prose-sm max-w-none">
                     <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
                       {simplifiedContent.content.content}
