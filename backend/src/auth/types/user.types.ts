@@ -6,6 +6,7 @@ export interface User {
   username: string;
   passwordHash: string; // bcrypt hash
   name: string;
+  email?: string;
   role: UserRole;
   linkedPatientId?: string; // For patient role
   createdAt: Date;
@@ -60,5 +61,34 @@ export interface AuthPayload {
   name?: string;         // For user type
   role?: string;         // For user type
   tenantId?: string;
+}
+
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  linkedPatientId?: string;
+}
+
+export interface UpdateUserRequest {
+  name?: string;
+  email?: string;
+  role?: UserRole;
+  linkedPatientId?: string;
+  password?: string; // Optional password change
+}
+
+export interface UserResponse {
+  id: string;
+  tenantId: string;
+  username: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  linkedPatientId?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
