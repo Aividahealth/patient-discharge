@@ -1,11 +1,10 @@
 import { Controller, Post, Body, UseGuards, Req, HttpException, HttpStatus } from '@nestjs/common';
 import { PatientChatbotService } from './patient-chatbot.service';
 import { ChatMessageDto, ChatResponseDto } from './dto/chat-message.dto';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { TenantGuard } from '../tenant/tenant.guard';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Controller('api/patient-chatbot')
-@UseGuards(JwtAuthGuard, TenantGuard)
+@UseGuards(AuthGuard)
 export class PatientChatbotController {
   constructor(private readonly chatbotService: PatientChatbotService) {}
 
