@@ -663,14 +663,28 @@ export default function ClinicianDashboard() {
 
   // Load discharge queue from API
   const loadDischargeQueue = async () => {
+    console.log('[ClinicianPortal] loadDischargeQueue called', { 
+      hasToken: !!token, 
+      hasTenantId: !!tenantId,
+      tenantId 
+    });
+    
     if (!token || !tenantId) {
-      console.warn('[ClinicianPortal] Cannot load queue - missing token or tenantId');
+      console.warn('[ClinicianPortal] Cannot load queue - missing token or tenantId', {
+        token: !!token,
+        tenantId: !!tenantId
+      });
       return;
     }
 
+    console.log('[ClinicianPortal] Starting to fetch discharge queue from API...');
     setIsLoadingQueue(true);
     try {
       const queueData = await getDischargeQueue(token, tenantId);
+      console.log('[ClinicianPortal] Discharge queue fetched successfully:', {
+        patientCount: queueData.patients?.length || 0,
+        meta: queueData.meta
+      });
       
       // Transform API patients to component format
       const transformedPatients = queueData.patients.map((p: DischargeQueuePatient) => ({
@@ -710,7 +724,14 @@ export default function ClinicianDashboard() {
       }
     } catch (error) {
       console.error('[ClinicianPortal] Failed to load discharge queue:', error);
+      if (error instanceof Error) {
+        console.error('[ClinicianPortal] Error details:', {
+          message: error.message,
+          stack: error.stack
+        });
+      }
     } finally {
+      console.log('[ClinicianPortal] Setting isLoadingQueue to false');
       setIsLoadingQueue(false);
     }
   };
@@ -791,8 +812,20 @@ export default function ClinicianDashboard() {
 
   // Load discharge queue on mount
   useEffect(() => {
+    console.log('[ClinicianDashboard] Discharge queue effect:', { 
+      hasToken: !!token, 
+      hasTenantId: !!tenantId, 
+      token: token ? `${token.substring(0, 20)}...` : null,
+      tenantId 
+    });
     if (token && tenantId) {
+      console.log('[ClinicianDashboard] Calling loadDischargeQueue...');
       loadDischargeQueue();
+    } else {
+      console.warn('[ClinicianDashboard] Cannot load discharge queue - missing token or tenantId', {
+        token: !!token,
+        tenantId: !!tenantId
+      });
     }
   }, [token, tenantId]);
 

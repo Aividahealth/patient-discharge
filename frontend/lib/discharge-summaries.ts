@@ -310,7 +310,14 @@ export async function getDischargeQueue(
   token: string,
   tenantId: string
 ): Promise<DischargeQueueResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/patients/discharge-queue`, {
+  const url = `${API_BASE_URL}/api/patients/discharge-queue`;
+  console.log('[getDischargeQueue] Making request to:', url, {
+    tenantId,
+    hasToken: !!token,
+    tokenPreview: token ? `${token.substring(0, 20)}...` : null
+  });
+
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -319,11 +326,29 @@ export async function getDischargeQueue(
     },
   });
 
+  console.log('[getDischargeQueue] Response received:', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+    headers: Object.fromEntries(response.headers.entries())
+  });
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch discharge queue: ${response.statusText}`);
+    const errorText = await response.text().catch(() => 'Could not read error response');
+    console.error('[getDischargeQueue] Error response:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText
+    });
+    throw new Error(`Failed to fetch discharge queue: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('[getDischargeQueue] Response data:', {
+    patientCount: data.patients?.length || 0,
+    meta: data.meta
+  });
+  return data;
 }
 
 /**
