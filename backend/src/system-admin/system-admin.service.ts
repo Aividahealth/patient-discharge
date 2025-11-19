@@ -3,6 +3,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { DevConfigService } from '../config/dev-config.service';
 import { AuthService } from '../auth/auth.service';
 import { UserService } from '../auth/user.service';
+import { GcpInfrastructureService } from './gcp-infrastructure.service';
 import { resolveServiceAccountPath } from '../utils/path.helper';
 import {
   TenantConfig,
@@ -22,6 +23,7 @@ export class SystemAdminService {
     private readonly configService: DevConfigService,
     private readonly authService: AuthService,
     private readonly userService: UserService,
+    private readonly gcpInfrastructure: GcpInfrastructureService,
   ) {}
 
   /**
@@ -69,6 +71,24 @@ export class SystemAdminService {
 
       snapshot.forEach(doc => {
         const data = doc.data();
+
+        // Convert Firestore infrastructure data
+        let infrastructure: TenantConfig['infrastructure'] | undefined;
+        if (data.infrastructure) {
+          infrastructure = {
+            buckets: data.infrastructure.buckets || {
+              raw: false,
+              simplified: false,
+              translated: false,
+            },
+            fhir: data.infrastructure.fhir || {
+              dataset: false,
+              store: false,
+            },
+            lastChecked: data.infrastructure.lastChecked?.toDate(),
+          };
+        }
+
         tenants.push({
           id: doc.id,
           name: data.name || doc.id,
@@ -83,6 +103,7 @@ export class SystemAdminService {
             expertPortal: true,
             chatbot: true,
           },
+          infrastructure,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
         });
@@ -110,6 +131,24 @@ export class SystemAdminService {
       }
 
       const data = doc.data()!;
+
+      // Convert Firestore infrastructure data
+      let infrastructure: TenantConfig['infrastructure'] | undefined;
+      if (data.infrastructure) {
+        infrastructure = {
+          buckets: data.infrastructure.buckets || {
+            raw: false,
+            simplified: false,
+            translated: false,
+          },
+          fhir: data.infrastructure.fhir || {
+            dataset: false,
+            store: false,
+          },
+          lastChecked: data.infrastructure.lastChecked?.toDate(),
+        };
+      }
+
       return {
         id: doc.id,
         name: data.name || doc.id,
@@ -124,6 +163,7 @@ export class SystemAdminService {
           expertPortal: true,
           chatbot: true,
         },
+        infrastructure,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
       };
@@ -145,7 +185,7 @@ export class SystemAdminService {
       }
 
       const now = new Date();
-      const tenantData = {
+      const tenantData: any = {
         name: request.name,
         branding: request.branding,
         features: request.features || {
@@ -157,6 +197,29 @@ export class SystemAdminService {
         createdAt: now,
         updatedAt: now,
       };
+
+      // Provision GCP infrastructure
+      this.logger.log(`Provisioning infrastructure for tenant: ${request.id}`);
+      const infrastructureResult = await this.gcpInfrastructure.provisionAll(request.id);
+
+      // Store infrastructure status
+      const status = await this.gcpInfrastructure.checkInfrastructureStatus(request.id);
+      tenantData.infrastructure = {
+        buckets: status.buckets,
+        fhir: status.fhir,
+        lastChecked: now,
+      };
+
+      // Log any errors during provisioning
+      if (!infrastructureResult.success) {
+        const allErrors = [
+          ...infrastructureResult.buckets.errors,
+          ...infrastructureResult.fhir.errors,
+        ];
+        this.logger.warn(
+          `Infrastructure provisioning completed with errors for tenant ${request.id}: ${allErrors.join(', ')}`
+        );
+      }
 
       await this.getFirestore()
         .collection('config')
@@ -175,6 +238,7 @@ export class SystemAdminService {
           expertPortal: tenantData.features.expertPortal ?? true,
           chatbot: tenantData.features.chatbot ?? true,
         },
+        infrastructure: tenantData.infrastructure,
         createdAt: tenantData.createdAt,
         updatedAt: tenantData.updatedAt,
       };
@@ -239,6 +303,27 @@ export class SystemAdminService {
       const existing = await this.getTenant(tenantId);
       if (!existing) {
         throw new NotFoundException(`Tenant ${tenantId} not found`);
+      }
+
+      // Delete GCP infrastructure first
+      this.logger.log(`Deleting GCP infrastructure for tenant: ${tenantId}`);
+      try {
+        const infrastructureResult = await this.gcpInfrastructure.deleteAll(tenantId);
+
+        if (!infrastructureResult.success) {
+          const allErrors = [
+            ...infrastructureResult.buckets.errors,
+            ...infrastructureResult.fhir.errors,
+          ];
+          this.logger.warn(
+            `Infrastructure deletion completed with errors for tenant ${tenantId}: ${allErrors.join(', ')}`
+          );
+        } else {
+          this.logger.log(`Successfully deleted infrastructure for tenant: ${tenantId}`);
+        }
+      } catch (error) {
+        this.logger.error(`Error deleting infrastructure for tenant ${tenantId}: ${error.message}`);
+        // Continue with Firestore deletion even if infrastructure deletion fails
       }
 
       // Delete tenant config
@@ -435,6 +520,93 @@ export class SystemAdminService {
       return aggregated;
     } catch (error) {
       this.logger.error(`Error getting aggregated metrics: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Check infrastructure status for a tenant
+   */
+  async checkInfrastructure(tenantId: string): Promise<any> {
+    try {
+      const tenant = await this.getTenant(tenantId);
+      if (!tenant) {
+        throw new NotFoundException(`Tenant ${tenantId} not found`);
+      }
+
+      const status = await this.gcpInfrastructure.checkInfrastructureStatus(tenantId);
+
+      // Update Firestore with current status
+      await this.getFirestore()
+        .collection('config')
+        .doc(tenantId)
+        .update({
+          infrastructure: {
+            buckets: status.buckets,
+            fhir: status.fhir,
+            lastChecked: new Date(),
+          },
+          updatedAt: new Date(),
+        });
+
+      this.logger.log(`Checked infrastructure for tenant: ${tenantId}`);
+
+      return {
+        tenantId,
+        status,
+        allReady: Object.values(status.buckets).every(v => v) && Object.values(status.fhir).every(v => v),
+      };
+    } catch (error) {
+      this.logger.error(`Error checking infrastructure for tenant ${tenantId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Provision or repair infrastructure for an existing tenant
+   */
+  async provisionInfrastructure(tenantId: string): Promise<any> {
+    try {
+      const tenant = await this.getTenant(tenantId);
+      if (!tenant) {
+        throw new NotFoundException(`Tenant ${tenantId} not found`);
+      }
+
+      this.logger.log(`Provisioning/repairing infrastructure for tenant: ${tenantId}`);
+
+      const result = await this.gcpInfrastructure.provisionAll(tenantId);
+      const status = await this.gcpInfrastructure.checkInfrastructureStatus(tenantId);
+
+      // Update Firestore with current status
+      await this.getFirestore()
+        .collection('config')
+        .doc(tenantId)
+        .update({
+          infrastructure: {
+            buckets: status.buckets,
+            fhir: status.fhir,
+            lastChecked: new Date(),
+          },
+          updatedAt: new Date(),
+        });
+
+      this.logger.log(`Infrastructure provisioning completed for tenant: ${tenantId}`);
+
+      return {
+        tenantId,
+        success: result.success,
+        created: {
+          buckets: result.buckets.created,
+          fhir: result.fhir.created,
+        },
+        errors: {
+          buckets: result.buckets.errors,
+          fhir: result.fhir.errors,
+        },
+        status,
+      };
+    } catch (error) {
+      this.logger.error(`Error provisioning infrastructure for tenant ${tenantId}: ${error.message}`);
       throw error;
     }
   }
