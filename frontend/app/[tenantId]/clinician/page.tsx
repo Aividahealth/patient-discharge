@@ -17,6 +17,7 @@ import { AuthGuard } from "@/components/auth-guard"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { FileUploadModal } from "@/components/file-upload-modal"
 import { MarkdownRenderer, markdownToHtml } from "@/components/markdown-renderer"
+import { SimplifiedDischargeSummary, SimplifiedDischargeInstructions } from "@/components/simplified-discharge-renderer"
 import { useTenant } from "@/contexts/tenant-context"
 import { usePDFExport } from "@/hooks/use-pdf-export"
 import { getDischargeSummaryRenderer } from "@/components/discharge-renderers/renderer-registry"
@@ -1605,59 +1606,19 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                         </div>
                       ) : (
                         <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-[70vh] overflow-y-auto">
-                          <div>
-                            <h4 className="font-medium mb-2">{t.whatHappenedDuringStay}</h4>
-                            <MarkdownRenderer
-                              content={(() => {
-                                const overview = currentPatient?.patientFriendly?.overview;
-                                if (!overview) return '';
-                                if (typeof overview === 'string') {
-                                  return extractOverviewOnly(overview);
-                                }
-                                const raw = overview[language as keyof typeof overview] || overview.en || '';
-                                return extractOverviewOnly(raw);
-                              })()}
+                          {currentPatient?.aiSimplifiedSummary && (
+                            <SimplifiedDischargeSummary 
+                              content={currentPatient.aiSimplifiedSummary} 
                             />
-                          </div>
-                          <div>
-                            <h4 className="font-medium mb-2">{t.yourMedications}</h4>
-                            <MarkdownRenderer
-                              content={(() => {
-                                const medications = currentPatient?.patientFriendly?.medications;
-                                if (!medications) return '';
-                                const raw = typeof medications === 'string'
-                                  ? medications
-                                  : (medications[language as keyof typeof medications] || medications.en || '');
-                                return stripLeadingHeader(raw, [/^(?:Your\s+medications|Medications|Medication):?\s*$/i]);
-                              })()}
+                          )}
+                          {currentPatient?.aiSimplifiedInstructions && (
+                            <SimplifiedDischargeInstructions 
+                              content={currentPatient.aiSimplifiedInstructions} 
                             />
-                          </div>
-                          <div>
-                            <h4 className="font-medium mb-2">{t.yourAppointments}</h4>
-                            <MarkdownRenderer
-                              content={(() => {
-                                const appointments = currentPatient?.patientFriendly?.appointments;
-                                if (!appointments) return '';
-                                const raw = typeof appointments === 'string'
-                                  ? appointments
-                                  : (appointments[language as keyof typeof appointments] || appointments.en || '');
-                                return stripLeadingHeader(raw, [/^(?:Your\s+appointments|Appointments|Follow-?up(?:\s+appointments)?):?\s*$/i]);
-                              })()}
-                            />
-                          </div>
-                          <div>
-                            <h4 className="font-medium mb-2">{t.activityGuidelines}</h4>
-                            <MarkdownRenderer
-                              content={(() => {
-                                const activity = currentPatient?.patientFriendly?.activity;
-                                if (!activity) return '';
-                                const raw = typeof activity === 'string'
-                                  ? activity
-                                  : (activity[language as keyof typeof activity] || activity.en || '');
-                                return stripLeadingHeader(raw, [/^(?:Activity(?:\s+guidelines)?|Diet\s+and\s+activity|Activity\s+restrictions):?\s*$/i]);
-                              })()}
-                            />
-                          </div>
+                          )}
+                          {!currentPatient?.aiSimplifiedSummary && !currentPatient?.aiSimplifiedInstructions && (
+                            <p className="text-muted-foreground">No simplified content available</p>
+                          )}
                         </div>
                       )}
                     </CardContent>
