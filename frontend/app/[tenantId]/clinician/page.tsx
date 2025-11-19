@@ -1256,15 +1256,20 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
               <CardDescription>{t.patientsReady}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button 
-                className="w-full justify-start bg-transparent" 
-                variant="outline"
-                onClick={() => setShowUploadModal(true)}
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                {t.uploadNewSummary}
-              </Button>
-              <Separator />
+              {/* Only show Upload button if EHR integration is Manual */}
+              {tenant?.ehrIntegration?.type === 'Manual' && (
+                <>
+                  <Button 
+                    className="w-full justify-start bg-transparent" 
+                    variant="outline"
+                    onClick={() => setShowUploadModal(true)}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {t.uploadNewSummary}
+                  </Button>
+                  <Separator />
+                </>
+              )}
               <div className="flex items-center justify-end">
                 <Button
                   variant="ghost"

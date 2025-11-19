@@ -37,6 +37,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Separator } from "@/components/ui/separator"
 
 export default function SystemAdminPortal() {
   const router = useRouter()
@@ -64,6 +65,9 @@ export default function SystemAdminPortal() {
       clinicianPortal: true,
       expertPortal: true,
       chatbot: true,
+    },
+    ehrIntegration: {
+      type: 'Manual',
     },
   })
 
@@ -587,6 +591,396 @@ export default function SystemAdminPortal() {
                           <label htmlFor="feature-chatbot" className="text-sm">Chatbot</label>
                         </div>
                       </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="ehr-integration">EHR Integration *</Label>
+                        <select
+                          id="ehr-integration"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2"
+                          value={newTenant.ehrIntegration?.type || 'Manual'}
+                          onChange={(e) => {
+                            const ehrType = e.target.value as 'Manual' | 'Cerner' | 'EPIC'
+                            setNewTenant({
+                              ...newTenant,
+                              ehrIntegration: {
+                                type: ehrType,
+                                ...(ehrType === 'Cerner' ? {
+                                  cerner: {
+                                    base_url: '',
+                                    system_app: {
+                                      client_id: '',
+                                      client_secret: '',
+                                      token_url: '',
+                                      scopes: '',
+                                    },
+                                    provider_app: {
+                                      client_id: '',
+                                      client_secret: '',
+                                      authorization_url: '',
+                                      token_url: '',
+                                      redirect_uri: '',
+                                      scopes: '',
+                                    },
+                                  }
+                                } : {}),
+                              }
+                            })
+                          }}
+                          required
+                        >
+                          <option value="Manual">Manual</option>
+                          <option value="Cerner">Cerner</option>
+                          <option value="EPIC">EPIC</option>
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          Manual: Upload button shown, no EHR polling. Cerner/EPIC: No upload button, EHR polling enabled.
+                        </p>
+                      </div>
+
+                      {/* Cerner Configuration */}
+                      {newTenant.ehrIntegration?.type === 'Cerner' && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                          <Label className="text-base font-semibold">Cerner Configuration</Label>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="cerner-base-url">Base URL *</Label>
+                            <Input
+                              id="cerner-base-url"
+                              placeholder="https://fhir.cerner.com/..."
+                              value={newTenant.ehrIntegration?.cerner?.base_url || ''}
+                              onChange={(e) => setNewTenant({
+                                ...newTenant,
+                                ehrIntegration: {
+                                  ...newTenant.ehrIntegration!,
+                                  cerner: {
+                                    ...newTenant.ehrIntegration?.cerner,
+                                    base_url: e.target.value,
+                                    system_app: newTenant.ehrIntegration?.cerner?.system_app || {
+                                      client_id: '',
+                                      client_secret: '',
+                                      token_url: '',
+                                      scopes: '',
+                                    },
+                                    provider_app: newTenant.ehrIntegration?.cerner?.provider_app || {
+                                      client_id: '',
+                                      client_secret: '',
+                                      authorization_url: '',
+                                      token_url: '',
+                                      redirect_uri: '',
+                                      scopes: '',
+                                    },
+                                  }
+                                }
+                              })}
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-semibold">System App (for background polling)</Label>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-client-id">Client ID *</Label>
+                                  <Input
+                                    id="cerner-system-client-id"
+                                    placeholder="System app client ID"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.client_id || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: e.target.value,
+                                            client_secret: newTenant.ehrIntegration?.cerner?.system_app?.client_secret || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.system_app?.token_url || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.system_app?.scopes || '',
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-client-secret">Client Secret *</Label>
+                                  <Input
+                                    id="cerner-system-client-secret"
+                                    type="password"
+                                    placeholder="System app client secret"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.client_secret || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.system_app?.client_id || '',
+                                            client_secret: e.target.value,
+                                            token_url: newTenant.ehrIntegration?.cerner?.system_app?.token_url || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.system_app?.scopes || '',
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-token-url">Token URL *</Label>
+                                  <Input
+                                    id="cerner-system-token-url"
+                                    placeholder="https://authorization.cerner.com/token"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.token_url || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.system_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.system_app?.client_secret || '',
+                                            token_url: e.target.value,
+                                            scopes: newTenant.ehrIntegration?.cerner?.system_app?.scopes || '',
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-scopes">Scopes *</Label>
+                                  <Input
+                                    id="cerner-system-scopes"
+                                    placeholder="system/Patient.read system/Observation.read"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.scopes || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.system_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.system_app?.client_secret || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.system_app?.token_url || '',
+                                            scopes: e.target.value,
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="text-sm font-semibold">Provider App (for user authentication)</Label>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-client-id">Client ID</Label>
+                                  <Input
+                                    id="cerner-provider-client-id"
+                                    placeholder="Provider app client ID"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.client_id || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: e.target.value,
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-client-secret">Client Secret</Label>
+                                  <Input
+                                    id="cerner-provider-client-secret"
+                                    type="password"
+                                    placeholder="Provider app client secret"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: e.target.value,
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-auth-url">Authorization URL</Label>
+                                  <Input
+                                    id="cerner-provider-auth-url"
+                                    placeholder="https://authorization.cerner.com/authorize"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: e.target.value,
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-token-url">Token URL</Label>
+                                  <Input
+                                    id="cerner-provider-token-url"
+                                    placeholder="https://authorization.cerner.com/token"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.token_url || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: e.target.value,
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-redirect-uri">Redirect URI</Label>
+                                  <Input
+                                    id="cerner-provider-redirect-uri"
+                                    placeholder="https://your-app.com/callback"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: e.target.value,
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-scopes">Scopes</Label>
+                                  <Input
+                                    id="cerner-provider-scopes"
+                                    placeholder="user/Patient.read user/Observation.read"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.scopes || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: e.target.value,
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* EPIC Configuration - Placeholder for future */}
+                      {newTenant.ehrIntegration?.type === 'EPIC' && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                          <Label className="text-base font-semibold">EPIC Configuration</Label>
+                          <p className="text-sm text-muted-foreground">EPIC integration configuration coming soon.</p>
+                        </div>
+                      )}
                     </div>
 
                     <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
