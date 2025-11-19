@@ -103,8 +103,13 @@ export function TenantProvider({ children }: TenantProviderProps) {
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [lastActivity, setLastActivity] = useState<number>(Date.now())
   const pathname = usePathname()
   const router = useRouter()
+
+  // SECURITY: Idle timeout settings (HIPAA M-5)
+  const IDLE_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
+  const ACTIVITY_CHECK_INTERVAL_MS = 60 * 1000 // Check every minute
 
   // Extract tenant ID from URL path: /:tenantId/...
   useEffect(() => {
@@ -167,6 +172,49 @@ export function TenantProvider({ children }: TenantProviderProps) {
 
     loadAuthData()
   }, [])
+
+  // SECURITY: Track user activity for idle timeout (HIPAA M-5)
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const updateActivity = () => {
+      setLastActivity(Date.now())
+    }
+
+    // Track various user activities
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click']
+    events.forEach(event => {
+      document.addEventListener(event, updateActivity, { passive: true })
+    })
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, updateActivity)
+      })
+    }
+  }, [isAuthenticated])
+
+  // SECURITY: Check for idle timeout and auto-logout (HIPAA M-5)
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const checkIdleTimeout = () => {
+      const now = Date.now()
+      const idleTime = now - lastActivity
+
+      if (idleTime >= IDLE_TIMEOUT_MS) {
+        console.warn('[TenantContext] Session timed out due to inactivity')
+        logout()
+      }
+    }
+
+    // Check for idle timeout every minute
+    const intervalId = setInterval(checkIdleTimeout, ACTIVITY_CHECK_INTERVAL_MS)
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [isAuthenticated, lastActivity, logout])
 
   const login = async (authData: AuthData) => {
     try {

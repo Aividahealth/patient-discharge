@@ -38,6 +38,18 @@ export interface DischargeSummaryFiles {
   };
 }
 
+/**
+ * SECURITY: Document integrity checksums (HIPAA M-4)
+ * SHA-256 hashes to detect tampering or corruption
+ */
+export interface DischargeSummaryChecksums {
+  raw?: string; // SHA-256 checksum of raw file
+  simplified?: string; // SHA-256 checksum of simplified file
+  translated?: {
+    [key in DischargeSummaryLanguage]?: string; // SHA-256 checksums of translated files
+  };
+}
+
 export interface DischargeSummaryMetadata {
   id: string; // Unique identifier
   patientId?: string; // Patient identifier
@@ -48,6 +60,7 @@ export interface DischargeSummaryMetadata {
   dischargeDate?: Date; // Discharge date
   status: DischargeSummaryStatus;
   files: DischargeSummaryFiles;
+  checksums?: DischargeSummaryChecksums; // SECURITY: Integrity verification (HIPAA M-4)
   createdAt: Date;
   updatedAt: Date;
   simplifiedAt?: Date; // When simplified version was created

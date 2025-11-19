@@ -1,8 +1,9 @@
 import { Controller, Post, Body, HttpException, HttpStatus, Logger, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
-import type { LoginRequest, LoginResponse } from './types/user.types';
+import type { LoginResponse } from './types/user.types';
 import { Public } from './auth.guard';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('api/auth')
 export class AuthController {
@@ -14,28 +15,25 @@ export class AuthController {
    * POST /api/auth/login
    * Simple password-based login for any user
    * SECURITY: Sets JWT token in HttpOnly cookie instead of response body
+   * SECURITY: Input validation via LoginDto prevents injection attacks
    */
   @Public()
   @Post('login')
   async login(
-    @Body() request: LoginRequest,
+    @Body() loginDto: LoginDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<Omit<LoginResponse, 'token'>> {
     try {
-      this.logger.log(`📝 Login request for user: ${request.username} in tenant: ${request.tenantId}`);
+      this.logger.log(`📝 Login request for user: ${loginDto.username} in tenant: ${loginDto.tenantId}`);
 
-      // Validate request
-      if (!request.tenantId || !request.username || !request.password) {
-        throw new HttpException(
-          {
-            message: 'Missing required fields',
-            error: 'tenantId, username, and password are required',
-          },
-          HttpStatus.BAD_REQUEST,
-        );
-      }
+      // Convert DTO to LoginRequest (validation already done by ValidationPipe)
+      const loginRequest = {
+        tenantId: loginDto.tenantId,
+        username: loginDto.username,
+        password: loginDto.password,
+      };
 
-      const loginResponse = await this.authService.login(request);
+      const loginResponse = await this.authService.login(loginRequest);
 
       // SECURITY: Set JWT token in HttpOnly cookie (not accessible to JavaScript)
       response.cookie('auth_token', loginResponse.token, {
