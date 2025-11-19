@@ -122,22 +122,26 @@ export function TenantProvider({ children }: TenantProviderProps) {
         setTenant(authData.tenant)
         setTenantId(authData.tenant.id)
 
-        // Fetch the latest tenant config from the backend
-        try {
-          const { getTenantConfig } = await import('@/lib/api/auth')
-          const configResponse = await getTenantConfig(authData.tenant.id, authData.token)
+        // Fetch the latest tenant config from the backend (skip for system_admin users)
+        if (authData.user.role !== 'system_admin') {
+          try {
+            const { getTenantConfig } = await import('@/lib/api/auth')
+            const configResponse = await getTenantConfig(authData.tenant.id, authData.token)
 
-          if (configResponse.success && configResponse.tenant) {
-            console.log('[TenantContext] Loaded tenant config:', configResponse.tenant)
-            setTenant(configResponse.tenant)
+            if (configResponse.success && configResponse.tenant) {
+              console.log('[TenantContext] Loaded tenant config:', configResponse.tenant)
+              setTenant(configResponse.tenant)
 
-            // Update stored auth data with full tenant config
-            authData.tenant = configResponse.tenant
-            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
+              // Update stored auth data with full tenant config
+              authData.tenant = configResponse.tenant
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
+            }
+          } catch (configError) {
+            console.warn('[TenantContext] Failed to load tenant config, using cached data:', configError)
+            // Continue with cached tenant data if config fetch fails
           }
-        } catch (configError) {
-          console.warn('[TenantContext] Failed to load tenant config, using cached data:', configError)
-          // Continue with cached tenant data if config fetch fails
+        } else {
+          console.log('[TenantContext] Skipping tenant config load for system_admin user')
         }
       } catch (error) {
         console.error('Error loading auth data:', error)
@@ -162,19 +166,23 @@ export function TenantProvider({ children }: TenantProviderProps) {
       setTenant(authData.tenant)
       setTenantId(authData.tenant.id)
 
-      // Fetch full tenant config from backend
-      try {
-        const { getTenantConfig } = await import('@/lib/api/auth')
-        const configResponse = await getTenantConfig(authData.tenant.id, authData.token)
+      // Fetch full tenant config from backend (skip for system_admin users)
+      if (authData.user.role !== 'system_admin') {
+        try {
+          const { getTenantConfig } = await import('@/lib/api/auth')
+          const configResponse = await getTenantConfig(authData.tenant.id, authData.token)
 
-        if (configResponse.success && configResponse.tenant) {
-          console.log('[TenantContext] Fetched tenant config:', configResponse.tenant)
-          authData.tenant = configResponse.tenant
-          setTenant(configResponse.tenant)
+          if (configResponse.success && configResponse.tenant) {
+            console.log('[TenantContext] Fetched tenant config:', configResponse.tenant)
+            authData.tenant = configResponse.tenant
+            setTenant(configResponse.tenant)
+          }
+        } catch (configError) {
+          console.warn('[TenantContext] Failed to fetch tenant config, using login data:', configError)
+          // Continue with tenant data from login response
         }
-      } catch (configError) {
-        console.warn('[TenantContext] Failed to fetch tenant config, using login data:', configError)
-        // Continue with tenant data from login response
+      } else {
+        console.log('[TenantContext] Skipping tenant config fetch for system_admin user')
       }
 
       // Save to localStorage with full config
