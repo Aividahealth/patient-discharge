@@ -1,0 +1,416 @@
+import { Injectable, Logger } from '@nestjs/common';
+import axios from 'axios';
+import * as qs from 'qs';
+import { IEHRService, EHRVendor, EHRCapabilities, BinaryDocument } from '../interfaces/ehr-service.interface';
+import { DevConfigService } from '../../config/dev-config.service';
+import { AuditService } from '../../audit/audit.service';
+import { TenantContext } from '../../tenant/tenant-context';
+import { AuthType } from '../../cerner-auth/types/auth.types';
+
+/**
+ * Cerner EHR adapter implementing IEHRService
+ * Handles all Cerner-specific FHIR operations and authentication
+ */
+@Injectable()
+export class CernerAdapter implements IEHRService {
+  private readonly logger = new Logger(CernerAdapter.name);
+  private accessToken: string | null = null;
+  private accessTokenExpiryMs: number | null = null;
+
+  constructor(
+    private readonly configService: DevConfigService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  getVendor(): EHRVendor {
+    return EHRVendor.CERNER;
+  }
+
+  getCapabilities(): EHRCapabilities {
+    return {
+      supportsFHIRR4: true,
+      supportsSMARTonFHIR: true,
+      supportsPatientAccess: true,
+      supportsProviderAccess: true,
+      supportedResourceTypes: [
+        'Patient',
+        'Encounter',
+        'DocumentReference',
+        'Composition',
+        'Binary',
+        'Observation',
+        'Condition',
+        'Medication',
+        'MedicationRequest',
+        'Procedure',
+        'AllergyIntolerance',
+        'Immunization',
+      ],
+      supportsDelete: true,
+      supportsUpdate: true,
+      maxSearchCount: undefined, // Unlimited
+    };
+  }
+
+  private async getBaseUrl(ctx: TenantContext): Promise<string> {
+    const ehrConfig = await this.configService.getTenantEHRConfig(ctx.tenantId);
+    if (!ehrConfig?.base_url) {
+      throw new Error(`Missing EHR base_url for tenant: ${ctx.tenantId}`);
+    }
+    return ehrConfig.base_url;
+  }
+
+  async authenticate(ctx: TenantContext, authType: AuthType = AuthType.SYSTEM): Promise<boolean> {
+    if (!this.configService.isLoaded()) {
+      this.logger.warn('Config not loaded yet, skipping authentication');
+      return false;
+    }
+
+    if (authType === AuthType.SYSTEM) {
+      return this.authenticateSystemApp(ctx);
+    } else {
+      return this.authenticateProviderApp(ctx);
+    }
+  }
+
+  private async authenticateSystemApp(ctx: TenantContext): Promise<boolean> {
+    this.logger.log(`Authenticating with Cerner system app for tenant: ${ctx.tenantId}`);
+
+    let ehrConfig;
+    try {
+      ehrConfig = await this.configService.getTenantEHRSystemConfig(ctx.tenantId);
+    } catch (error) {
+      this.logger.warn('Config not loaded yet, skipping authentication');
+      return false;
+    }
+
+    if (!ehrConfig?.client_id || !ehrConfig?.client_secret || !ehrConfig?.token_url || !ehrConfig?.scopes) {
+      this.logger.error('Missing Cerner system app configuration');
+      return false;
+    }
+
+    const credentials = Buffer.from(`${ehrConfig.client_id}:${ehrConfig.client_secret}`).toString('base64');
+    const headers = {
+      Authorization: `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+    const data = qs.stringify({
+      grant_type: 'client_credentials',
+      scope: ehrConfig.scopes,
+    });
+
+    try {
+      const response = await axios.post(ehrConfig.token_url, data, { headers });
+      this.accessToken = response.data.access_token;
+      const expiresInSec: number | undefined = response.data.expires_in;
+      // Refresh one minute before actual expiry
+      const refreshBufferMs = 60 * 1000;
+      if (expiresInSec && Number.isFinite(expiresInSec)) {
+        this.accessTokenExpiryMs = Date.now() + Math.max(0, (expiresInSec * 1000) - refreshBufferMs);
+      } else {
+        // Default to 45 minutes if expires_in is missing
+        this.accessTokenExpiryMs = Date.now() + (45 * 60 * 1000);
+      }
+      this.logger.log('Cerner system app authentication successful');
+      return true;
+    } catch (error) {
+      this.logger.error('Cerner system app authentication failed', error);
+      return false;
+    }
+  }
+
+  private async authenticateProviderApp(ctx: TenantContext): Promise<boolean> {
+    this.logger.log(`Authenticating with Cerner provider app for tenant: ${ctx.tenantId}, user: ${ctx.userId}`);
+
+    if (!ctx.userId) {
+      this.logger.error('User ID required for provider app authentication');
+      return false;
+    }
+
+    // TODO: Integrate with session service to get user's access token
+    this.logger.warn('Provider app authentication not yet fully implemented');
+    return false;
+  }
+
+  private isTokenValid(): boolean {
+    if (!this.accessToken) return false;
+    if (!this.accessTokenExpiryMs) return true;
+    return Date.now() < this.accessTokenExpiryMs;
+  }
+
+  isAuthenticated(): boolean {
+    return this.isTokenValid();
+  }
+
+  private async ensureAccessToken(ctx: TenantContext, authType: AuthType = AuthType.SYSTEM): Promise<boolean> {
+    if (this.isTokenValid()) {
+      this.logger.log('Reusing existing Cerner access token');
+      return true;
+    }
+    this.logger.log('Cerner access token expired or missing, fetching new token');
+    return this.authenticate(ctx, authType);
+  }
+
+  async createResource(resourceType: string, resource: any, ctx: TenantContext): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
+    if (!ok) {
+      this.logger.error('Authentication failed. Cannot create resource.');
+      return null;
+    }
+
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}`;
+    const headers = {
+      Authorization: `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/fhir+json',
+      Accept: 'application/fhir+json',
+    };
+
+    try {
+      const response = await axios.post(url, resource, { headers });
+      this.logger.log(`Created ${resourceType} successfully.`);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to create ${resourceType}`, error);
+      if (error.response) {
+        this.logger.error('Response:', error.response.data);
+        return error.response.data;
+      }
+      throw error;
+    }
+  }
+
+  async fetchResource(resourceType: string, resourceId: string, ctx: TenantContext): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
+    if (!ok) return null;
+
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}/${resourceId}`;
+    const headers = {
+      Authorization: `Bearer ${this.accessToken}`,
+      Accept: 'application/fhir+json',
+    };
+
+    try {
+      const response = await axios.get(url, { headers });
+      this.logger.log(`Fetched ${resourceType}/${resourceId} successfully.`);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to fetch ${resourceType}/${resourceId}`, error);
+      if (error.response) {
+        this.logger.error('Response:', error.response.data);
+        return error.response.data;
+      }
+      return null;
+    }
+  }
+
+  async updateResource(resourceType: string, resourceId: string, resource: any, ctx: TenantContext): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx);
+    if (!ok) return null;
+
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}/${resourceId}`;
+    const headers = {
+      Authorization: `Bearer ${this.accessToken}`,
+      'Content-Type': 'application/fhir+json',
+      Accept: 'application/fhir+json',
+    };
+
+    try {
+      const response = await axios.put(url, resource, { headers });
+      this.logger.log(`Updated ${resourceType}/${resourceId} successfully.`);
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to update ${resourceType}/${resourceId}`, error);
+      if (error.response) {
+        this.logger.error('Response:', error.response.data);
+        return error.response.data;
+      }
+      return null;
+    }
+  }
+
+  async deleteResource(resourceType: string, resourceId: string, ctx: TenantContext): Promise<boolean> {
+    const ok = await this.ensureAccessToken(ctx);
+    if (!ok) return false;
+
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}/${resourceId}`;
+    const headers = {
+      Authorization: `Bearer ${this.accessToken}`,
+      Accept: 'application/fhir+json',
+    };
+
+    try {
+      await axios.delete(url, { headers });
+      this.logger.log(`Deleted ${resourceType}/${resourceId} successfully.`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to delete ${resourceType}/${resourceId}`, error);
+      if (error.response) {
+        this.logger.error('Response:', error.response.data);
+        return error.response.data;
+      }
+      return false;
+    }
+  }
+
+  async searchResource(
+    resourceType: string,
+    query: Record<string, any>,
+    ctx: TenantContext,
+    authType: AuthType = AuthType.SYSTEM,
+  ): Promise<any | null> {
+    const ok = await this.ensureAccessToken(ctx, authType);
+    if (!ok) return null;
+
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/${resourceType}`;
+    const headers = {
+      Authorization: `Bearer ${this.accessToken}`,
+      Accept: 'application/fhir+json',
+    };
+
+    try {
+      const response = await axios.get(url, { headers, params: query });
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Failed to search ${resourceType}`, error);
+      if (error.response) {
+        this.logger.error('Response:', error.response.data);
+        return error.response.data;
+      }
+      return null;
+    }
+  }
+
+  async searchDischargeSummaries(patientId: string, ctx: TenantContext): Promise<any | null> {
+    this.logger.log(`Searching discharge summaries for patient ${patientId}`);
+
+    // Audit log the request
+    this.auditService.logFhirRequest({
+      action: 'search',
+      resourceType: 'DocumentReference',
+      resourceId: patientId,
+      endpoint: '/ehr/discharge-summaries',
+      method: 'GET',
+      metadata: { loincCode: '18842-5', vendor: 'cerner' },
+    });
+
+    // Try DocumentReference first
+    const docRefQuery = {
+      patient: patientId,
+      // type: 'http://loinc.org|18842-5' // Discharge Summary LOINC code
+    };
+
+    let result = await this.searchResource('DocumentReference', docRefQuery, ctx);
+
+    // If no DocumentReference results, try Composition
+    if (!result || (result.total === 0 && result.entry?.length === 0)) {
+      this.logger.log('No DocumentReference found, trying Composition');
+
+      // Audit log the fallback
+      this.auditService.logFhirRequest({
+        action: 'search',
+        resourceType: 'Composition',
+        resourceId: patientId,
+        endpoint: '/ehr/discharge-summaries',
+        method: 'GET',
+        metadata: { loincCode: '18842-5', fallback: true, vendor: 'cerner' },
+      });
+
+      const compQuery = {
+        patient: patientId,
+        // type: 'http://loinc.org|18842-5'
+      };
+
+      result = await this.searchResource('Composition', compQuery, ctx);
+    }
+
+    // Log processing stage
+    if (result && result.total > 0) {
+      this.auditService.logDocumentProcessing(
+        result.entry?.[0]?.resource?.id || 'unknown',
+        patientId,
+        'extracted',
+        { totalFound: result.total, vendor: 'cerner' },
+      );
+    }
+
+    return result;
+  }
+
+  async fetchBinaryDocument(binaryId: string, ctx: TenantContext, acceptType: string = 'application/octet-stream'): Promise<BinaryDocument | null> {
+    const ok = await this.ensureAccessToken(ctx);
+    if (!ok) return null;
+
+    const baseUrl = await this.getBaseUrl(ctx);
+    const url = `${baseUrl}/Binary/${binaryId}`;
+    const headers = {
+      Authorization: `Bearer ${this.accessToken}`,
+      Accept: acceptType,
+    };
+
+    try {
+      const response = await axios.get(url, { headers });
+      this.logger.log(`Fetched Binary/${binaryId} successfully.`);
+
+      // Validate binary data
+      const binaryData = response.data;
+      if (typeof binaryData === 'string' && binaryData.length < 10) {
+        this.logger.warn(`⚠️ Binary/${binaryId} contains invalid data: "${binaryData}" - likely corrupted or test data`);
+        return {
+          id: binaryId,
+          contentType: response.headers['content-type'] || acceptType,
+          data: null,
+          size: 0,
+          error: 'Invalid binary data - likely corrupted or test data',
+        };
+      }
+
+      return {
+        id: binaryId,
+        contentType: response.headers['content-type'] || acceptType,
+        data: binaryData,
+        size: binaryData.length,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to fetch Binary/${binaryId}`);
+      if (error.response) {
+        const errorData = error.response.data;
+        if (errorData?.issue?.[0]?.diagnostics) {
+          this.logger.error(`Error: ${errorData.issue[0].diagnostics.substring(0, 200)}...`);
+        } else {
+          this.logger.error(`HTTP ${error.response.status}: ${error.response.statusText}`);
+        }
+        return error.response.data;
+      }
+      return null;
+    }
+  }
+
+  parseDocumentReference(docRef: any): any {
+    if (!docRef || docRef.resourceType !== 'DocumentReference') {
+      return null;
+    }
+
+    const parsed = {
+      id: docRef.id,
+      status: docRef.status,
+      type: docRef.type,
+      patientId: docRef.subject?.reference?.replace('Patient/', ''),
+      date: docRef.date,
+      authors: docRef.author?.map((a: any) => a.display || a.reference),
+      content: docRef.content?.map((c: any) => ({
+        contentType: c.attachment?.contentType,
+        url: c.attachment?.url,
+        data: c.attachment?.data,
+        title: c.attachment?.title,
+        size: c.attachment?.size,
+      })),
+    };
+
+    return parsed;
+  }
+}

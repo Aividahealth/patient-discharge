@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { GoogleModule } from './google/google.module';
 import { ConfigModule } from './config/config.module';
 import { CernerModule } from './cerner/cerner.module';
+import { EHRModule } from './ehr/ehr.module';
 import { AuditModule } from './audit/audit.module';
 import { DischargeSummariesModule } from './discharge-summaries/discharge-summaries.module';
 import { DischargeExportModule } from './discharge-export/discharge-export.module';
@@ -21,7 +22,8 @@ import { SystemAdminModule } from './system-admin/system-admin.module';
   imports: [
     ConfigModule,
     GoogleModule,
-    CernerModule,
+    CernerModule, // Keep for backward compatibility (deprecated)
+    EHRModule, // NEW: Vendor-agnostic EHR integration
     AuditModule,
     DischargeSummariesModule,
     DischargeExportModule,
