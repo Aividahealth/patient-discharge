@@ -57,32 +57,32 @@ export default function SystemAdminLoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <CommonHeader title="System Admin Login" hideTenantInfo={true} />
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6">
           {/* Header */}
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-purple-600">
+              <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-cerner-blue">
                 <Shield className="h-12 w-12 text-white" />
               </div>
               <div className="text-left">
-                <h1 className="font-heading text-2xl font-bold text-purple-900">System Administration</h1>
-                <p className="text-sm text-purple-700">Multi-Tenant Management Portal</p>
+                <h1 className="font-heading text-2xl font-bold text-cerner-blue">System Administration</h1>
+                <p className="text-sm text-gray-700">Multi-Tenant Management Portal</p>
               </div>
             </div>
-            <p className="text-purple-800">Sign in with your system administrator credentials</p>
+            <p className="text-gray-800">Sign in with your system administrator credentials</p>
           </div>
 
           {/* Login Form */}
-          <Card className="border-purple-200 shadow-lg">
-            <CardHeader className="space-y-1 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-t-lg">
-              <CardTitle className="font-heading text-xl text-center text-purple-900">
+          <Card className="border-gray-200 shadow-lg">
+            <CardHeader className="space-y-1 bg-light-gray rounded-t-lg">
+              <CardTitle className="font-heading text-xl text-center text-cerner-blue">
                 <Shield className="h-5 w-5 inline mr-2" />
                 System Admin Sign In
               </CardTitle>
-              <CardDescription className="text-center text-purple-700">
+              <CardDescription className="text-center text-gray-700">
                 Access the system-wide administration panel
               </CardDescription>
             </CardHeader>
@@ -97,18 +97,18 @@ export default function SystemAdminLoginPage() {
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username" className="text-purple-900">Username</Label>
+                  <Label htmlFor="username" className="text-gray-800">Username</Label>
                   <Input
                     id="username"
                     placeholder="Enter your system admin username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
-                    className="border-purple-200 focus:border-purple-500"
+                    className="border-gray-200 focus:border-cerner-blue"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-purple-900">Password</Label>
+                  <Label htmlFor="password" className="text-gray-800">Password</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -117,7 +117,7 @@ export default function SystemAdminLoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="border-purple-200 focus:border-purple-500"
+                      className="border-gray-200 focus:border-cerner-blue"
                     />
                     <Button
                       type="button"
@@ -132,7 +132,7 @@ export default function SystemAdminLoginPage() {
                 </div>
                 <Button
                   type="submit"
-                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  className="w-full bg-cerner-blue hover:bg-hover-blue text-white"
                   disabled={isLoggingIn}
                 >
                   <Shield className="h-4 w-4 mr-2" />
@@ -140,8 +140,8 @@ export default function SystemAdminLoginPage() {
                 </Button>
               </form>
 
-              <div className="mt-6 p-3 bg-purple-50 border border-purple-200 rounded-md">
-                <p className="text-xs text-purple-800 text-center">
+              <div className="mt-6 p-3 bg-light-gray border border-gray-200 rounded-md">
+                <p className="text-xs text-gray-800 text-center">
                   <Shield className="h-3 w-3 inline mr-1" />
                   This portal is restricted to authorized system administrators only
                 </p>
