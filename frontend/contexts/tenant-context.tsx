@@ -71,7 +71,7 @@ export interface User {
 }
 
 export interface AuthData {
-  token: string
+  // SECURITY: Token no longer in response - stored in HttpOnly cookie
   expiresIn: number
   user: User
   tenant: Tenant
@@ -81,18 +81,18 @@ interface TenantContextType {
   tenantId: string | null
   tenant: Tenant | null
   user: User | null
-  token: string | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (authData: AuthData) => void
-  logout: () => void
+  logout: () => Promise<void>
   updateTenant: (tenant: Tenant) => void
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined)
 
+// SECURITY: Only storing non-sensitive user/tenant info in localStorage
+// Auth token is now in HttpOnly cookie (not accessible to JavaScript)
 const AUTH_STORAGE_KEY = 'aivida_auth'
-const AUTH_EXPIRY_KEY = 'aivida_auth_expiry'
 
 interface TenantProviderProps {
   children: ReactNode
@@ -102,10 +102,14 @@ export function TenantProvider({ children }: TenantProviderProps) {
   const [tenantId, setTenantId] = useState<string | null>(null)
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [lastActivity, setLastActivity] = useState<number>(Date.now())
   const pathname = usePathname()
   const router = useRouter()
+
+  // SECURITY: Idle timeout settings (HIPAA M-5)
+  const IDLE_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
+  const ACTIVITY_CHECK_INTERVAL_MS = 60 * 1000 // Check every minute
 
   // Extract tenant ID from URL path: /:tenantId/...
   useEffect(() => {
@@ -118,39 +122,29 @@ export function TenantProvider({ children }: TenantProviderProps) {
     }
   }, [pathname])
 
-  // Load auth data from localStorage on mount
+  // Load user/tenant data from localStorage on mount
+  // SECURITY: Auth token is in HttpOnly cookie, not localStorage
   useEffect(() => {
     const loadAuthData = async () => {
       try {
         const storedAuth = localStorage.getItem(AUTH_STORAGE_KEY)
-        const storedExpiry = localStorage.getItem(AUTH_EXPIRY_KEY)
 
-        if (!storedAuth || !storedExpiry) {
-          setIsLoading(false)
-          return
-        }
-
-        // Check if token is expired
-        const expiryTime = parseInt(storedExpiry, 10)
-        if (Date.now() > expiryTime) {
-          // Token expired, clear storage
-          localStorage.removeItem(AUTH_STORAGE_KEY)
-          localStorage.removeItem(AUTH_EXPIRY_KEY)
+        if (!storedAuth) {
           setIsLoading(false)
           return
         }
 
         const authData: AuthData = JSON.parse(storedAuth)
-        setToken(authData.token)
         setUser(authData.user)
         setTenant(authData.tenant)
         setTenantId(authData.tenant.id)
 
         // Fetch the latest tenant config from the backend (skip for system_admin users)
+        // Cookie will be sent automatically with request
         if (authData.user.role !== 'system_admin') {
           try {
             const { getTenantConfig } = await import('@/lib/api/auth')
-            const configResponse = await getTenantConfig(authData.tenant.id, authData.token)
+            const configResponse = await getTenantConfig(authData.tenant.id)
 
             if (configResponse.success && configResponse.tenant) {
               console.log('[TenantContext] Loaded tenant config:', configResponse.tenant)
@@ -171,7 +165,6 @@ export function TenantProvider({ children }: TenantProviderProps) {
         console.error('Error loading auth data:', error)
         // Clear corrupted data
         localStorage.removeItem(AUTH_STORAGE_KEY)
-        localStorage.removeItem(AUTH_EXPIRY_KEY)
       } finally {
         setIsLoading(false)
       }
@@ -180,21 +173,65 @@ export function TenantProvider({ children }: TenantProviderProps) {
     loadAuthData()
   }, [])
 
+  // SECURITY: Track user activity for idle timeout (HIPAA M-5)
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const updateActivity = () => {
+      setLastActivity(Date.now())
+    }
+
+    // Track various user activities
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click']
+    events.forEach(event => {
+      document.addEventListener(event, updateActivity, { passive: true })
+    })
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, updateActivity)
+      })
+    }
+  }, [isAuthenticated])
+
+  // SECURITY: Check for idle timeout and auto-logout (HIPAA M-5)
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const checkIdleTimeout = () => {
+      const now = Date.now()
+      const idleTime = now - lastActivity
+
+      if (idleTime >= IDLE_TIMEOUT_MS) {
+        console.warn('[TenantContext] Session timed out due to inactivity')
+        logout()
+      }
+    }
+
+    // Check for idle timeout every minute
+    const intervalId = setInterval(checkIdleTimeout, ACTIVITY_CHECK_INTERVAL_MS)
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [isAuthenticated, lastActivity, logout])
+
   const login = async (authData: AuthData) => {
     try {
-      const expiryTime = Date.now() + authData.expiresIn * 1000
+      // SECURITY: Token is already set in HttpOnly cookie by backend
+      // Only store non-sensitive user/tenant info in localStorage
 
-      // Set initial auth data
-      setToken(authData.token)
+      // Set auth data in state
       setUser(authData.user)
       setTenant(authData.tenant)
       setTenantId(authData.tenant.id)
 
       // Fetch full tenant config from backend (skip for system_admin users)
+      // Cookie will be sent automatically with request
       if (authData.user.role !== 'system_admin') {
         try {
           const { getTenantConfig } = await import('@/lib/api/auth')
-          const configResponse = await getTenantConfig(authData.tenant.id, authData.token)
+          const configResponse = await getTenantConfig(authData.tenant.id)
 
           if (configResponse.success && configResponse.tenant) {
             console.log('[TenantContext] Fetched tenant config:', configResponse.tenant)
@@ -209,24 +246,37 @@ export function TenantProvider({ children }: TenantProviderProps) {
         console.log('[TenantContext] Skipping tenant config fetch for system_admin user')
       }
 
-      // Save to localStorage with full config
+      // Save user/tenant info to localStorage (no token)
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData))
-      localStorage.setItem(AUTH_EXPIRY_KEY, expiryTime.toString())
     } catch (error) {
       console.error('Error saving auth data:', error)
     }
   }
 
-  const logout = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
-    localStorage.removeItem(AUTH_EXPIRY_KEY)
-    setToken(null)
-    setUser(null)
-    setTenant(null)
-    setTenantId(null)
+  const logout = async () => {
+    try {
+      // Call backend to clear HttpOnly cookie
+      const { createApiClient } = await import('@/lib/api-client')
+      const apiClient = createApiClient({ tenantId })
 
-    // Redirect to login
-    router.push('/login')
+      try {
+        await apiClient.post('/api/auth/logout')
+      } catch (error) {
+        console.warn('[TenantContext] Logout API call failed, continuing with local cleanup:', error)
+        // Continue with local cleanup even if API call fails
+      }
+    } catch (error) {
+      console.error('[TenantContext] Error during logout:', error)
+    } finally {
+      // Clear local state and storage
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      setUser(null)
+      setTenant(null)
+      setTenantId(null)
+
+      // Redirect to login
+      router.push('/login')
+    }
   }
 
   const updateTenant = (updatedTenant: Tenant) => {
@@ -245,13 +295,14 @@ export function TenantProvider({ children }: TenantProviderProps) {
     }
   }
 
-  const isAuthenticated = !!(token && user && tenant)
+  // SECURITY: Authentication is now based on HttpOnly cookie (checked by backend)
+  // Frontend just checks if we have user/tenant info
+  const isAuthenticated = !!(user && tenant)
 
   const value: TenantContextType = {
     tenantId,
     tenant,
     user,
-    token,
     isLoading,
     isAuthenticated,
     login,

@@ -36,7 +36,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   success: boolean
-  token: string
+  // SECURITY: Token no longer in response - stored in HttpOnly cookie
   expiresIn: number
   user: {
     id: string
@@ -114,6 +114,7 @@ export interface TenantConfigResponse {
 
 /**
  * Login with username and password
+ * SECURITY: Token is set in HttpOnly cookie by backend (not in response)
  */
 export async function login(request: LoginRequest): Promise<AuthData> {
   const client = new ApiClient()
@@ -124,8 +125,8 @@ export async function login(request: LoginRequest): Promise<AuthData> {
     throw new Error('Login failed')
   }
 
+  // SECURITY: Token is in HttpOnly cookie, not returned in response
   return {
-    token: response.token,
     expiresIn: response.expiresIn,
     user: response.user,
     tenant: {
@@ -160,9 +161,10 @@ export async function login(request: LoginRequest): Promise<AuthData> {
 
 /**
  * Get tenant configuration
+ * SECURITY: Cookie sent automatically, no token parameter needed
  */
-export async function getTenantConfig(tenantId: string, token: string): Promise<TenantConfigResponse> {
-  const client = new ApiClient({ tenantId, token })
+export async function getTenantConfig(tenantId: string): Promise<TenantConfigResponse> {
+  const client = new ApiClient({ tenantId })
 
   const response = await client.get<TenantConfigResponse>('/api/config')
 

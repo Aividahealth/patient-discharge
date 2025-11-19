@@ -21,18 +21,15 @@ const API_BASE_URL = getApiBaseUrl()
 
 export interface ApiClientConfig {
   tenantId?: string | null
-  token?: string | null
 }
 
 export class ApiClient {
   private baseUrl: string
   private tenantId: string | null
-  private token: string | null
 
   constructor(config: ApiClientConfig = {}) {
     this.baseUrl = API_BASE_URL
     this.tenantId = config.tenantId || null
-    this.token = config.token || null
   }
 
   /**
@@ -43,14 +40,8 @@ export class ApiClient {
   }
 
   /**
-   * Set auth token for subsequent requests
-   */
-  setToken(token: string | null) {
-    this.token = token
-  }
-
-  /**
-   * Build headers with tenant ID and authorization
+   * Build headers with tenant ID
+   * SECURITY: No longer includes Authorization header - auth via HttpOnly cookie
    */
   private getHeaders(customHeaders: HeadersInit = {}): HeadersInit {
     const headers: HeadersInit = {
@@ -60,10 +51,6 @@ export class ApiClient {
 
     if (this.tenantId) {
       headers['X-Tenant-ID'] = this.tenantId
-    }
-
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
     }
 
     return headers
@@ -106,6 +93,7 @@ export class ApiClient {
       ...options,
       method: 'GET',
       headers,
+      credentials: 'include', // SECURITY: Send HttpOnly cookies with request
     })
 
     if (!response.ok) {
@@ -132,6 +120,7 @@ export class ApiClient {
       ...options,
       method: 'POST',
       headers,
+      credentials: 'include', // SECURITY: Send HttpOnly cookies with request
       body: body ? JSON.stringify(body) : undefined,
     })
 
@@ -154,6 +143,7 @@ export class ApiClient {
       ...options,
       method: 'PUT',
       headers,
+      credentials: 'include', // SECURITY: Send HttpOnly cookies with request
       body: body ? JSON.stringify(body) : undefined,
     })
 
@@ -176,6 +166,7 @@ export class ApiClient {
       ...options,
       method: 'DELETE',
       headers,
+      credentials: 'include', // SECURITY: Send HttpOnly cookies with request
     })
 
     if (!response.ok) {
@@ -197,6 +188,7 @@ export class ApiClient {
       ...options,
       method: 'PATCH',
       headers,
+      credentials: 'include', // SECURITY: Send HttpOnly cookies with request
       body: body ? JSON.stringify(body) : undefined,
     })
 

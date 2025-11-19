@@ -46,22 +46,33 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
-    const { headers } = request;
+    const { headers, cookies } = request;
 
-    // Step 1: Check Authorization header exists
-    const authHeader = headers.authorization || headers.Authorization;
-    if (!authHeader) {
-      this.logger.warn('Missing Authorization header');
-      this.logger.debug(`Available headers: ${Object.keys(headers).join(', ')}`);
-      throw new UnauthorizedException('Missing Authorization header. Expected: Bearer <token>');
-    }
-    
-    if (!authHeader.startsWith('Bearer ')) {
-      this.logger.warn(`Invalid Authorization header format. Header value: ${authHeader.substring(0, 50)}...`);
-      throw new UnauthorizedException('Invalid Authorization header format. Expected: Bearer <token>');
-    }
+    // Step 1: Extract token from HttpOnly cookie (preferred) or Authorization header (fallback)
+    let token: string;
 
-    const token = authHeader.substring(7).trim(); // Remove 'Bearer ' prefix and trim whitespace
+    // SECURITY: Try HttpOnly cookie first (XSS-safe)
+    if (cookies && cookies.auth_token) {
+      token = cookies.auth_token;
+      this.logger.debug('Token extracted from HttpOnly cookie');
+    }
+    // Fallback to Authorization header (for backward compatibility)
+    else {
+      const authHeader = headers.authorization || headers.Authorization;
+      if (!authHeader) {
+        this.logger.warn('Missing authentication: no cookie or Authorization header');
+        this.logger.debug(`Available headers: ${Object.keys(headers).join(', ')}`);
+        throw new UnauthorizedException('Missing authentication. Expected auth_token cookie or Bearer token in Authorization header.');
+      }
+
+      if (!authHeader.startsWith('Bearer ')) {
+        this.logger.warn(`Invalid Authorization header format. Header value: ${authHeader.substring(0, 50)}...`);
+        throw new UnauthorizedException('Invalid Authorization header format. Expected: Bearer <token>');
+      }
+
+      token = authHeader.substring(7).trim(); // Remove 'Bearer ' prefix and trim whitespace
+      this.logger.debug('Token extracted from Authorization header (legacy)');
+    }
 
     // Decode JWT header to check algorithm (for debugging)
     try {

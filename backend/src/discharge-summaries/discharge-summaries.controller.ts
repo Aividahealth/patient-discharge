@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { DischargeSummariesService } from './discharge-summaries.service';
 import {
@@ -18,8 +19,14 @@ import type {
   DischargeSummaryListQuery,
   DischargeSummaryContentQuery,
 } from './discharge-summary.types';
+import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { TenantGuard } from '../auth/guards/tenant.guard';
 
 @Controller('discharge-summaries')
+@UseGuards(AuthGuard, RolesGuard, TenantGuard)
+@Roles('clinician', 'expert', 'patient', 'tenant_admin', 'system_admin')
 export class DischargeSummariesController {
   private readonly logger = new Logger(DischargeSummariesController.name);
 
@@ -120,5 +127,64 @@ export class DischargeSummariesController {
   async delete(@Param('id') id: string) {
     this.logger.log(`Delete discharge summary: ${id}`);
     return this.dischargeSummariesService.delete(id);
+  }
+
+  /**
+   * HIPAA M-8: Export patient discharge summary data
+   * GET /discharge-summaries/:id/export
+   * Returns discharge summary in FHIR-compatible JSON format for patient download
+   */
+  @Get(':id/export')
+  async exportPatientData(@Param('id') id: string) {
+    this.logger.log(`Export patient data for discharge summary: ${id}`);
+
+    // Get summary metadata
+    const metadata = await this.dischargeSummariesService.getById(id);
+
+    // Get content (simplified version if available, otherwise raw)
+    const contentQuery = {
+      id,
+      version: metadata.files.simplified
+        ? DischargeSummaryVersion.SIMPLIFIED
+        : DischargeSummaryVersion.RAW,
+    };
+    const summaryWithContent = await this.dischargeSummariesService.getWithContent(contentQuery);
+
+    // Return in export-friendly format
+    return {
+      exportDate: new Date().toISOString(),
+      patientInfo: {
+        patientId: metadata.patientId,
+        patientName: metadata.patientName,
+        mrn: metadata.mrn,
+      },
+      encounter: {
+        encounterId: metadata.encounterId,
+        admissionDate: metadata.admissionDate,
+        dischargeDate: metadata.dischargeDate,
+        facility: metadata.metadata?.facility,
+        department: metadata.metadata?.department,
+      },
+      clinicalInfo: {
+        attendingPhysician: metadata.metadata?.attendingPhysician,
+        diagnosis: metadata.metadata?.diagnosis || [],
+      },
+      dischargeSummary: {
+        content: summaryWithContent.content?.content,
+        version: summaryWithContent.content?.version,
+        lastModified: metadata.updatedAt,
+      },
+      metadata: {
+        createdAt: metadata.createdAt,
+        status: metadata.status,
+        availableVersions: {
+          raw: !!metadata.files.raw,
+          simplified: !!metadata.files.simplified,
+          translated: metadata.files.translated
+            ? Object.keys(metadata.files.translated)
+            : [],
+        },
+      },
+    };
   }
 }
