@@ -126,7 +126,15 @@ export class AuthGuard implements CanActivate {
         }
 
         // Verify tenantId from token matches X-Tenant-ID header
-        if (jwtPayload.tenantId !== tenantIdHeader) {
+        // Special handling for system_admin: token may have null tenantId but header should be 'system'
+        if (jwtPayload.role === 'system_admin') {
+          if (tenantIdHeader !== 'system') {
+            this.logger.warn(
+              `System admin must use 'system' as tenantId. Got: ${tenantIdHeader}`,
+            );
+            throw new UnauthorizedException('System admin must use X-Tenant-ID: system');
+          }
+        } else if (jwtPayload.tenantId !== tenantIdHeader) {
           this.logger.warn(
             `Tenant ID mismatch: token has ${jwtPayload.tenantId}, header has ${tenantIdHeader}`,
           );
@@ -154,11 +162,15 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired token');
     }
 
-    // Verify tenant exists in Firestore
-    const firestoreConfig = await this.configService.getTenantConfig(tenantIdHeader);
-    if (!firestoreConfig) {
-      this.logger.warn(`Tenant not found in Firestore: ${tenantIdHeader}`);
-      throw new UnauthorizedException(`Tenant ${tenantIdHeader} not found in Firestore`);
+    // Verify tenant exists in Firestore (skip for 'system' tenant used by system_admin)
+    if (tenantIdHeader !== 'system') {
+      const firestoreConfig = await this.configService.getTenantConfig(tenantIdHeader);
+      if (!firestoreConfig) {
+        this.logger.warn(`Tenant not found in Firestore: ${tenantIdHeader}`);
+        throw new UnauthorizedException(`Tenant ${tenantIdHeader} not found in Firestore`);
+      }
+    } else {
+      this.logger.debug('Skipping Firestore tenant verification for system tenant');
     }
 
     // Attach auth info to request for use in controllers

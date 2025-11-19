@@ -100,7 +100,8 @@ export class SystemAdminApi {
   private client: ApiClient
 
   constructor(token: string) {
-    this.client = new ApiClient({ token })
+    // System admin uses 'system' as tenantId
+    this.client = new ApiClient({ token, tenantId: 'system' })
   }
 
   /**
