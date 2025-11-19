@@ -3,7 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import express from 'express';
 import cors from 'cors';
-import * as cookieParser from 'cookie-parser';
+import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
 
 // Load environment variables from .env file

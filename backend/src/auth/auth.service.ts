@@ -22,7 +22,7 @@ export class AuthService {
   ) {
     // Get JWT secret from config.yaml or environment variable
     const config = this.configService.get();
-    this.jwtSecret = config.jwt_secret || process.env.JWT_SECRET;
+    this.jwtSecret = config.jwt_secret || process.env.JWT_SECRET || '';
 
     // SECURITY: Enforce JWT secret configuration - no default fallback
     if (!this.jwtSecret) {

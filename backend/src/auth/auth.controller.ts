@@ -1,5 +1,5 @@
 import { Controller, Post, Body, HttpException, HttpStatus, Logger, Res } from '@nestjs/common';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import type { LoginResponse } from './types/user.types';
 import { Public } from './auth.guard';
@@ -44,7 +44,7 @@ export class AuthController {
         path: '/',
       });
 
-      this.logger.log(`✅ Login successful for user: ${request.username} - token set in HttpOnly cookie`);
+      this.logger.log(`✅ Login successful for user: ${loginDto.username} - token set in HttpOnly cookie`);
 
       // Return response WITHOUT token (token is in cookie)
       const { token, ...responseWithoutToken } = loginResponse;
