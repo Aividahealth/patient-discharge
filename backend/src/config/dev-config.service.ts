@@ -10,7 +10,37 @@ export type TenantConfig = {
     dataset: string;
     fhir_store: string;
   };
-  cerner: {
+
+  // NEW: Vendor-agnostic EHR configuration
+  ehr?: {
+    vendor: 'cerner' | 'epic' | 'allscripts' | 'meditech';  // Which EHR vendor to use
+    base_url: string;
+    patients?: string[];  // Optional patient list for export
+
+    // Vendor-specific configuration (structure varies by vendor)
+    system_app?: {
+      client_id: string;
+      client_secret?: string;      // For Cerner (Basic Auth)
+      private_key_path?: string;   // For EPIC (JWT assertion)
+      key_id?: string;              // For EPIC (public key ID)
+      token_url: string;
+      scopes: string;
+    };
+
+    provider_app?: {
+      client_id: string;
+      client_secret?: string;
+      private_key_path?: string;
+      key_id?: string;
+      authorization_url: string;
+      token_url: string;
+      redirect_uri: string;
+      scopes: string;
+    };
+  };
+
+  // DEPRECATED: Keep for backward compatibility with existing Cerner configs
+  cerner?: {
     base_url: string;
     // List of patients to process for document export
     patients?: string[];
@@ -35,6 +65,7 @@ export type TenantConfig = {
       scopes: string;
     };
   };
+
   pubsub?: {
     topic_name: string;
     service_account_path: string;
@@ -340,5 +371,83 @@ export class DevConfigService {
 
   isLoaded(): boolean {
     return true; // Always loaded since it's loaded in constructor
+  }
+
+  /**
+   * Get EHR vendor for a tenant
+   * Returns vendor from new 'ehr' config, or 'cerner' if using legacy config
+   */
+  async getTenantEHRVendor(tenantId: string): Promise<string | null> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
+
+    // Try new ehr config first
+    if (tenantConfig?.ehr?.vendor) {
+      return tenantConfig.ehr.vendor;
+    }
+
+    // Fall back to legacy cerner config
+    if (tenantConfig?.cerner) {
+      return 'cerner';
+    }
+
+    return null;
+  }
+
+  /**
+   * Get EHR configuration for a tenant
+   * Supports both new 'ehr' config and legacy 'cerner' config
+   */
+  async getTenantEHRConfig(tenantId: string): Promise<TenantConfig['ehr'] | null> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
+
+    // Try new ehr config first
+    if (tenantConfig?.ehr) {
+      return tenantConfig.ehr;
+    }
+
+    // Fall back to legacy cerner config and convert to new format
+    if (tenantConfig?.cerner) {
+      this.logger.debug(`Converting legacy Cerner config to EHR config for tenant: ${tenantId}`);
+      return {
+        vendor: 'cerner',
+        base_url: tenantConfig.cerner.base_url,
+        patients: tenantConfig.cerner.patients,
+        system_app: tenantConfig.cerner.system_app || (
+          tenantConfig.cerner.client_id ? {
+            client_id: tenantConfig.cerner.client_id,
+            client_secret: tenantConfig.cerner.client_secret,
+            token_url: tenantConfig.cerner.token_url!,
+            scopes: tenantConfig.cerner.scopes!,
+          } : undefined
+        ),
+        provider_app: tenantConfig.cerner.provider_app,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get EHR system app configuration (for backend/server authentication)
+   */
+  async getTenantEHRSystemConfig(tenantId: string): Promise<TenantConfig['ehr']['system_app'] | null> {
+    const ehrConfig = await this.getTenantEHRConfig(tenantId);
+    return ehrConfig?.system_app || null;
+  }
+
+  /**
+   * Get EHR provider app configuration (for user authentication)
+   */
+  async getTenantEHRProviderConfig(tenantId: string): Promise<TenantConfig['ehr']['provider_app'] | null> {
+    const ehrConfig = await this.getTenantEHRConfig(tenantId);
+    return ehrConfig?.provider_app || null;
+  }
+
+  /**
+   * Get list of patients configured for a tenant's EHR
+   */
+  async getTenantEHRPatients(tenantId: string): Promise<string[]> {
+    const ehrConfig = await this.getTenantEHRConfig(tenantId);
+    return ehrConfig?.patients || [];
   }
 }
