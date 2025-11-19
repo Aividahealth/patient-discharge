@@ -102,4 +102,22 @@ export class SystemAdminController {
     this.logger.log('Getting aggregated metrics');
     return this.systemAdminService.getAggregatedMetrics();
   }
+
+  /**
+   * Check infrastructure status for a tenant
+   */
+  @Get('tenants/:tenantId/infrastructure/status')
+  async checkInfrastructure(@Param('tenantId') tenantId: string) {
+    this.logger.log(`Checking infrastructure status for tenant: ${tenantId}`);
+    return this.systemAdminService.checkInfrastructure(tenantId);
+  }
+
+  /**
+   * Provision or repair infrastructure for a tenant
+   */
+  @Post('tenants/:tenantId/infrastructure/provision')
+  async provisionInfrastructure(@Param('tenantId') tenantId: string) {
+    this.logger.log(`Provisioning infrastructure for tenant: ${tenantId}`);
+    return this.systemAdminService.provisionInfrastructure(tenantId);
+  }
 }

@@ -12,6 +12,18 @@ export interface TenantConfig {
     expertPortal: boolean;
     chatbot: boolean;
   };
+  infrastructure?: {
+    buckets: {
+      raw: boolean;
+      simplified: boolean;
+      translated: boolean;
+    };
+    fhir: {
+      dataset: boolean;
+      store: boolean;
+    };
+    lastChecked?: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
