@@ -8,6 +8,7 @@ import { EncounterExportScheduler } from './services/encounter-export.scheduler'
 import { EncounterExportSchedulerController } from './controllers/encounter-export-scheduler.controller';
 import { GoogleModule } from '../google/google.module';
 import { CernerModule } from '../cerner/cerner.module';
+import { EHRModule } from '../ehr/ehr.module';
 import { ConfigModule } from '../config/config.module';
 import { AuditModule } from '../audit/audit.module';
 import { CernerAuthModule } from '../cerner-auth/cerner-auth.module';
@@ -16,7 +17,8 @@ import { PubSubModule } from '../pubsub/pubsub.module';
 @Module({
   imports: [
     GoogleModule,
-    CernerModule,
+    CernerModule, // Keep for backward compatibility (deprecated)
+    EHRModule, // NEW: Vendor-agnostic EHR integration
     ConfigModule,
     AuditModule,
     CernerAuthModule,

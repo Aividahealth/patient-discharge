@@ -103,6 +103,7 @@ export class SystemAdminService {
             expertPortal: true,
             chatbot: true,
           },
+          ehrIntegration: data.ehrIntegration,
           infrastructure,
           createdAt: data.createdAt?.toDate() || new Date(),
           updatedAt: data.updatedAt?.toDate() || new Date(),
@@ -163,6 +164,7 @@ export class SystemAdminService {
           expertPortal: true,
           chatbot: true,
         },
+        ehrIntegration: data.ehrIntegration,
         infrastructure,
         createdAt: data.createdAt?.toDate() || new Date(),
         updatedAt: data.updatedAt?.toDate() || new Date(),
@@ -194,6 +196,7 @@ export class SystemAdminService {
           expertPortal: true,
           chatbot: true,
         },
+        ehrIntegration: request.ehrIntegration || { type: 'Manual' },
         createdAt: now,
         updatedAt: now,
       };
@@ -238,6 +241,7 @@ export class SystemAdminService {
           expertPortal: tenantData.features.expertPortal ?? true,
           chatbot: tenantData.features.chatbot ?? true,
         },
+        ehrIntegration: tenantData.ehrIntegration,
         infrastructure: tenantData.infrastructure,
         createdAt: tenantData.createdAt,
         updatedAt: tenantData.updatedAt,
@@ -277,6 +281,9 @@ export class SystemAdminService {
           expertPortal: request.features.expertPortal ?? existing.features.expertPortal,
           chatbot: request.features.chatbot ?? existing.features.chatbot,
         };
+      }
+      if (request.ehrIntegration) {
+        updateData.ehrIntegration = request.ehrIntegration;
       }
 
       await this.getFirestore()
