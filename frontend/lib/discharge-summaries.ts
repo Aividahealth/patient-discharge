@@ -357,6 +357,7 @@ export async function getDischargeQueue(
 export interface PatientDetailsResponse {
   patientId: string;
   compositionId: string;
+  preferredLanguage?: string; // Patient's preferred language from FHIR
   rawSummary?: {
     text: string;
     parsedData?: any;
@@ -487,6 +488,37 @@ export async function getPatientDetails(
 
   const compositionData = await binariesResponse.json();
 
+  // Fetch patient preferred language from FHIR
+  let preferredLanguage: string | undefined;
+  try {
+    const patientResponse = await fetch(
+      `${apiUrl}/google/fhir/Patient/${patientId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      }
+    );
+    if (patientResponse.ok) {
+      const patient = await patientResponse.json() as any;
+      // Extract preferred language from patient.communication array
+      // FHIR format: communication: [{ language: { coding: [{ code: "es" }] }, preferred: true }]
+      const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
+      if (preferredComm?.language?.coding?.[0]?.code) {
+        preferredLanguage = preferredComm.language.coding[0].code;
+      } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+        // Fallback to first communication language if no preferred
+        preferredLanguage = patient.communication[0].language.coding[0].code;
+      }
+    }
+  } catch (error) {
+    // Ignore errors fetching patient preferred language
+    console.warn('Failed to fetch patient preferred language:', error);
+  }
+
   // Find raw and simplified content
   const rawSummary = compositionData.dischargeSummaries?.find((summary: any) =>
     !summary.tags?.some((tag: any) => tag.code === 'simplified-content')
@@ -535,6 +567,7 @@ export async function getPatientDetails(
   return {
     patientId,
     compositionId,
+    preferredLanguage,
     rawSummary: rawSummary ? {
       text: rawSummary.text,
       parsedData: rawSummary.parsedData

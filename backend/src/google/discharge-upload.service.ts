@@ -90,6 +90,9 @@ export class DischargeUploadService {
       const family = nameParts[nameParts.length - 1] || '';
       const given = nameParts.slice(0, -1);
 
+      // Default to Spanish if no preferred language provided (for manual EHR integration)
+      const finalPreferredLanguage = preferredLanguage || 'es';
+
       const patient = {
         resourceType: 'Patient',
         id: patientId,
@@ -116,18 +119,14 @@ export class DischargeUploadService {
             text: name,
           },
         ],
-        ...(preferredLanguage
-          ? {
-              communication: [
-                {
-                  language: {
-                    coding: [{ system: 'urn:ietf:bcp:47', code: preferredLanguage }],
-                  },
-                  preferred: true,
-                },
-              ],
-            }
-          : {}),
+        communication: [
+          {
+            language: {
+              coding: [{ system: 'urn:ietf:bcp:47', code: finalPreferredLanguage }],
+            },
+            preferred: true,
+          },
+        ],
         ...(avatar ? {
           photo: [
             {

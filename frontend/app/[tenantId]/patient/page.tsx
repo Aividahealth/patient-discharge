@@ -102,17 +102,12 @@ export default function PatientDashboard() {
   useEffect(() => {
     const pid = searchParams.get('patientId')
     const cid = searchParams.get('compositionId')
-    const lang = searchParams.get('language')
 
-    console.log('[Patient Portal] URL parameters:', { patientId: pid, compositionId: cid, language: lang })
+    console.log('[Patient Portal] URL parameters:', { patientId: pid, compositionId: cid })
 
     if (pid) setPatientId(pid)
     if (cid) setCompositionId(cid)
-    if (lang) {
-      setPreferredLanguage(lang)
-      // Default to showing translated content if preferred language is non-English
-      setViewTranslated(lang !== 'en')
-    }
+    // Preferred language is now fetched from getPatientDetails
   }, [searchParams])
 
   // Auto-fetch compositionId if only patientId is provided
@@ -230,6 +225,16 @@ export default function PatientDashboard() {
         )
         console.log('[Patient Portal] Patient details fetched successfully')
 
+        // Set preferred language from patient details
+        if (details.preferredLanguage) {
+          setPreferredLanguage(details.preferredLanguage)
+          // Default to translated version for non-English patients
+          setViewTranslated(details.preferredLanguage !== 'en')
+        } else {
+          setPreferredLanguage(null)
+          setViewTranslated(false)
+        }
+
         // Set discharge summary and instructions
         const summaryText = details.simplifiedSummary?.text || details.rawSummary?.text || ""
         const instructionsText = details.simplifiedInstructions?.text || details.rawInstructions?.text || ""
@@ -256,10 +261,10 @@ export default function PatientDashboard() {
         }
 
         // Fetch translated content if preferred language is set and not English
-        if (preferredLanguage && preferredLanguage !== 'en') {
+        if (details.preferredLanguage && details.preferredLanguage !== 'en') {
           const translated = await getTranslatedContent(
             compositionId,
-            preferredLanguage,
+            details.preferredLanguage,
             token,
             tenant.id
           )
@@ -304,7 +309,7 @@ export default function PatientDashboard() {
     }
 
     fetchPatientData()
-  }, [patientId, compositionId, token, tenant, preferredLanguage])
+  }, [patientId, compositionId, token, tenant])
 
   // Mock patient data for UI elements (will be replaced with real data later)
   const patientData = {
@@ -690,9 +695,9 @@ EMERGENCY CONTACTS:
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Language Toggle - Only show if preferred language is non-English */}
+              {/* Language Toggle - Show 2 buttons: English and Patient Preferred Language */}
               {preferredLanguage && preferredLanguage !== 'en' && (
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Button
                     variant={!viewTranslated ? "default" : "outline"}
                     size="sm"
@@ -707,9 +712,9 @@ EMERGENCY CONTACTS:
                     onClick={() => setViewTranslated(true)}
                     className="px-3"
                   >
-                    {SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.nativeName || preferredLanguage}
+                    {SUPPORTED_LANGUAGES[preferredLanguage]?.nativeName || preferredLanguage}
                   </Button>
-              </div>
+                </div>
               )}
               <FeedbackButton userType="patient" />
               <Button

@@ -22,7 +22,8 @@ import { useTenant } from "@/contexts/tenant-context"
 import { usePDFExport } from "@/hooks/use-pdf-export"
 import { getDischargeSummaryRenderer } from "@/components/discharge-renderers/renderer-registry"
 import { parseDischargeDocument } from "@/lib/parsers/parser-registry"
-import { getDischargeQueue, getPatientDetails, type DischargeQueuePatient } from "@/lib/discharge-summaries"
+import { getDischargeQueue, getPatientDetails, getTranslatedContent, type DischargeQueuePatient } from "@/lib/discharge-summaries"
+import { SUPPORTED_LANGUAGES } from "@/lib/constants/languages"
 import {
   Upload,
   FileText,
@@ -46,7 +47,10 @@ export default function ClinicianDashboard() {
   const router = useRouter()
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [language, setLanguage] = useState("en")
+  const [language, setLanguage] = useState("en") // UI language for translations
+  const [viewLanguage, setViewLanguage] = useState<"en" | "preferred">("en") // Language to view content in
+  const [patientPreferredLanguage, setPatientPreferredLanguage] = useState<string | null>(null) // Patient's preferred language
+  const [translatedContent, setTranslatedContent] = useState<{ summary?: string; instructions?: string } | null>(null)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isLoadingQueue, setIsLoadingQueue] = useState(true)
@@ -780,6 +784,16 @@ export default function ClinicianDashboard() {
       // Fetch patient details from API
       const patientDetails = await getPatientDetails(patientId, compositionId, token, tenantId);
       
+      // Store patient preferred language
+      if (patientDetails.preferredLanguage) {
+        setPatientPreferredLanguage(patientDetails.preferredLanguage);
+        // Reset view language to English when switching patients
+        setViewLanguage("en");
+        setTranslatedContent(null);
+      } else {
+        setPatientPreferredLanguage(null);
+      }
+      
       // Transform to component format
       const transformedPatient = await transformPatientData(
         queuePatientForTransform,
@@ -1260,19 +1274,52 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Language Toggle */}
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <select
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value)}
-                  className="bg-transparent border border-border rounded-md px-2 py-1 text-sm"
-                >
-                  {Object.entries(languages).map(([code, name]) => (
-                    <option key={code} value={code}>{name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Language Toggle - Show 2 buttons: English and Patient Preferred Language */}
+              {currentPatient && patientPreferredLanguage && patientPreferredLanguage !== 'en' && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant={viewLanguage === "en" ? "default" : "outline"}
+                    size="sm"
+                    onClick={async () => {
+                      setViewLanguage("en");
+                      setTranslatedContent(null);
+                    }}
+                    className="px-3"
+                  >
+                    English
+                  </Button>
+                  <Button
+                    variant={viewLanguage === "preferred" ? "default" : "outline"}
+                    size="sm"
+                    onClick={async () => {
+                      setViewLanguage("preferred");
+                      // Fetch translated content if not already loaded
+                      if (!translatedContent && currentPatient?.compositionId) {
+                        try {
+                          const translated = await getTranslatedContent(
+                            currentPatient.compositionId,
+                            patientPreferredLanguage,
+                            token || '',
+                            tenantId || ''
+                          );
+                          if (translated?.content) {
+                            const parts = translated.content.content.split('\n\n---\n\n');
+                            setTranslatedContent({
+                              summary: parts[0] || "",
+                              instructions: parts[1] || ""
+                            });
+                          }
+                        } catch (error) {
+                          console.error('Failed to fetch translated content:', error);
+                        }
+                      }
+                    }}
+                    className="px-3"
+                  >
+                    {SUPPORTED_LANGUAGES[patientPreferredLanguage]?.nativeName || patientPreferredLanguage}
+                  </Button>
+                </div>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -1606,18 +1653,38 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                         </div>
                       ) : (
                         <div className="bg-muted/30 p-4 rounded-lg text-sm space-y-4 max-h-[70vh] overflow-y-auto">
-                          {currentPatient?.aiSimplifiedSummary && (
-                            <SimplifiedDischargeSummary 
-                              content={currentPatient.aiSimplifiedSummary} 
-                            />
-                          )}
-                          {currentPatient?.aiSimplifiedInstructions && (
-                            <SimplifiedDischargeInstructions 
-                              content={currentPatient.aiSimplifiedInstructions} 
-                            />
-                          )}
-                          {!currentPatient?.aiSimplifiedSummary && !currentPatient?.aiSimplifiedInstructions && (
-                            <p className="text-muted-foreground">No simplified content available</p>
+                          {viewLanguage === "preferred" && translatedContent ? (
+                            <>
+                              {translatedContent.summary && (
+                                <SimplifiedDischargeSummary 
+                                  content={translatedContent.summary} 
+                                />
+                              )}
+                              {translatedContent.instructions && (
+                                <SimplifiedDischargeInstructions 
+                                  content={translatedContent.instructions} 
+                                />
+                              )}
+                              {!translatedContent.summary && !translatedContent.instructions && (
+                                <p className="text-muted-foreground">No translated content available</p>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {currentPatient?.aiSimplifiedSummary && (
+                                <SimplifiedDischargeSummary 
+                                  content={currentPatient.aiSimplifiedSummary} 
+                                />
+                              )}
+                              {currentPatient?.aiSimplifiedInstructions && (
+                                <SimplifiedDischargeInstructions 
+                                  content={currentPatient.aiSimplifiedInstructions} 
+                                />
+                              )}
+                              {!currentPatient?.aiSimplifiedSummary && !currentPatient?.aiSimplifiedInstructions && (
+                                <p className="text-muted-foreground">No simplified content available</p>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
