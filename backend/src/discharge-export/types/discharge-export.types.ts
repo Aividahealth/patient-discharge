@@ -14,6 +14,7 @@ export interface ExportResult {
     exportTimestamp: string;
     patientMapping?: 'found' | 'created' | 'failed';
     duplicateCheck?: 'new' | 'duplicate' | 'skipped';
+    vendor?: string;
   };
 }
 
