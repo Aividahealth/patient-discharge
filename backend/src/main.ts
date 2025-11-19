@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import express from 'express';
 import cors from 'cors';
+import * as cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
 
 // Load environment variables from .env file
@@ -10,13 +11,16 @@ dotenv.config();
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  
+
   try {
     logger.log(`🚀 Starting application with NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
     logger.log(`📂 Working directory: ${process.cwd()}`);
     logger.log(`🔧 Environment variables: NODE_ENV=${process.env.NODE_ENV}, PORT=${process.env.PORT}, SERVICE_ACCOUNT_PATH=${process.env.SERVICE_ACCOUNT_PATH}`);
-    
+
     const app = await NestFactory.create(AppModule, { cors: false }); // Disable NestJS CORS
+
+  // SECURITY: Enable cookie parsing for HttpOnly cookies
+  app.use(cookieParser());
 
   // Custom CORS middleware
   app.use((req, res, next) => {

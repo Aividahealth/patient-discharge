@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { DischargeSummariesService } from './discharge-summaries.service';
 import {
@@ -18,8 +19,14 @@ import type {
   DischargeSummaryListQuery,
   DischargeSummaryContentQuery,
 } from './discharge-summary.types';
+import { AuthGuard } from '../auth/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { TenantGuard } from '../auth/guards/tenant.guard';
 
 @Controller('discharge-summaries')
+@UseGuards(AuthGuard, RolesGuard, TenantGuard)
+@Roles('clinician', 'expert', 'patient', 'tenant_admin', 'system_admin')
 export class DischargeSummariesController {
   private readonly logger = new Logger(DischargeSummariesController.name);
 

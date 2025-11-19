@@ -22,13 +22,23 @@ export class AuthService {
   ) {
     // Get JWT secret from config.yaml or environment variable
     const config = this.configService.get();
-    this.jwtSecret = config.jwt_secret || process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-    
-    if (this.jwtSecret === 'your-secret-key-change-in-production') {
-      this.logger.warn('⚠️ Using default JWT secret. Set jwt_secret in config.yaml or JWT_SECRET environment variable for production!');
-    } else {
-      this.logger.log('✅ JWT secret loaded from config');
+    this.jwtSecret = config.jwt_secret || process.env.JWT_SECRET;
+
+    // SECURITY: Enforce JWT secret configuration - no default fallback
+    if (!this.jwtSecret) {
+      const errorMsg = 'FATAL: JWT_SECRET must be configured. Set jwt_secret in config.yaml or JWT_SECRET environment variable.';
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
     }
+
+    // SECURITY: Validate secret strength (minimum 32 characters)
+    if (this.jwtSecret.length < 32) {
+      const errorMsg = `FATAL: JWT_SECRET must be at least 32 characters long. Current length: ${this.jwtSecret.length}`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    this.logger.log('✅ JWT secret loaded and validated from config');
   }
 
   /**
