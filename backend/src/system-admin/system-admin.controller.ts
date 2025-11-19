@@ -13,7 +13,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemAdminService } from './system-admin.service';
-import {
+import type {
   CreateTenantRequest,
   UpdateTenantRequest,
   CreateTenantAdminRequest,
