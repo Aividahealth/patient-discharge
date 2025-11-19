@@ -669,10 +669,10 @@ export class DischargeExportService {
               ],
             },
             system: 'urn:oid:2.16.840.1.113883.3.787.0.0',
-            value: cernerPatientId,
+            value: ehrPatientId,
           },
         ],
-        active: cernerPatient.active !== false, // Default to true if not explicitly false
+        active: ehrPatient.active !== false, // Default to true if not explicitly false
         ...(cleanName.length > 0 && { name: cleanName }),
         ...(cleanGender && { gender: cleanGender }),
         ...(cleanBirthDate && { birthDate: cleanBirthDate }),
@@ -685,8 +685,8 @@ export class DischargeExportService {
             },
             {
               system: 'http://aivida.com/fhir/tags',
-              code: `original-cerner-id-${cernerPatientId}`,
-              display: `Original Cerner ID: ${cernerPatientId}`,
+              code: `original-ehr-id-${ehrPatientId}`,
+              display: `Original EHR ID: ${ehrPatientId}`,
             },
           ],
         },
@@ -783,7 +783,7 @@ export class DischargeExportService {
       }
     }
 
-    this.logger.error(`   ❌ No PDF data found in Cerner document ${cernerDoc.id}`);
+    this.logger.error(`   ❌ No PDF data found in EHR document ${ehrDoc.id}`);
     return null;
   }
 

@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, Logger, Headers } from '@nestjs/common';
 import { EHRServiceFactory } from '../factories/ehr-service.factory';
 import { VendorRegistryService } from '../services/vendor-registry.service';
-import { TenantContext } from '../../tenant/tenant-context';
+import type { TenantContext } from '../../tenant/tenant-context';
 import { TenantContext as TenantContextDecorator } from '../../tenant/tenant.decorator';
 
 /**

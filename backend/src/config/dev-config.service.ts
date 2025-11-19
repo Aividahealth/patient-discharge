@@ -301,13 +301,13 @@ export class DevConfigService {
     return tenantConfig?.cerner || null;
   }
 
-  async getTenantCernerSystemConfig(tenantId: string): Promise<TenantConfig['cerner']['system_app'] | null> {
+  async getTenantCernerSystemConfig(tenantId: string): Promise<TenantConfig['cerner'] extends { system_app?: infer T } ? T : any | null> {
     const cernerConfig = await this.getTenantCernerConfig(tenantId);
     if (!cernerConfig) return null;
     
     // Return system_app config if available, otherwise fall back to legacy config
     if (cernerConfig.system_app) {
-      return cernerConfig.system_app;
+      return cernerConfig.system_app as any;
     }
     
     // Legacy fallback
@@ -317,15 +317,15 @@ export class DevConfigService {
         client_secret: cernerConfig.client_secret,
         token_url: cernerConfig.token_url,
         scopes: cernerConfig.scopes,
-      };
+      } as any;
     }
     
     return null;
   }
 
-  async getTenantCernerProviderConfig(tenantId: string): Promise<TenantConfig['cerner']['provider_app'] | null> {
+  async getTenantCernerProviderConfig(tenantId: string): Promise<TenantConfig['cerner'] extends { provider_app?: infer T } ? T : any | null> {
     const cernerConfig = await this.getTenantCernerConfig(tenantId);
-    return cernerConfig?.provider_app || null;
+    return (cernerConfig?.provider_app as any) || null;
   }
 
   async getTenantCernerPatients(tenantId: string): Promise<string[]> {
@@ -430,17 +430,17 @@ export class DevConfigService {
   /**
    * Get EHR system app configuration (for backend/server authentication)
    */
-  async getTenantEHRSystemConfig(tenantId: string): Promise<TenantConfig['ehr']['system_app'] | null> {
+  async getTenantEHRSystemConfig(tenantId: string): Promise<TenantConfig['ehr'] extends { system_app?: infer T } ? T : any | null> {
     const ehrConfig = await this.getTenantEHRConfig(tenantId);
-    return ehrConfig?.system_app || null;
+    return (ehrConfig?.system_app as any) || null;
   }
 
   /**
    * Get EHR provider app configuration (for user authentication)
    */
-  async getTenantEHRProviderConfig(tenantId: string): Promise<TenantConfig['ehr']['provider_app'] | null> {
+  async getTenantEHRProviderConfig(tenantId: string): Promise<TenantConfig['ehr'] extends { provider_app?: infer T } ? T : any | null> {
     const ehrConfig = await this.getTenantEHRConfig(tenantId);
-    return ehrConfig?.provider_app || null;
+    return (ehrConfig?.provider_app as any) || null;
   }
 
   /**
