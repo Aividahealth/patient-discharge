@@ -1,10 +1,11 @@
-import { Controller, Post, Body, Param, HttpException, HttpStatus, Logger, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Param, HttpException, HttpStatus, Logger, UseGuards, Inject } from '@nestjs/common';
 import { DischargeUploadService } from './discharge-upload.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
 import { CurrentUser } from '../auth/user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard, TenantGuard } from '../auth/guards';
+import { AuditService } from '../audit/audit.service';
 
 interface UploadDischargeSummaryRequest {
   id: string;
@@ -29,7 +30,10 @@ interface UploadDischargeSummaryRequest {
 export class DischargeUploadController {
   private readonly logger = new Logger(DischargeUploadController.name);
 
-  constructor(private readonly dischargeUploadService: DischargeUploadService) {}
+  constructor(
+    private readonly dischargeUploadService: DischargeUploadService,
+    private readonly auditService: AuditService,
+  ) {}
 
   /**
    * POST /api/discharge-summary/upload
@@ -105,11 +109,59 @@ export class DischargeUploadController {
         `📤 Publishing discharge summary for Composition: ${compositionId} by user: ${user?.username}`,
       );
 
-      // Mark as completed (this updates the Encounter status)
+      // Step 1: Add clarifications to discharge instructions if provided
+      if (body.additionalClarifications && body.additionalClarifications.trim()) {
+        try {
+          await this.dischargeUploadService.addClarificationsToInstructions(
+            compositionId,
+            body.additionalClarifications,
+            ctx,
+          );
+          this.logger.log(`✅ Added clarifications to discharge instructions`);
+        } catch (clarificationError) {
+          this.logger.warn(`⚠️ Failed to add clarifications: ${clarificationError.message}`);
+          // Continue with publish even if clarifications fail
+        }
+      }
+
+      // Step 2: Mark as completed (this updates the Encounter status)
       const result = await this.dischargeUploadService.markDischargeCompleted(compositionId, ctx);
 
-      // TODO: Store section approvals, clarifications, and redaction preferences
-      // This could be stored in the Composition meta or in a separate audit/approval collection
+      // Step 3: Get patient info for audit logging
+      // Extract from result if available, or fetch from composition
+      let patientId: string | undefined;
+      let patientName: string | undefined;
+      
+      // Try to get patient info from the discharge queue or composition
+      // For now, we'll log without patient info if not easily available
+      // The compositionId and encounterId in the result can be used to trace back
+
+      // Step 4: Log audit activity
+      try {
+        await this.auditService.logClinicianActivity({
+          tenantId: ctx.tenantId,
+          userId: user?.id || user?.username,
+          userName: user?.name || user?.username,
+          userRole: user?.role,
+          action: 'published',
+          resourceType: 'discharge_summary',
+          resourceId: compositionId,
+          patientId,
+          patientName,
+          metadata: {
+            sectionApprovals: body.sectionApprovals,
+            hasClarifications: !!body.additionalClarifications,
+            redactionPreferences: body.redactionPreferences,
+            clinician: body.clinician,
+            publishedAt: new Date().toISOString(),
+          },
+        });
+        this.logger.log(`✅ Logged audit activity for publish`);
+      } catch (auditError) {
+        this.logger.warn(`⚠️ Failed to log audit activity: ${auditError.message}`);
+        // Continue even if audit logging fails
+      }
+
       this.logger.log(`✅ Published discharge summary. Composition ID: ${compositionId}`, {
         sectionApprovals: body.sectionApprovals,
         hasClarifications: !!body.additionalClarifications,

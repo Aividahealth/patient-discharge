@@ -1,8 +1,9 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { GoogleService } from './google.service';
 import { PubSubService, EncounterExportEvent } from '../pubsub/pubsub.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { logPipelineEvent } from '../utils/pipeline-logger';
+import { AuditService } from '../audit/audit.service';
 
 interface UploadDischargeSummaryRequest {
   id: string; // patientId
@@ -29,6 +30,7 @@ export class DischargeUploadService {
   constructor(
     private readonly googleService: GoogleService,
     private readonly pubSubService: PubSubService,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -926,6 +928,167 @@ export class DischargeUploadService {
       throw new HttpException(
         {
           message: 'Failed to mark discharge as completed',
+          error: error.message,
+          compositionId,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Add additional clarifications to discharge instructions
+   */
+  async addClarificationsToInstructions(
+    compositionId: string,
+    clarifications: string,
+    ctx: TenantContext,
+  ): Promise<{ success: boolean; binaryId?: string }> {
+    try {
+      this.logger.log(`📝 Adding clarifications to discharge instructions for Composition: ${compositionId}`);
+
+      // Step 1: Get Composition to find Binary references
+      const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
+      if (!composition || !composition.section) {
+        throw new HttpException(
+          {
+            message: 'Composition not found or has no sections',
+            compositionId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Step 2: Find discharge instructions Binary
+      let instructionsBinaryId: string | null = null;
+      for (const section of composition.section) {
+        if (section.entry) {
+          for (const entry of section.entry) {
+            if (entry.reference?.startsWith('Binary/')) {
+              const binaryId = entry.reference.replace('Binary/', '');
+              const binary = await this.googleService.fhirRead('Binary', binaryId, ctx);
+              
+              // Check if this is a discharge-instructions binary
+              if (binary?.meta?.tag) {
+                for (const tag of binary.meta.tag) {
+                  if (tag.system === 'http://aivida.com/fhir/tags' && 
+                      (tag.code === 'discharge-instructions' || tag.code.startsWith('discharge-instructions-'))) {
+                    instructionsBinaryId = binaryId;
+                    break;
+                  }
+                }
+              }
+              if (instructionsBinaryId) break;
+            }
+          }
+        }
+        if (instructionsBinaryId) break;
+      }
+
+      if (!instructionsBinaryId) {
+        // Try to find simplified instructions
+        for (const section of composition.section) {
+          if (section.entry) {
+            for (const entry of section.entry) {
+              if (entry.reference?.startsWith('Binary/')) {
+                const binaryId = entry.reference.replace('Binary/', '');
+                const binary = await this.googleService.fhirRead('Binary', binaryId, ctx);
+                
+                if (binary?.meta?.tag) {
+                  for (const tag of binary.meta.tag) {
+                    if (tag.system === 'http://aivida.com/fhir/tags' && 
+                        (tag.code === 'discharge-instructions-simplified' || tag.code === 'discharge-instructions-translated')) {
+                      instructionsBinaryId = binaryId;
+                      break;
+                    }
+                  }
+                }
+                if (instructionsBinaryId) break;
+              }
+            }
+          }
+          if (instructionsBinaryId) break;
+        }
+      }
+
+      if (!instructionsBinaryId) {
+        this.logger.warn(`⚠️ No discharge instructions Binary found for Composition: ${compositionId}`);
+        return { success: false };
+      }
+
+      // Step 3: Get current instructions content
+      const currentBinary = await this.googleService.fhirRead('Binary', instructionsBinaryId, ctx);
+      if (!currentBinary || !currentBinary.data) {
+        throw new HttpException(
+          {
+            message: 'Binary resource not found or has no data',
+            binaryId: instructionsBinaryId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Decode current content
+      const currentContent = Buffer.from(currentBinary.data, 'base64').toString('utf8');
+
+      // Step 4: Append clarifications section
+      const clarificationsSection = `\n\n## Additional Clarifications\n\n${clarifications.trim()}\n`;
+      const updatedContent = currentContent + clarificationsSection;
+
+      // Step 5: Create new Binary with updated content
+      const newBinary = {
+        resourceType: 'Binary',
+        contentType: 'text/plain',
+        data: Buffer.from(updatedContent, 'utf8').toString('base64'),
+        meta: currentBinary.meta || {
+          tag: [],
+        },
+      };
+
+      // Preserve tags
+      if (!newBinary.meta.tag) {
+        newBinary.meta.tag = [];
+      }
+
+      const result = await this.googleService.fhirCreate('Binary', newBinary, ctx);
+      this.logger.log(`✅ Created new Binary with clarifications: ${result.id}`);
+
+      // Step 6: Update DocumentReference to point to new Binary
+      // Find DocumentReference that references the old Binary
+      const docRefQuery = {
+        'content.attachment.url': `Binary/${instructionsBinaryId}`,
+      };
+      const docRefResult = await this.googleService.fhirSearch('DocumentReference', docRefQuery, ctx);
+      
+      if (docRefResult?.entry && docRefResult.entry.length > 0) {
+        const docRef = docRefResult.entry[0].resource;
+        docRef.content = [
+          {
+            attachment: {
+              contentType: 'text/plain',
+              url: `Binary/${result.id}`,
+              title: docRef.content?.[0]?.attachment?.title || 'Discharge Instructions',
+            },
+          },
+        ];
+        docRef.date = new Date().toISOString();
+        
+        await this.googleService.fhirUpdate('DocumentReference', docRef.id, docRef, ctx);
+        this.logger.log(`✅ Updated DocumentReference: ${docRef.id}`);
+      }
+
+      return {
+        success: true,
+        binaryId: result.id,
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to add clarifications: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          message: 'Failed to add clarifications to discharge instructions',
           error: error.message,
           compositionId,
         },

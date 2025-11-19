@@ -1091,9 +1091,6 @@ export default function ClinicianDashboard() {
       const result = await response.json()
       console.log('[ClinicianPortal] Publish successful:', result)
 
-      // Show success message
-      alert('Discharge summary published successfully!')
-
       // Remove patient from the discharge queue list
       if (currentPatient?.id) {
         setPatients(prevPatients => prevPatients.filter(p => p.id !== currentPatient.id))
