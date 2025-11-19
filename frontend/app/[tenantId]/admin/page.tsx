@@ -23,11 +23,12 @@ import { tenantColors } from "@/lib/tenant-colors"
 import { AddUserDialog, EditUserDialog, DeleteUserDialog } from "@/components/user-management-dialogs"
 import { listUsers, createUser, updateUser, deleteUser, type User, type CreateUserRequest, type UpdateUserRequest } from "@/lib/api/users"
 import { getTenantMetrics } from "@/lib/api/tenant"
+import { getAuditLogs } from "@/lib/api/audit-logs"
 import type { TenantMetrics } from "@/types/tenant-metrics"
+import type { AuditLog } from "@/types/audit-logs"
 import { useToast } from "@/hooks/use-toast"
 import {
   Settings,
-  Database,
   Users,
   Shield,
   FileText,
@@ -61,11 +62,6 @@ export default function AdminDashboard() {
   const { toast } = useToast()
 
   const [activeTab, setActiveTab] = useState("overview")
-  const [integrationSettings, setIntegrationSettings] = useState({
-    pdfExtract: true,
-    hl7: false,
-    fhir: true,
-  })
   const [notifications, setNotifications] = useState([
     {
       id: 1,
@@ -99,9 +95,10 @@ export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<TenantMetrics | null>(null)
   const [loadingMetrics, setLoadingMetrics] = useState(false)
 
-  const toggleIntegration = (key: keyof typeof integrationSettings) => {
-    setIntegrationSettings((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
+  // Audit logs state
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false)
+  const [auditLogFilter, setAuditLogFilter] = useState<'all' | 'clinician_activity' | 'simplification' | 'translation' | 'chatbot'>('all')
 
   // Fetch users when component mounts or when users tab is active
   useEffect(() => {
@@ -116,6 +113,13 @@ export default function AdminDashboard() {
       fetchMetrics()
     }
   }, [activeTab, token, tenantId])
+
+  // Fetch audit logs when audit tab is active
+  useEffect(() => {
+    if (activeTab === "audit" && token && tenantId) {
+      fetchAuditLogs()
+    }
+  }, [activeTab, token, tenantId, auditLogFilter])
 
   const fetchUsers = async () => {
     if (!token || !tenantId) return
@@ -152,6 +156,33 @@ export default function AdminDashboard() {
       })
     } finally {
       setLoadingMetrics(false)
+    }
+  }
+
+  const fetchAuditLogs = async () => {
+    if (!token || !tenantId) return
+
+    setLoadingAuditLogs(true)
+    try {
+      const response = await getAuditLogs(
+        {
+          type: auditLogFilter === 'all' ? undefined : auditLogFilter,
+          limit: 50,
+          offset: 0,
+        },
+        tenantId,
+        token
+      )
+      setAuditLogs(response.items)
+    } catch (error) {
+      console.error('Error fetching audit logs:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load audit logs. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingAuditLogs(false)
     }
   }
 
@@ -261,7 +292,7 @@ export default function AdminDashboard() {
 
       <div className="container mx-auto px-4 py-6 max-w-7xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-5 h-auto p-1">
             <TabsTrigger value="overview" className="flex flex-col gap-1 py-3">
               <BarChart3 className="h-4 w-4" />
               <span className="text-xs">Overview</span>
@@ -269,10 +300,6 @@ export default function AdminDashboard() {
             <TabsTrigger value="analytics" className="flex flex-col gap-1 py-3">
               <PieChart className="h-4 w-4" />
               <span className="text-xs">Analytics</span>
-            </TabsTrigger>
-            <TabsTrigger value="integrations" className="flex flex-col gap-1 py-3">
-              <Database className="h-4 w-4" />
-              <span className="text-xs">Data Sources</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="flex flex-col gap-1 py-3">
               <Users className="h-4 w-4" />
@@ -713,88 +740,6 @@ export default function AdminDashboard() {
 
           </TabsContent>
 
-          {/* Data Sources & Integrations */}
-          <TabsContent value="integrations" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-heading text-2xl">Data Source Configuration</h2>
-                <p className="text-muted-foreground">Configure input sources and FHIR resource mappings</p>
-              </div>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Integration
-              </Button>
-            </div>
-
-            {/* Input Sources */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">Input Sources</CardTitle>
-                <CardDescription>Toggle available data input methods</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base">PDF Document Extraction</Label>
-                    <p className="text-sm text-muted-foreground">Extract data from uploaded PDF discharge summaries</p>
-                  </div>
-                  <Switch
-                    checked={integrationSettings.pdfExtract}
-                    onCheckedChange={() => toggleIntegration("pdfExtract")}
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base">HL7 Messages</Label>
-                    <p className="text-sm text-muted-foreground">Process HL7 ADT and discharge messages</p>
-                  </div>
-                  <Switch checked={integrationSettings.hl7} onCheckedChange={() => toggleIntegration("hl7")} />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-base">FHIR Endpoints</Label>
-                    <p className="text-sm text-muted-foreground">Connect to FHIR R4 compliant systems</p>
-                  </div>
-                  <Switch checked={integrationSettings.fhir} onCheckedChange={() => toggleIntegration("fhir")} />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* FHIR Resource Mapping */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">FHIR Resource Mapping</CardTitle>
-                <CardDescription>Configure how FHIR resources map to discharge instruction sections</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="medication-resource">Medication Resources</Label>
-                    <Input
-                      id="medication-resource"
-                      defaultValue="MedicationRequest, MedicationStatement"
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="appointment-resource">Appointment Resources</Label>
-                    <Input id="appointment-resource" defaultValue="Appointment, ServiceRequest" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label htmlFor="nutrition-resource">Nutrition Resources</Label>
-                    <Input id="nutrition-resource" defaultValue="NutritionOrder, DiagnosticReport" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label htmlFor="careplan-resource">Care Plan Resources</Label>
-                    <Input id="careplan-resource" defaultValue="CarePlan, Goal" className="mt-1" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
           {/* User Management */}
           <TabsContent value="users" className="space-y-6">
             <div className="flex items-center justify-between">
@@ -934,152 +879,191 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-heading text-2xl">Audit & Logs</h2>
-                <p className="text-muted-foreground">View access trails and export anonymized metrics</p>
+                <p className="text-muted-foreground">Track all system activities and AI operations</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline">
+                <Button variant="outline" size="sm" onClick={fetchAuditLogs} disabled={loadingAuditLogs}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loadingAuditLogs ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <Button variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
                   Export Logs
-                </Button>
-                <Button variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Metrics
                 </Button>
               </div>
             </div>
 
-            {/* User Activity Audit Trail */}
+            {/* Filter Tabs */}
             <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">User Activity Audit Trail</CardTitle>
-                <CardDescription>Who viewed, edited, or published discharge instructions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[
-                    {
-                      timestamp: "2024-03-15 14:30:22",
-                      user: "Dr. Sarah Johnson",
-                      action: "Published",
-                      resource: "Discharge Instructions - John Smith",
-                      ip: "192.168.1.100",
-                    },
-                    {
-                      timestamp: "2024-03-15 14:25:15",
-                      user: "Dr. Sarah Johnson",
-                      action: "Edited",
-                      resource: "Medication Section - John Smith",
-                      ip: "192.168.1.100",
-                    },
-                    {
-                      timestamp: "2024-03-15 14:20:08",
-                      user: "John Smith",
-                      action: "Viewed",
-                      resource: "Discharge Instructions",
-                      ip: "10.0.0.45",
-                    },
-                    {
-                      timestamp: "2024-03-15 13:45:33",
-                      user: "Dr. Michael Chen",
-                      action: "Generated",
-                      resource: "AI Summary - Maria Garcia",
-                      ip: "192.168.1.102",
-                    },
-                  ].map((log, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 border rounded-lg text-sm">
-                      <div className="flex items-center gap-4">
-                        <div className="text-muted-foreground font-mono">{log.timestamp}</div>
-                        <div className="font-medium">{log.user}</div>
-                        <Badge
-                          variant={
-                            log.action === "Published" ? "default" : log.action === "Edited" ? "secondary" : "outline"
-                          }
-                        >
-                          {log.action}
-                        </Badge>
-                        <div className="text-muted-foreground">{log.resource}</div>
-                      </div>
-                      <div className="text-muted-foreground font-mono text-xs">{log.ip}</div>
-                    </div>
-                  ))}
+              <CardContent className="pt-6">
+                <div className="flex gap-2">
+                  <Button
+                    variant={auditLogFilter === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAuditLogFilter('all')}
+                  >
+                    All Activity
+                  </Button>
+                  <Button
+                    variant={auditLogFilter === 'clinician_activity' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAuditLogFilter('clinician_activity')}
+                  >
+                    Clinician Activity
+                  </Button>
+                  <Button
+                    variant={auditLogFilter === 'simplification' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAuditLogFilter('simplification')}
+                  >
+                    Simplifications
+                  </Button>
+                  <Button
+                    variant={auditLogFilter === 'translation' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAuditLogFilter('translation')}
+                  >
+                    Translations
+                  </Button>
+                  <Button
+                    variant={auditLogFilter === 'chatbot' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setAuditLogFilter('chatbot')}
+                  >
+                    Chatbot
+                  </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* AI Audit Logs */}
+            {/* Audit Logs */}
             <Card>
               <CardHeader>
-                <CardTitle className="font-heading">AI Audit Logs</CardTitle>
-                <CardDescription>AI-generated discharge summaries for review and validation</CardDescription>
+                <CardTitle className="font-heading">Activity Logs</CardTitle>
+                <CardDescription>Comprehensive audit trail of all system activities</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  {[
-                    {
-                      timestamp: "2024-03-15 15:45:12",
-                      patient: "Priya Sharma",
-                      mrn: "P-12345",
-                      action: "Generated",
-                      processingTime: "3.2s",
-                      originalSummary: "Patient underwent laparoscopic cholecystectomy for acute cholecystitis. Post-operative course was uncomplicated. Patient was started on clear liquids and advanced to regular diet as tolerated. Incision sites are clean, dry, and intact with no signs of infection. Patient ambulated without difficulty. Pain well controlled with oral analgesics. Discharge medications include: Acetaminophen 650mg PO q6h PRN pain, Ibuprofen 400mg PO q8h PRN pain, Oxycodone 5mg PO q4h PRN severe pain. Follow-up with general surgery in 2 weeks. Return to ED for fever >101.5°F, severe abdominal pain, or signs of infection.",
-                      simplifiedSummary: "You had surgery to remove your gallbladder. Everything went well! You can eat normally now. Your cuts are healing nicely. Keep taking your pain medicine as needed. See your surgeon in 2 weeks. Call us if you get a fever over 101.5°F or have severe belly pain."
-                    },
-                    {
-                      timestamp: "2024-03-15 15:42:33",
-                      patient: "Nguyen Minh Duc",
-                      mrn: "N-34567",
-                      action: "Regenerated",
-                      processingTime: "2.8s",
-                      originalSummary: "Patient presented with acute appendicitis and underwent laparoscopic appendectomy. Post-operative recovery was uneventful. Patient tolerated diet advancement well. Surgical incisions are healing appropriately. Patient ambulating independently. Pain management adequate with prescribed medications. Discharge instructions include: Acetaminophen 650mg PO q6h, Ibuprofen 400mg PO q8h, return to general surgery clinic in 1 week, resume normal activities as tolerated, avoid heavy lifting for 2 weeks. Patient counseled on signs of infection and when to seek medical attention.",
-                      simplifiedSummary: "You had surgery to remove your appendix. You're recovering well! You can eat normally and walk around. Take your pain medicine as directed. Come back to see us in 1 week. You can do normal activities but don't lift heavy things for 2 weeks. Call us if you see signs of infection."
-                    },
-                    {
-                      timestamp: "2024-03-15 15:38:45",
-                      patient: "John Smith",
-                      mrn: "J-78901",
-                      action: "Translated",
-                      processingTime: "1.9s",
-                      originalSummary: "Patient admitted for acute myocardial infarction, underwent cardiac catheterization with stent placement. Post-procedure course stable. Patient on dual antiplatelet therapy. Discharge medications: Aspirin 81mg daily, Clopidogrel 75mg daily, Atorvastatin 40mg daily, Metoprolol 25mg BID. Follow-up with cardiology in 1 week. Cardiac rehabilitation recommended. Return to ED for chest pain, shortness of breath, or signs of bleeding.",
-                      simplifiedSummary: "You had a heart attack and we put in a stent to help your heart. You're doing well! Take your heart medicines every day. See your heart doctor in 1 week. Start cardiac rehab when ready. Call 911 if you have chest pain or trouble breathing."
-                    },
-                  ].map((log, index) => (
-                    <div key={index} className="border rounded-lg p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="text-muted-foreground font-mono text-xs">{log.timestamp}</div>
-                          <div className="flex items-center gap-2">
-                            <Brain className="h-4 w-4 text-blue-500" />
-                            <span className="font-medium">GPT-4</span>
-                          </div>
-                          <Badge variant="default">{log.action}</Badge>
-                          <div className="text-muted-foreground">
-                            {log.patient} ({log.mrn})
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <div className="text-right">
-                            <div>Processing Time: {log.processingTime}</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                          <h4 className="font-medium text-sm mb-2 text-red-600">Original Discharge Summary</h4>
-                          <div className="bg-red-50 border border-red-200 rounded p-3 text-xs max-h-32 overflow-y-auto">
-                            {log.originalSummary}
-                          </div>
-                        </div>
-                        <div>
-                          <h4 className="font-medium text-sm mb-2 text-green-600">Simplified Patient Version</h4>
-                          <div className="bg-green-50 border border-green-200 rounded p-3 text-xs max-h-32 overflow-y-auto">
-                            {log.simplifiedSummary}
-                          </div>
-                        </div>
-                      </div>
+                {loadingAuditLogs ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Loading audit logs...</p>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : auditLogs.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <Shield className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">No audit logs found</p>
+                      <p className="text-xs text-muted-foreground mt-1">Logs will appear here as activities occur</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {auditLogs.map((log) => (
+                      <div key={log.id} className="border rounded-lg p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="text-muted-foreground font-mono text-xs">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </div>
+                            {log.type === 'clinician_activity' && (
+                              <>
+                                <Badge variant="default">{log.type.replace('_', ' ')}</Badge>
+                                <Badge variant="secondary">{log.action}</Badge>
+                                <div className="text-sm">
+                                  <span className="font-medium">{log.userName || log.userId}</span>
+                                  <span className="text-muted-foreground"> {log.action} </span>
+                                  <span className="font-medium">{log.resourceType.replace('_', ' ')}</span>
+                                  {log.patientName && (
+                                    <span className="text-muted-foreground"> for {log.patientName}</span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {log.type === 'simplification' && (
+                              <>
+                                <Badge variant="default">Simplification</Badge>
+                                <Badge variant={
+                                  log.action === 'completed' ? 'default' :
+                                  log.action === 'failed' ? 'destructive' : 'secondary'
+                                }>
+                                  {log.action}
+                                </Badge>
+                                <div className="text-sm">
+                                  <span className="text-muted-foreground">Patient: </span>
+                                  <span className="font-medium">{log.patientName || log.patientId}</span>
+                                  {log.processingTime && (
+                                    <span className="text-muted-foreground ml-2">
+                                      ({(log.processingTime / 1000).toFixed(1)}s)
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {log.type === 'translation' && (
+                              <>
+                                <Badge variant="default">Translation</Badge>
+                                <Badge variant={
+                                  log.action === 'completed' ? 'default' :
+                                  log.action === 'failed' ? 'destructive' : 'secondary'
+                                }>
+                                  {log.action}
+                                </Badge>
+                                <div className="text-sm">
+                                  <span className="font-medium">{log.sourceLanguage}</span>
+                                  <span className="text-muted-foreground"> → </span>
+                                  <span className="font-medium">{log.targetLanguage}</span>
+                                  <span className="text-muted-foreground"> for {log.patientName || log.patientId}</span>
+                                  {log.processingTime && (
+                                    <span className="text-muted-foreground ml-2">
+                                      ({(log.processingTime / 1000).toFixed(1)}s)
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            {log.type === 'chatbot' && (
+                              <>
+                                <Badge variant="default">Chatbot</Badge>
+                                <Badge variant="secondary">{log.action.replace('_', ' ')}</Badge>
+                                <div className="text-sm">
+                                  <span className="text-muted-foreground">Patient: </span>
+                                  <span className="font-medium">{log.patientName || log.patientId}</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          {log.type === 'simplification' || log.type === 'translation' ? (
+                            <div className="flex items-center gap-2">
+                              {log.aiModel && (
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Brain className="h-3 w-3" />
+                                  <span>{log.aiModel}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        {log.type === 'chatbot' && (
+                          <div className="mt-2 space-y-2">
+                            <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs">
+                              <div className="font-medium text-blue-900 mb-1">Message:</div>
+                              <div>{log.message}</div>
+                            </div>
+                            {log.response && (
+                              <div className="bg-green-50 border border-green-200 rounded p-2 text-xs">
+                                <div className="font-medium text-green-900 mb-1">Response:</div>
+                                <div>{log.response}</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
