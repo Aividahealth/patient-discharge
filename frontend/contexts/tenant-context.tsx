@@ -35,6 +35,30 @@ export interface Tenant {
   branding: TenantBranding
   features: TenantFeatures
   config: TenantConfig
+  ehrIntegration?: {
+    type: 'Manual' | 'Cerner' | 'EPIC'
+    cerner?: {
+      base_url: string
+      system_app?: {
+        client_id: string
+        client_secret: string
+        token_url: string
+        scopes: string
+      }
+      provider_app?: {
+        client_id: string
+        client_secret: string
+        authorization_url: string
+        token_url: string
+        redirect_uri: string
+        scopes: string
+      }
+      patients?: string[]
+    }
+    epic?: {
+      base_url?: string
+    }
+  }
 }
 
 export interface User {

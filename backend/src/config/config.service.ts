@@ -29,6 +29,30 @@ export interface TenantConfigResponse {
     translationEnabled: boolean;
     defaultLanguage: string;
   };
+  ehrIntegration?: {
+    type: 'Manual' | 'Cerner' | 'EPIC';
+    cerner?: {
+      base_url: string;
+      system_app?: {
+        client_id: string;
+        client_secret: string;
+        token_url: string;
+        scopes: string;
+      };
+      provider_app?: {
+        client_id: string;
+        client_secret: string;
+        authorization_url: string;
+        token_url: string;
+        redirect_uri: string;
+        scopes: string;
+      };
+      patients?: string[];
+    };
+    epic?: {
+      base_url?: string;
+    };
+  };
 }
 
 @Injectable()
@@ -121,6 +145,7 @@ export class ConfigService {
           translationEnabled: data.config?.translationEnabled ?? true,
           defaultLanguage: data.config?.defaultLanguage || 'en',
         },
+        ehrIntegration: data.ehrIntegration,
       };
 
       return response;
@@ -174,6 +199,7 @@ export class ConfigService {
         translationEnabled: true,
         defaultLanguage: 'en',
       },
+      ehrIntegration: yamlConfig.cerner ? { type: 'Cerner' as const, cerner: yamlConfig.cerner } : { type: 'Manual' as const },
     };
   }
 }
