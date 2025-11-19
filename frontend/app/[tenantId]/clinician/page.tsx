@@ -1094,10 +1094,20 @@ export default function ClinicianDashboard() {
       // Show success message
       alert('Discharge summary published successfully!')
 
-      // Optionally reload the patient data or refresh the queue
-      if (currentPatient.compositionId) {
-        await refreshComposition()
+      // Remove patient from the discharge queue list
+      if (currentPatient?.id) {
+        setPatients(prevPatients => prevPatients.filter(p => p.id !== currentPatient.id))
+        setSelectedPatient(null)
+        // Clear patient data
+        setPatientMedicalData(prev => {
+          const updated = { ...prev }
+          delete updated[currentPatient.id]
+          return updated
+        })
       }
+
+      // Reload the discharge queue to refresh the list
+      await loadDischargeQueue()
     } catch (error) {
       console.error('[ClinicianPortal] Failed to publish:', error)
       alert(error instanceof Error ? error.message : 'Failed to publish discharge summary. Please try again.')
@@ -1592,7 +1602,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           <div className="flex gap-2">
                             <Button onClick={() => setEditMode(false)}>
                               <Save className="h-4 w-4 mr-2" />
-                              {t.saveDraft}
+                              Save
                             </Button>
                           </div>
                         </div>
@@ -1791,10 +1801,6 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                 {/* Action Buttons */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
-                      <Save className="h-4 w-4 mr-2" />
-                      {t.saveDraft}
-                    </Button>
                     <Button variant="outline" size="sm" onClick={downloadPDF}>
                       <Download className="h-4 w-4 mr-2" />
                       {t.generatePDF}
