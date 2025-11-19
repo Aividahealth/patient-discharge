@@ -745,23 +745,26 @@ export class DischargeUploadService {
             physicianId = parts[1] || '';
           }
 
-          patients.push({
-            id: patientId,
-            mrn,
-            name,
-            room,
-            unit,
-            dischargeDate,
-            compositionId,
-            status,
-            attendingPhysician: {
-              name: physicianName,
-              id: physicianId,
-            },
-            avatar,
-          });
+          // Only add to queue if not approved (approved discharges should not appear in queue)
+          if (status !== 'approved') {
+            patients.push({
+              id: patientId,
+              mrn,
+              name,
+              room,
+              unit,
+              dischargeDate,
+              compositionId,
+              status,
+              attendingPhysician: {
+                name: physicianName,
+                id: physicianId,
+              },
+              avatar,
+            });
+          }
 
-          // Count statuses
+          // Count statuses (still count approved for meta, but don't include in queue)
           if (status === 'pending') statusCounts.pending++;
           else if (status === 'review') statusCounts.review++;
           else if (status === 'approved') statusCounts.approved++;
