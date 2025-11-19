@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
+import { useTenant } from "@/contexts/tenant-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +20,9 @@ import { AuthGuard } from "@/components/auth-guard"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { TenantButton } from "@/components/tenant-button"
 import { tenantColors } from "@/lib/tenant-colors"
+import { AddUserDialog, EditUserDialog, DeleteUserDialog } from "@/components/user-management-dialogs"
+import { listUsers, createUser, updateUser, deleteUser, type User, type CreateUserRequest, type UpdateUserRequest } from "@/lib/api/users"
+import { useToast } from "@/hooks/use-toast"
 import {
   Settings,
   Database,
@@ -45,9 +50,14 @@ import {
   Brain,
   Zap,
   Star,
+  LogOut,
 } from "lucide-react"
 
 export default function AdminDashboard() {
+  const params = useParams()
+  const { user, token, tenantId, logout } = useTenant()
+  const { toast } = useToast()
+
   const [activeTab, setActiveTab] = useState("overview")
   const [integrationSettings, setIntegrationSettings] = useState({
     pdfExtract: true,
@@ -74,9 +84,111 @@ export default function AdminDashboard() {
   ])
   const [isLiveMode, setIsLiveMode] = useState(true)
 
+  // User management state
+  const [users, setUsers] = useState<User[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [addUserOpen, setAddUserOpen] = useState(false)
+  const [editUserOpen, setEditUserOpen] = useState(false)
+  const [deleteUserOpen, setDeleteUserOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+
   const toggleIntegration = (key: keyof typeof integrationSettings) => {
     setIntegrationSettings((prev) => ({ ...prev, [key]: !prev[key] }))
   }
+
+  // Fetch users when component mounts or when users tab is active
+  useEffect(() => {
+    if (activeTab === "users" && token && tenantId) {
+      fetchUsers()
+    }
+  }, [activeTab, token, tenantId])
+
+  const fetchUsers = async () => {
+    if (!token || !tenantId) return
+
+    setLoadingUsers(true)
+    try {
+      const fetchedUsers = await listUsers(tenantId, token)
+      setUsers(fetchedUsers)
+    } catch (error) {
+      console.error('Error fetching users:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load users. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  const handleCreateUser = async (request: CreateUserRequest) => {
+    if (!token || !tenantId) return
+
+    try {
+      await createUser(request, tenantId, token)
+      toast({
+        title: "Success",
+        description: "User created successfully",
+      })
+      fetchUsers() // Refresh the list
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create user",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
+  const handleUpdateUser = async (userId: string, request: UpdateUserRequest) => {
+    if (!token || !tenantId) return
+
+    try {
+      await updateUser(userId, request, tenantId, token)
+      toast({
+        title: "Success",
+        description: "User updated successfully",
+      })
+      fetchUsers() // Refresh the list
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update user",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!token || !tenantId) return
+
+    try {
+      await deleteUser(userId, tenantId, token)
+      toast({
+        title: "Success",
+        description: "User deleted successfully",
+      })
+      fetchUsers() // Refresh the list
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
+  // Filter users based on search query
+  const filteredUsers = users.filter(user =>
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   return (
     <ErrorBoundary>
@@ -106,6 +218,10 @@ export default function AdminDashboard() {
                 <AvatarImage src="/admin-avatar.png" />
                 <AvatarFallback>AD</AvatarFallback>
               </Avatar>
+              <Button variant="ghost" size="sm" onClick={logout}>
+                <LogOut className="h-4 w-4" />
+                <span className="ml-2 hidden sm:inline">Logout</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -706,153 +822,131 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-heading text-2xl">User Management</h2>
-                <p className="text-muted-foreground">Manage clinician and patient access roles</p>
+                <p className="text-muted-foreground">Manage users for patient, clinician, expert, and admin roles</p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline">
                   <Upload className="h-4 w-4 mr-2" />
                   Import Users
                 </Button>
-                <Button>
+                <Button onClick={() => setAddUserOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add User
                 </Button>
               </div>
             </div>
 
-            {/* SSO Configuration */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">Single Sign-On (SSO)</CardTitle>
-                <CardDescription>Configure SAML/OIDC authentication for pilot deployment</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="saml-endpoint">SAML Endpoint URL</Label>
-                    <Input id="saml-endpoint" placeholder="https://your-idp.com/saml/sso" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label htmlFor="oidc-issuer">OIDC Issuer</Label>
-                    <Input id="oidc-issuer" placeholder="https://your-idp.com/auth/realms/hospital" className="mt-1" />
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch id="sso-enabled" />
-                  <Label htmlFor="sso-enabled">Enable SSO Authentication</Label>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* User List */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="font-heading">Active Users</CardTitle>
+                  <CardTitle className="font-heading">Active Users ({filteredUsers.length})</CardTitle>
                   <div className="flex items-center gap-2">
                     <div className="relative">
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="Search users..." className="pl-8 w-64" />
+                      <Input
+                        placeholder="Search users..."
+                        className="pl-8 w-64"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Filter className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 mt-4">
-                  <div className="flex items-center gap-2">
-                    <input type="checkbox" className="rounded" />
-                    <span className="text-sm text-muted-foreground">Select All</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Bulk Edit
-                    </Button>
-                    <Button variant="outline" size="sm" disabled>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Bulk Delete
-                    </Button>
-                    <Button variant="outline" size="sm" disabled>
-                      <Shield className="h-4 w-4 mr-2" />
-                      Change Roles
+                    <Button variant="outline" size="sm" onClick={fetchUsers} disabled={loadingUsers}>
+                      <RefreshCw className={`h-4 w-4 ${loadingUsers ? 'animate-spin' : ''}`} />
                     </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {[
-                    {
-                      name: "Dr. Sarah Johnson",
-                      email: "s.johnson@hospital.com",
-                      role: "Clinician",
-                      department: "Cardiology",
-                      lastActive: "2 hours ago",
-                      status: "active",
-                    },
-                    {
-                      name: "Dr. Michael Chen",
-                      email: "m.chen@hospital.com",
-                      role: "Clinician",
-                      department: "Internal Medicine",
-                      lastActive: "1 day ago",
-                      status: "active",
-                    },
-                    {
-                      name: "John Smith",
-                      email: "john.smith@email.com",
-                      role: "Patient",
-                      department: "N/A",
-                      lastActive: "30 min ago",
-                      status: "active",
-                    },
-                  ].map((user, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <input type="checkbox" className="rounded" />
-                        <Avatar className="h-10 w-10">
-                          <AvatarFallback>
-                            {user.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <Badge variant={user.role === "Clinician" ? "default" : "secondary"}>{user.role}</Badge>
-                          <p className="text-xs text-muted-foreground mt-1">{user.department}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm">{user.lastActive}</p>
-                          <Badge variant="outline" className="text-xs">
-                            {user.status}
-                          </Badge>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+                {loadingUsers ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Loading users...</p>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : filteredUsers.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="text-center">
+                      <Users className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">
+                        {searchQuery ? 'No users found matching your search' : 'No users found. Click "Add User" to create one.'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback>
+                              {user.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{user.name}</p>
+                            <p className="text-sm text-muted-foreground">@{user.username}</p>
+                            {user.email && (
+                              <p className="text-xs text-muted-foreground">{user.email}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="flex items-center gap-2">
+                              <Badge variant={
+                                user.role === "tenant_admin" || user.role === "system_admin" ? "default" :
+                                user.role === "clinician" ? "secondary" :
+                                user.role === "expert" ? "outline" :
+                                "outline"
+                              }>
+                                {user.role === "tenant_admin" ? "Tenant Admin" :
+                                 user.role === "system_admin" ? "System Admin" :
+                                 user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                              </Badge>
+                              {!user.isActive && (
+                                <Badge variant="destructive" className="text-xs">Inactive</Badge>
+                              )}
+                              {user.isLocked && (
+                                <Badge variant="destructive" className="text-xs">Locked</Badge>
+                              )}
+                            </div>
+                            {user.linkedPatientId && (
+                              <p className="text-xs text-muted-foreground mt-1">Patient ID: {user.linkedPatientId}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user)
+                                setEditUserOpen(true)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user)
+                                setDeleteUserOpen(true)
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1130,8 +1224,27 @@ export default function AdminDashboard() {
           </TabsContent>
         </Tabs>
       </div>
-      
+
       <CommonFooter />
+
+      {/* User Management Dialogs */}
+      <AddUserDialog
+        open={addUserOpen}
+        onOpenChange={setAddUserOpen}
+        onSubmit={handleCreateUser}
+      />
+      <EditUserDialog
+        open={editUserOpen}
+        onOpenChange={setEditUserOpen}
+        user={selectedUser}
+        onSubmit={handleUpdateUser}
+      />
+      <DeleteUserDialog
+        open={deleteUserOpen}
+        onOpenChange={setDeleteUserOpen}
+        user={selectedUser}
+        onConfirm={handleDeleteUser}
+      />
       </div>
       </AuthGuard>
     </ErrorBoundary>

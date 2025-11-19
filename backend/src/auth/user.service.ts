@@ -66,8 +66,16 @@ export class UserService {
       return {
         id: doc.docs[0].id,
         ...userData,
+        // Convert Firestore timestamps to Date objects
         createdAt: userData.createdAt?.toDate() || new Date(),
         updatedAt: userData.updatedAt?.toDate() || new Date(),
+        lockedAt: userData.lockedAt?.toDate(),
+        lastFailedLoginAt: userData.lastFailedLoginAt?.toDate(),
+        lastSuccessfulLoginAt: userData.lastSuccessfulLoginAt?.toDate(),
+        // Ensure lockout fields have defaults
+        isActive: userData.isActive ?? true,
+        isLocked: userData.isLocked ?? false,
+        failedLoginAttempts: userData.failedLoginAttempts ?? 0,
       } as User;
     } catch (error) {
       this.logger.error(`Error finding user by username: ${error.message}`);
@@ -93,8 +101,16 @@ export class UserService {
       return {
         id: doc.id,
         ...userData,
+        // Convert Firestore timestamps to Date objects
         createdAt: userData?.createdAt?.toDate() || new Date(),
         updatedAt: userData?.updatedAt?.toDate() || new Date(),
+        lockedAt: userData?.lockedAt?.toDate(),
+        lastFailedLoginAt: userData?.lastFailedLoginAt?.toDate(),
+        lastSuccessfulLoginAt: userData?.lastSuccessfulLoginAt?.toDate(),
+        // Ensure lockout fields have defaults
+        isActive: userData?.isActive ?? true,
+        isLocked: userData?.isLocked ?? false,
+        failedLoginAttempts: userData?.failedLoginAttempts ?? 0,
       } as User;
     } catch (error) {
       this.logger.error(`Error finding user by ID: ${error.message}`);
@@ -155,6 +171,52 @@ export class UserService {
       return updatedUser;
     } catch (error) {
       this.logger.error(`Error updating user: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Find all users by tenant ID
+   */
+  async findByTenant(tenantId: string): Promise<User[]> {
+    try {
+      const snapshot = await this.getFirestore()
+        .collection(this.collectionName)
+        .where('tenantId', '==', tenantId)
+        .get();
+
+      if (snapshot.empty) {
+        return [];
+      }
+
+      return snapshot.docs.map(doc => {
+        const userData = doc.data();
+        return {
+          id: doc.id,
+          ...userData,
+          createdAt: userData.createdAt?.toDate() || new Date(),
+          updatedAt: userData.updatedAt?.toDate() || new Date(),
+        } as User;
+      });
+    } catch (error) {
+      this.logger.error(`Error finding users by tenant: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a user
+   */
+  async delete(id: string): Promise<void> {
+    try {
+      await this.getFirestore()
+        .collection(this.collectionName)
+        .doc(id)
+        .delete();
+
+      this.logger.log(`Deleted user: ${id}`);
+    } catch (error) {
+      this.logger.error(`Error deleting user: ${error.message}`);
       throw error;
     }
   }

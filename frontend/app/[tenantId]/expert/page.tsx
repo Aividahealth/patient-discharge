@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2, BarChart } from "lucide-react"
+import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2, BarChart, LogOut } from "lucide-react"
 import { getReviewList, getFeedbackStats, ReviewSummary, ReviewType } from "@/lib/expert-api"
 import { QualityMetricsCard } from "@/components/quality-metrics-card"
 import { useTenant } from "@/contexts/tenant-context"
@@ -28,7 +28,7 @@ import {
 
 export default function ExpertPortalPage() {
   const router = useRouter()
-  const { tenantId, token, isLoading, isAuthenticated } = useTenant()
+  const { tenantId, token, isLoading, isAuthenticated, logout } = useTenant()
   const [medicalSummaries, setMedicalSummaries] = useState<ReviewSummary[]>([])
   const [languageSummaries, setLanguageSummaries] = useState<ReviewSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,17 +198,30 @@ export default function ExpertPortalPage() {
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <ClipboardCheck className="h-5 w-5" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <ClipboardCheck className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="font-heading text-xl font-semibold text-foreground">
+                  Expert Review Portal
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Review discharge summaries and provide feedback
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-heading text-xl font-semibold text-foreground">
-                Expert Review Portal
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Review discharge summaries and provide feedback
-              </p>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => logout()}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Logout</span>
+              </Button>
             </div>
           </div>
         </div>

@@ -1,15 +1,31 @@
-export type UserRole = 'patient' | 'clinician' | 'expert' | 'admin';
+export type UserRole = 'patient' | 'clinician' | 'expert' | 'tenant_admin' | 'system_admin';
 
 export interface User {
   id: string;
-  tenantId: string;
+  tenantId: string | null; // null for system_admin only
   username: string;
   passwordHash: string; // bcrypt hash
   name: string;
+  email?: string;
   role: UserRole;
   linkedPatientId?: string; // For patient role
+
+  // Account Status
+  isActive: boolean; // Account enabled/disabled
+  isLocked: boolean; // Account locked due to failed attempts
+  lockedAt?: Date; // When account was locked
+  lockedReason?: string; // Reason for lock
+
+  // Failed Login Tracking
+  failedLoginAttempts: number; // Counter (0-3)
+  lastFailedLoginAt?: Date; // Last failed attempt
+  lastSuccessfulLoginAt?: Date; // Last successful login
+
+  // Audit Fields
   createdAt: Date;
   updatedAt: Date;
+  createdBy?: string; // Admin who created user
+  lastUpdatedBy?: string; // Admin who last modified
 }
 
 export interface LoginRequest {
@@ -24,7 +40,7 @@ export interface LoginResponse {
   expiresIn: number;
   user: {
     id: string;
-    tenantId: string;
+    tenantId: string | null; // null for system_admin
     username: string;
     name: string;
     role: string;
@@ -43,7 +59,7 @@ export interface LoginResponse {
 
 export interface JWTPayload {
   userId: string;
-  tenantId: string;
+  tenantId: string | null; // null for system_admin
   username: string;
   name: string;
   role: string;
@@ -62,3 +78,37 @@ export interface AuthPayload {
   tenantId?: string;
 }
 
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  linkedPatientId?: string;
+}
+
+export interface UpdateUserRequest {
+  name?: string;
+  email?: string;
+  role?: UserRole;
+  linkedPatientId?: string;
+  password?: string; // Optional password change
+}
+
+export interface UserResponse {
+  id: string;
+  tenantId: string | null; // null for system_admin only
+  username: string;
+  name: string;
+  email?: string;
+  role: UserRole;
+  linkedPatientId?: string;
+  isActive: boolean;
+  isLocked: boolean;
+  failedLoginAttempts: number;
+  lastSuccessfulLoginAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+  lastUpdatedBy?: string;
+}

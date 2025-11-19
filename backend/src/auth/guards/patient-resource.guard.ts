@@ -1,0 +1,86 @@
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
+
+/**
+ * Guard to enforce patient-level resource access control
+ *
+ * This guard ensures that users with 'patient' role can ONLY access their own patient data.
+ * Other roles (clinician, expert, tenant_admin, system_admin) can access any patient data
+ * within their authorized scope.
+ *
+ * Validation for 'patient' role:
+ * - Extracts patientId from route parameters or query parameters
+ * - Checks if it matches the user's linkedPatientId
+ * - Prevents patients from accessing other patients' data
+ *
+ * Prerequisites:
+ * - AuthGuard must run before this guard (to set request.user)
+ * - Route must have :patientId parameter or patientId query param
+ *
+ * Usage:
+ * @UseGuards(AuthGuard, RolesGuard, PatientResourceGuard)
+ * @Get('/patient/:patientId/composition/:compositionId')
+ * getComposition(@Param('patientId') patientId: string) { ... }
+ */
+@Injectable()
+export class PatientResourceGuard implements CanActivate {
+  private readonly logger = new Logger(PatientResourceGuard.name);
+
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest();
+    const user = request.user;
+
+    // User should be set by AuthGuard
+    if (!user) {
+      this.logger.warn('PatientResourceGuard: No user found in request. Did AuthGuard run?');
+      throw new ForbiddenException('Authentication required');
+    }
+
+    // Only enforce for 'patient' role
+    // Other roles can access any patient data (subject to tenant isolation)
+    if (user.role !== 'patient') {
+      this.logger.debug(
+        `PatientResourceGuard: User ${user.username} (${user.role}) granted access to any patient data`,
+      );
+      return true;
+    }
+
+    // Extract patientId from route parameters or query parameters
+    const patientIdParam = request.params?.patientId || request.query?.patientId;
+
+    if (!patientIdParam) {
+      // If no patientId in request, allow (this guard only applies to patient-specific endpoints)
+      this.logger.debug('PatientResourceGuard: No patientId in request, allowing access');
+      return true;
+    }
+
+    // Check if patient has linkedPatientId
+    if (!user.linkedPatientId) {
+      this.logger.warn(
+        `PatientResourceGuard: Patient user ${user.username} has no linkedPatientId`,
+      );
+      throw new ForbiddenException('Patient account is not linked to a patient record');
+    }
+
+    // Verify patient is accessing their own data
+    if (user.linkedPatientId !== patientIdParam) {
+      this.logger.warn(
+        `PatientResourceGuard: Patient ${user.username} (linkedPatientId: ${user.linkedPatientId}) attempted to access patientId: ${patientIdParam}`,
+      );
+      throw new ForbiddenException(
+        'Access denied. You can only access your own patient data.',
+      );
+    }
+
+    this.logger.debug(
+      `PatientResourceGuard: Patient ${user.username} granted access to their own data (patientId: ${patientIdParam})`,
+    );
+
+    return true;
+  }
+}

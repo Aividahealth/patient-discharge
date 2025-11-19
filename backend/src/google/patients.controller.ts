@@ -1,10 +1,15 @@
-import { Controller, Get, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus, Logger, UseGuards } from '@nestjs/common';
 import { DischargeUploadService } from './discharge-upload.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
 import { CurrentUser } from '../auth/user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard, TenantGuard } from '../auth/guards';
 
+// Patients endpoints require clinician, expert, tenant_admin, or system_admin role
 @Controller('api/patients')
+@UseGuards(RolesGuard, TenantGuard)
+@Roles('clinician', 'expert', 'tenant_admin', 'system_admin')
 export class PatientsController {
   private readonly logger = new Logger(PatientsController.name);
 
