@@ -22,6 +22,8 @@ import { TenantButton } from "@/components/tenant-button"
 import { tenantColors } from "@/lib/tenant-colors"
 import { AddUserDialog, EditUserDialog, DeleteUserDialog } from "@/components/user-management-dialogs"
 import { listUsers, createUser, updateUser, deleteUser, type User, type CreateUserRequest, type UpdateUserRequest } from "@/lib/api/users"
+import { getTenantMetrics } from "@/lib/api/tenant"
+import type { TenantMetrics } from "@/types/tenant-metrics"
 import { useToast } from "@/hooks/use-toast"
 import {
   Settings,
@@ -93,6 +95,10 @@ export default function AdminDashboard() {
   const [deleteUserOpen, setDeleteUserOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
 
+  // Analytics/metrics state
+  const [metrics, setMetrics] = useState<TenantMetrics | null>(null)
+  const [loadingMetrics, setLoadingMetrics] = useState(false)
+
   const toggleIntegration = (key: keyof typeof integrationSettings) => {
     setIntegrationSettings((prev) => ({ ...prev, [key]: !prev[key] }))
   }
@@ -101,6 +107,13 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab === "users" && token && tenantId) {
       fetchUsers()
+    }
+  }, [activeTab, token, tenantId])
+
+  // Fetch metrics when analytics tab is active
+  useEffect(() => {
+    if (activeTab === "analytics" && token && tenantId) {
+      fetchMetrics()
     }
   }, [activeTab, token, tenantId])
 
@@ -120,6 +133,25 @@ export default function AdminDashboard() {
       })
     } finally {
       setLoadingUsers(false)
+    }
+  }
+
+  const fetchMetrics = async () => {
+    if (!token || !tenantId) return
+
+    setLoadingMetrics(true)
+    try {
+      const fetchedMetrics = await getTenantMetrics(tenantId, token)
+      setMetrics(fetchedMetrics)
+    } catch (error) {
+      console.error('Error fetching metrics:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load analytics. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingMetrics(false)
     }
   }
 
@@ -423,57 +455,77 @@ export default function AdminDashboard() {
                   <Download className="h-4 w-4 mr-2" />
                   Export Data
                 </Button>
-                <Button variant="outline" size="sm">
-                  <RefreshCw className="h-4 w-4 mr-2" />
+                <Button variant="outline" size="sm" onClick={fetchMetrics} disabled={loadingMetrics}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loadingMetrics ? 'animate-spin' : ''}`} />
                   Refresh
                 </Button>
               </div>
             </div>
 
             {/* Key Performance Indicators */}
-            <div className="grid md:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Time Saved (Hours)</CardTitle>
-                  <Zap className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">1,247</div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    +15% from last month
-                  </p>
-                </CardContent>
-              </Card>
+            {loadingMetrics ? (
+              <div className="grid md:grid-cols-3 gap-6">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Loading...</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-8 bg-muted animate-pulse rounded"></div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : metrics ? (
+              <div className="grid md:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Discharge Summaries</CardTitle>
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{metrics.dischargeSummaries.total.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Simplified: {metrics.dischargeSummaries.byStatus.simplified}, Translated: {metrics.dischargeSummaries.byStatus.translated}
+                    </p>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">AI Generations</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">3,456</div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    +28% from last month
-                  </p>
-                </CardContent>
-              </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{metrics.users.total.toLocaleString()}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Patients: {metrics.users.byRole.patient}, Clinicians: {metrics.users.byRole.clinician}
+                    </p>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Cost Savings</CardTitle>
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">$47.2K</div>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    +12% from last month
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Expert Feedback</CardTitle>
+                    <Star className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{metrics.expertFeedback.averageRating.toFixed(1)}/5</div>
+                    <p className="text-xs text-muted-foreground">
+                      Based on {metrics.expertFeedback.total} feedback submissions
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-6">
+                <Card className="col-span-3">
+                  <CardContent className="pt-6">
+                    <p className="text-center text-muted-foreground">No metrics available. Click Refresh to load data.</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
             {/* Charts Section */}
             <div className="grid md:grid-cols-2 gap-6">
@@ -511,228 +563,154 @@ export default function AdminDashboard() {
             </div>
 
             {/* Usage Metrics */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">Patient Usage Metrics</CardTitle>
-                  <CardDescription>How patients are engaging with the system</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Active Patients</span>
-                    <span className="text-sm font-medium">1,247</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Avg. Session Duration</span>
-                    <span className="text-sm font-medium">8.3 min</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Discharge Views</span>
-                    <span className="text-sm font-medium">3,456</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Language Switches</span>
-                    <span className="text-sm font-medium">892</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">AI Chat Interactions</span>
-                    <span className="text-sm font-medium">2,134</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">Clinician Usage Metrics</CardTitle>
-                  <CardDescription>How clinicians are using the platform</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Active Clinicians</span>
-                    <span className="text-sm font-medium">47</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Avg. Session Duration</span>
-                    <span className="text-sm font-medium">12.7 min</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">AI Generations</span>
-                    <span className="text-sm font-medium">1,823</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Manual Edits</span>
-                    <span className="text-sm font-medium">456</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">PDF Exports</span>
-                    <span className="text-sm font-medium">1,234</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* AI Performance Metrics */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">AI Processing Time</CardTitle>
-                  <CardDescription>Average time to generate discharge summaries with GPT-4</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Simple Cases</span>
-                    <span className="text-sm font-medium">2.3 min</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Complex Cases</span>
-                    <span className="text-sm font-medium">4.7 min</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Multi-language</span>
-                    <span className="text-sm font-medium">6.1 min</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Average</span>
-                    <span className="text-sm font-medium text-primary">3.8 min</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">User Satisfaction</CardTitle>
-                  <CardDescription>Real-time feedback scores by user type</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Clinicians</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 bg-muted rounded-full h-2">
-                        <div className="bg-green-500 h-2 rounded-full" style={{ width: "88%" }}></div>
-                      </div>
-                      <span className="text-sm font-medium">4.4/5</span>
+            {metrics && (
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-heading">User Breakdown by Role</CardTitle>
+                    <CardDescription>Distribution of users across different roles</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Patients</span>
+                      <span className="text-sm font-medium">{metrics.users.byRole.patient.toLocaleString()}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Patients</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 bg-muted rounded-full h-2">
-                        <div className="h-2 rounded-full" style={{ ...tenantColors.bgPrimary, width: "92%" }}></div>
-                      </div>
-                      <span className="text-sm font-medium">4.6/5</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Clinicians</span>
+                      <span className="text-sm font-medium">{metrics.users.byRole.clinician.toLocaleString()}</span>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Administrators</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 bg-muted rounded-full h-2">
-                        <div className="bg-purple-500 h-2 rounded-full" style={{ width: "85%" }}></div>
-                      </div>
-                      <span className="text-sm font-medium">4.3/5</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Experts</span>
+                      <span className="text-sm font-medium">{metrics.users.byRole.expert.toLocaleString()}</span>
                     </div>
-                  </div>
-                  <Separator />
-                  <div className="text-xs text-muted-foreground">
-                    <p>• Based on {Math.floor(Math.random() * 50) + 20} recent feedback submissions</p>
-                    <p>• Updated in real-time as users submit feedback</p>
-                    <p>• Click "Share Feedback" in any portal to contribute</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Tenant Admins</span>
+                      <span className="text-sm font-medium">{metrics.users.byRole.tenant_admin.toLocaleString()}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between font-medium">
+                      <span className="text-sm">Total Users</span>
+                      <span className="text-sm">{metrics.users.total.toLocaleString()}</span>
+                    </div>
+                  </CardContent>
+                </Card>
 
-            {/* Recent Feedback Submissions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">Recent Feedback Submissions</CardTitle>
-                <CardDescription>Latest user feedback from all portals</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {[
-                    {
-                      userType: "Patient",
-                      rating: 5,
-                      emoji: "😄",
-                      timestamp: "2 hours ago",
-                      user: "John Smith"
-                    },
-                    {
-                      userType: "Clinician", 
-                      rating: 4,
-                      emoji: "😊",
-                      timestamp: "4 hours ago",
-                      user: "Dr. Sarah Johnson"
-                    },
-                    {
-                      userType: "Admin",
-                      rating: 5,
-                      emoji: "😄",
-                      timestamp: "1 day ago",
-                      user: "System Admin"
-                    },
-                    {
-                      userType: "Patient",
-                      rating: 5,
-                      emoji: "😄",
-                      timestamp: "2 days ago", 
-                      user: "Maria Garcia"
-                    },
-                    {
-                      userType: "Clinician",
-                      rating: 4,
-                      emoji: "😊",
-                      timestamp: "3 days ago",
-                      user: "Dr. Michael Chen"
-                    }
-                  ].map((feedback, index) => (
-                    <div key={index} className="flex items-start gap-4 p-4 border border-border rounded-lg">
-                      <div className="flex flex-col items-center gap-1">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-heading">Discharge Summary Status</CardTitle>
+                    <CardDescription>Breakdown of discharge summaries by processing status</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Raw Only</span>
+                      <span className="text-sm font-medium">{metrics.dischargeSummaries.byStatus.raw_only.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Simplified</span>
+                      <span className="text-sm font-medium">{metrics.dischargeSummaries.byStatus.simplified.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Translated</span>
+                      <span className="text-sm font-medium">{metrics.dischargeSummaries.byStatus.translated.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Processing</span>
+                      <span className="text-sm font-medium">{metrics.dischargeSummaries.byStatus.processing.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Error</span>
+                      <span className="text-sm font-medium text-destructive">{metrics.dischargeSummaries.byStatus.error.toLocaleString()}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between font-medium">
+                      <span className="text-sm">Total</span>
+                      <span className="text-sm">{metrics.dischargeSummaries.total.toLocaleString()}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Quality Metrics */}
+            {metrics && (
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-heading">Expert Feedback Quality</CardTitle>
+                    <CardDescription>Ratings from expert reviewers on discharge summaries</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Average Rating</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 bg-muted rounded-full h-3">
+                          <div
+                            className="bg-green-500 h-3 rounded-full transition-all"
+                            style={{ width: `${(metrics.expertFeedback.averageRating / 5) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm font-medium">{metrics.expertFeedback.averageRating.toFixed(1)}/5</span>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Total Feedback Submissions</span>
+                        <span className="font-medium">{metrics.expertFeedback.total.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Summaries Reviewed</span>
+                        <span className="font-medium">{((metrics.expertFeedback.total / metrics.dischargeSummaries.total) * 100).toFixed(1)}%</span>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="text-xs text-muted-foreground">
+                      <p>• Expert feedback helps improve AI-generated summaries</p>
+                      <p>• Ratings are submitted by clinical experts reviewing discharge instructions</p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-heading">System Health</CardTitle>
+                    <CardDescription>Processing status and error rates</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Success Rate</span>
+                        <span className="font-medium text-green-600">
+                          {(((metrics.dischargeSummaries.total - metrics.dischargeSummaries.byStatus.error) / metrics.dischargeSummaries.total) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2">
                         <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium relative overflow-hidden ${
-                            feedback.userType === 'Clinician' ? 'bg-green-100 text-green-700' :
-                            feedback.userType === 'Expert' ? 'bg-purple-100 text-purple-700' : ''
-                          }`}
-                          style={feedback.userType === 'Patient' ? { color: 'var(--tenant-primary)' } : {}}
-                        >
-                          {feedback.userType === 'Patient' && (
-                            <span
-                              className="absolute inset-0 -z-10"
-                              style={{
-                                backgroundColor: 'var(--tenant-primary)',
-                                opacity: 0.15,
-                              }}
-                            />
-                          )}
-                          {feedback.userType.charAt(0)}
-                        </div>
-                        <div className="text-2xl">
-                          {feedback.emoji}
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">{feedback.user}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {feedback.userType}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">{feedback.timestamp}</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          Rated {feedback.rating}/5 - {feedback.rating >= 4 ? 'Positive' : feedback.rating >= 3 ? 'Neutral' : 'Negative'} feedback
-                        </p>
+                          className="bg-green-500 h-2 rounded-full transition-all"
+                          style={{ width: `${((metrics.dischargeSummaries.total - metrics.dischargeSummaries.byStatus.error) / metrics.dischargeSummaries.total) * 100}%` }}
+                        ></div>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-4 pt-4 border-t border-border">
-                  <Button variant="outline" size="sm" className="w-full">
-                    <Eye className="h-4 w-4 mr-2" />
-                    View All Feedback
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Currently Processing</span>
+                        <Badge variant="secondary">{metrics.dischargeSummaries.byStatus.processing.toLocaleString()}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Errors</span>
+                        <Badge variant="destructive">{metrics.dischargeSummaries.byStatus.error.toLocaleString()}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Completed Successfully</span>
+                        <Badge variant="default">{(metrics.dischargeSummaries.byStatus.simplified + metrics.dischargeSummaries.byStatus.translated).toLocaleString()}</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
           </TabsContent>
 
           {/* Data Sources & Integrations */}

@@ -40,7 +40,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 
 export default function SystemAdminPortal() {
   const router = useRouter()
-  const { authData, logout } = useTenant()
+  const { user, token, isLoading, logout } = useTenant()
   const [api, setApi] = useState<SystemAdminApi | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -81,21 +81,26 @@ export default function SystemAdminPortal() {
 
   // Verify system admin access
   useEffect(() => {
-    if (!authData) {
+    // Wait for auth data to load
+    if (isLoading) {
+      return
+    }
+
+    if (!user || !token) {
       router.push('/system-admin/login')
       return
     }
 
-    if (authData.user.role !== 'system_admin') {
+    if (user.role !== 'system_admin') {
       router.push('/login')
       return
     }
 
     // Initialize API client
-    const apiClient = new SystemAdminApi(authData.token)
+    const apiClient = new SystemAdminApi(token)
     setApi(apiClient)
     loadData(apiClient)
-  }, [authData, router])
+  }, [user, token, isLoading, router])
 
   const loadData = async (apiClient: SystemAdminApi) => {
     try {
@@ -210,7 +215,7 @@ export default function SystemAdminPortal() {
     router.push('/system-admin/login')
   }
 
-  if (loading) {
+  if (isLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-lg">Loading...</p>
@@ -232,7 +237,7 @@ export default function SystemAdminPortal() {
                 System Administration
               </h1>
               <p className="text-purple-700 mt-1">
-                Welcome, {authData?.user.name} • Managing {tenants.length} tenant{tenants.length !== 1 ? 's' : ''}
+                Welcome, {user?.name} • Managing {tenants.length} tenant{tenants.length !== 1 ? 's' : ''}
               </p>
             </div>
             <Button onClick={handleLogout} variant="outline" className="border-purple-300">

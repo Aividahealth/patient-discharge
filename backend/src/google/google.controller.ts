@@ -2,7 +2,6 @@ import { Controller, Get, Param, Post, Body, Put, Delete, Query, HttpException, 
 import { GoogleService } from './google.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
-import { Public } from '../auth/auth.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard, TenantGuard, PatientResourceGuard } from '../auth/guards';
 
@@ -401,9 +400,8 @@ export class GoogleController {
 
   /**
    * Get Composition simplified binaries (filtered by discharge-summary-simplified and discharge-instructions-simplified tags)
-   * Service-to-service endpoint - uses @Public() to bypass auth for Cloud Function identity tokens
+   * Accessible by authenticated clinicians, experts, tenant admins, and system admins
    */
-  @Public()
   @Get('fhir/Composition/:id/simplified')
   async getCompositionSimplifiedBinaries(
     @Param('id') id: string,
@@ -433,9 +431,8 @@ export class GoogleController {
 
   /**
    * Get Composition translated binaries (filtered by discharge-summary-translated and discharge-instructions-translated tags)
-   * Service-to-service endpoint - uses @Public() to bypass auth for Cloud Function identity tokens
+   * Accessible by authenticated clinicians, experts, tenant admins, and system admins
    */
-  @Public()
   @Get('fhir/Composition/:id/translated')
   async getCompositionTranslatedBinaries(
     @Param('id') id: string,
