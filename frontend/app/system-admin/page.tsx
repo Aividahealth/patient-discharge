@@ -228,7 +228,7 @@ export default function SystemAdminPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <CommonHeader title="System Administration" hideTenantInfo={true} />
 
       <div className="flex-1 p-6">
@@ -236,15 +236,15 @@ export default function SystemAdminPortal() {
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-purple-900 flex items-center gap-2">
+              <h1 className="text-3xl font-bold text-cerner-blue flex items-center gap-2">
                 <Shield className="h-8 w-8" />
                 System Administration
               </h1>
-              <p className="text-purple-700 mt-1">
+              <p className="text-gray-700 mt-1">
                 Welcome, {user?.name} • Managing {tenants.length} tenant{tenants.length !== 1 ? 's' : ''}
               </p>
             </div>
-            <Button onClick={handleLogout} variant="outline" className="border-purple-300">
+            <Button onClick={handleLogout} variant="outline" className="border-gray-200">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -430,7 +430,7 @@ export default function SystemAdminPortal() {
                           <div className="text-sm text-muted-foreground">Clinicians</div>
                           <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.clinician}</div>
                         </div>
-                        <div className="p-3 bg-purple-50 rounded-md">
+                        <div className="p-3 bg-light-gray rounded-md">
                           <div className="text-sm text-muted-foreground">Experts</div>
                           <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.expert}</div>
                         </div>
@@ -983,7 +983,7 @@ export default function SystemAdminPortal() {
                       )}
                     </div>
 
-                    <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
+                    <Button type="submit" className="w-full bg-cerner-blue hover:bg-hover-blue text-white">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Tenant
                     </Button>
@@ -1057,7 +1057,7 @@ export default function SystemAdminPortal() {
                       </p>
                     </div>
 
-                    <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
+                    <Button type="submit" className="w-full bg-cerner-blue hover:bg-hover-blue text-white">
                       <UserPlus className="h-4 w-4 mr-2" />
                       Create Tenant Admin
                     </Button>
