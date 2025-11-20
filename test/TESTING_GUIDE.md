@@ -86,7 +86,7 @@ Re-runs tests automatically when files change.
 
 Test discharge summaries are located in:
 ```
-backend/test-data/discharge-summaries/
+test/test-data/discharge-summaries/
 ```
 
 The directory includes:

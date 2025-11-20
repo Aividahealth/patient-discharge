@@ -195,7 +195,7 @@ function runCleanup(): void {
   console.log('\n🧹 Running cleanup...\n');
 
   try {
-    execSync('ts-node scripts/cleanup-test-data.ts', {
+    execSync('ts-node test/scripts/cleanup-test-data.ts', {
       stdio: 'inherit',
       cwd: process.cwd(),
       env: { ...process.env, NON_INTERACTIVE: 'true' },

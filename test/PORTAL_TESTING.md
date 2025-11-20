@@ -5,13 +5,17 @@ Complete test suite for testing all portals (Clinician, Expert, Patient, Admin) 
 ## Quick Start
 
 ```bash
-cd backend
+# From test directory (recommended)
+cd test
+npm install  # First time only
+npm test
 
-# Run all portal tests
+# Or from backend directory
+cd backend
 npm run test:portals
 
 # Clean up test data
-npm run cleanup-test-data
+cd test && npm run cleanup
 ```
 
 ## What Gets Tested
@@ -34,22 +38,22 @@ npm run cleanup-test-data
 ## Test Commands
 
 ```bash
-# Basic test run
+# From test directory (recommended)
+cd test
+npm test                    # Basic test run
+npm run test:verbose        # With verbose output
+npm run test:coverage       # With code coverage
+npm run test:watch          # Watch mode (for development)
+npm run test:no-cleanup     # Skip cleanup (for debugging)
+npm run cleanup             # Manual cleanup
+
+# Or from backend directory
+cd backend
 npm run test:portals
-
-# With verbose output
 npm run test:portals:verbose
-
-# With code coverage
 npm run test:portals:coverage
-
-# Watch mode (for development)
 npm run test:portals:watch
-
-# Skip cleanup (for debugging)
 npm run test:portals -- --no-cleanup
-
-# Manual cleanup
 npm run cleanup-test-data
 ```
 
@@ -57,7 +61,7 @@ npm run cleanup-test-data
 
 ### Sample Discharge Summaries
 
-Located in: `backend/test-data/discharge-summaries/`
+Located in: `test/test-data/discharge-summaries/`
 
 - **patient-001-discharge.md** - Cardiac (MI, stent)
 - **patient-002-discharge.md** - OB/GYN (delivery)
@@ -101,19 +105,22 @@ Automatically created for each test run:
 ## Test Architecture
 
 ```
-backend/
-├── test/
-│   ├── portals-integration.spec.ts    # Main test suite
-│   ├── utils/
-│   │   ├── test-user-manager.ts       # User management
-│   │   └── test-discharge-manager.ts  # Discharge summary management
-│   ├── TESTING_GUIDE.md               # Detailed guide
-│   └── README.md                      # Full documentation
+test/                                  # Top-level test directory
+├── portals-integration.spec.ts        # Main test suite
+├── utils/
+│   ├── test-user-manager.ts           # User management
+│   └── test-discharge-manager.ts      # Discharge summary management
+├── scripts/
+│   ├── run-portal-tests.ts            # Test runner
+│   └── cleanup-test-data.ts           # Cleanup script
 ├── test-data/
 │   └── discharge-summaries/           # Sample documents
-└── scripts/
-    ├── run-portal-tests.ts            # Test runner
-    └── cleanup-test-data.ts           # Cleanup script
+├── package.json                       # Test dependencies
+├── tsconfig.json                      # TypeScript config
+├── jest.config.js                     # Jest config
+├── TESTING_GUIDE.md                   # Detailed guide
+├── PORTAL_TESTING.md                  # This file
+└── README.md                          # Full documentation
 ```
 
 ## How It Works
@@ -159,29 +166,30 @@ backend/
 
 ```bash
 # Watch mode - tests run on file changes
-npm run test:portals:watch
+cd test && npm run test:watch
 ```
 
 ### Before Committing
 
 ```bash
 # Full test run with coverage
-npm run test:portals:coverage
+cd test && npm run test:coverage
 ```
 
 ### After Errors
 
 ```bash
 # Clean up and retry
-npm run cleanup-test-data
-npm run test:portals
+cd test
+npm run cleanup
+npm test
 ```
 
 ### CI/CD Pipeline
 
 ```bash
 # Non-interactive mode
-CI=true npm run test:portals
+cd test && CI=true npm test
 ```
 
 ## Troubleshooting
@@ -190,21 +198,24 @@ CI=true npm run test:portals
 
 ```bash
 # Check prerequisites
-ls backend/test-data/discharge-summaries/
+ls test/test-data/discharge-summaries/
 echo $SERVICE_ACCOUNT_PATH
 
+# Install dependencies
+cd test && npm install
+
 # Verify Firestore access
-npm run list-users
+cd backend && npm run list-users
 ```
 
 ### Test Data Pollution
 
 ```bash
 # Clean up first
-npm run cleanup-test-data
+cd test && npm run cleanup
 
 # Then run tests
-npm run test:portals
+npm test
 ```
 
 ### Upload Failures
@@ -221,7 +232,7 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID
 
 ```bash
 # Manual cleanup with verbose output
-npm run cleanup-test-data
+cd test && npm run cleanup
 
 # Verify in Firestore Console
 # Filter: testTag == "portal-integration-test"
@@ -243,9 +254,9 @@ npm run cleanup-test-data
 ## Documentation
 
 - **Quick Reference**: This file
-- **Full Guide**: [backend/test/TESTING_GUIDE.md](backend/test/TESTING_GUIDE.md)
-- **Test README**: [backend/test/README.md](backend/test/README.md)
-- **Architecture**: [ARCHITECTURE_DEEP_DIVE.md](ARCHITECTURE_DEEP_DIVE.md)
+- **Full Guide**: [TESTING_GUIDE.md](TESTING_GUIDE.md)
+- **Test README**: [README.md](README.md)
+- **Architecture**: [../ARCHITECTURE_DEEP_DIVE.md](../ARCHITECTURE_DEEP_DIVE.md)
 
 ## CI/CD Integration
 
@@ -254,9 +265,9 @@ npm run cleanup-test-data
 ```yaml
 - name: Portal Tests
   run: |
-    cd backend
+    cd test
     npm install
-    npm run test:portals
+    npm test
   env:
     NODE_ENV: dev
     CI: true
@@ -266,15 +277,15 @@ npm run cleanup-test-data
 
 ```bash
 #!/bin/sh
-cd backend && npm run test:portals
+cd test && npm test
 ```
 
 ## Support
 
 **For issues:**
 1. Check test output for specific errors
-2. Review [TESTING_GUIDE.md](backend/test/TESTING_GUIDE.md)
-3. Run cleanup: `npm run cleanup-test-data`
+2. Review [TESTING_GUIDE.md](TESTING_GUIDE.md)
+3. Run cleanup: `cd test && npm run cleanup`
 4. Check Firestore Console for test data
 
 **Test Coverage:**
@@ -289,20 +300,25 @@ cd backend && npm run test:portals
 
 ## Next Steps
 
-1. **Run the tests**:
+1. **Install dependencies** (first time only):
    ```bash
-   cd backend && npm run test:portals
+   cd test && npm install
    ```
 
-2. **Review the output** for any failures
-
-3. **Check code coverage**:
+2. **Run the tests**:
    ```bash
-   npm run test:portals:coverage
+   npm test
+   ```
+
+3. **Review the output** for any failures
+
+4. **Check code coverage**:
+   ```bash
+   npm run test:coverage
    open coverage/lcov-report/index.html
    ```
 
-4. **Read the full guide**: [backend/test/TESTING_GUIDE.md](backend/test/TESTING_GUIDE.md)
+5. **Read the full guide**: [TESTING_GUIDE.md](TESTING_GUIDE.md)
 
 ---
 

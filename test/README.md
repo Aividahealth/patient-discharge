@@ -5,11 +5,17 @@ Comprehensive end-to-end testing for all portals in the patient discharge system
 ## Quick Start
 
 ```bash
-# Run all portal tests
+# From the test directory
+cd test
+npm install  # First time only
+npm test
+
+# Or from the backend directory
+cd backend
 npm run test:portals
 
 # Clean up test data
-npm run cleanup-test-data
+npm run cleanup
 ```
 
 ## What This Tests
@@ -50,7 +56,7 @@ This test suite provides comprehensive testing for:
 
 ### Sample Discharge Summaries
 
-Located in: `test-data/discharge-summaries/`
+Located in: `test/test-data/discharge-summaries/`
 
 - **patient-001-discharge.md** - Cardiac patient (acute MI, stent placement)
 - **patient-002-discharge.md** - OB/GYN patient (normal vaginal delivery)
@@ -79,13 +85,13 @@ All test users are automatically:
 
 ### Test Utilities
 
-#### `test/utils/test-user-manager.ts`
+#### `utils/test-user-manager.ts`
 - Create and manage test users
 - Support for all user roles
 - Automatic tagging and cleanup
 - Password generation
 
-#### `test/utils/test-discharge-manager.ts`
+#### `utils/test-discharge-manager.ts`
 - Upload discharge summaries to GCS
 - Create Firestore metadata
 - Support for .md and .pdf files
@@ -94,21 +100,27 @@ All test users are automatically:
 ### Test Organization
 
 ```
-test/
+test/                              # Top-level test directory
 ├── portals-integration.spec.ts    # Main test suite
 ├── utils/
 │   ├── test-user-manager.ts       # User creation/cleanup
 │   └── test-discharge-manager.ts  # Discharge summary management
+├── scripts/
+│   ├── run-portal-tests.ts        # Test runner
+│   └── cleanup-test-data.ts       # Cleanup script
+├── test-data/
+│   └── discharge-summaries/       # Sample discharge documents
+│       ├── patient-001-discharge.md
+│       ├── patient-002-discharge.md
+│       ├── patient-003-discharge.md
+│       ├── patient-004-discharge.md
+│       └── README.md
+├── package.json                   # Test dependencies
+├── tsconfig.json                  # TypeScript config
+├── jest.config.js                 # Jest config
 ├── TESTING_GUIDE.md               # Comprehensive guide
+├── PORTAL_TESTING.md              # Quick reference
 └── README.md                      # This file
-
-test-data/
-└── discharge-summaries/           # Sample discharge documents
-    ├── patient-001-discharge.md
-    ├── patient-002-discharge.md
-    ├── patient-003-discharge.md
-    ├── patient-004-discharge.md
-    └── README.md
 ```
 
 ## Usage
@@ -116,33 +128,36 @@ test-data/
 ### Basic Commands
 
 ```bash
-# Run tests (default)
+# From test directory (recommended)
+cd test
+npm test                    # Run tests
+npm run test:verbose        # Verbose output
+npm run test:coverage       # With coverage
+npm run test:watch          # Watch mode
+npm run cleanup             # Clean up test data
+
+# Or from backend directory
+cd backend
 npm run test:portals
-
-# Run with verbose output
 npm run test:portals:verbose
-
-# Run with code coverage
 npm run test:portals:coverage
-
-# Run in watch mode
-npm run test:portals:watch
-
-# Clean up test data manually
 npm run cleanup-test-data
 ```
 
 ### Advanced Options
 
 ```bash
-# Run tests without cleanup (for debugging)
+# From test directory
+npm run test:no-cleanup     # Skip cleanup (for debugging)
+
+# Or from backend directory
 npm run test:portals -- --no-cleanup
 
-# Run specific test suites
-npm run test:portals -- --testNamePattern="Clinician Portal"
+# Run specific test suites with Jest
+jest --testNamePattern="Clinician Portal"
 
 # Combine options
-npm run test:portals -- --verbose --no-cleanup
+npm test -- --verbose --no-cleanup
 ```
 
 ## Test Tagging System
@@ -171,7 +186,7 @@ All test data is tagged with `portal-integration-test`:
 By default, tests automatically clean up after completion:
 
 ```bash
-npm run test:portals  # Includes cleanup
+cd test && npm test  # Includes cleanup
 ```
 
 ### Manual Cleanup
@@ -179,7 +194,11 @@ npm run test:portals  # Includes cleanup
 Clean up test data at any time:
 
 ```bash
-npm run cleanup-test-data
+# From test directory
+cd test && npm run cleanup
+
+# From backend directory
+cd backend && npm run cleanup-test-data
 ```
 
 This script:
@@ -194,7 +213,11 @@ This script:
 Keep test data for inspection:
 
 ```bash
-npm run test:portals -- --no-cleanup
+# From test directory
+cd test && npm run test:no-cleanup
+
+# From backend directory
+cd backend && npm run test:portals -- --no-cleanup
 ```
 
 ## Configuration

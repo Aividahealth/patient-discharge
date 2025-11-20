@@ -34,7 +34,7 @@ describe('Portal Integration Tests - All Portals', () => {
   let dischargeSummaries: TestDischargeSummary[];
   const TENANT_ID = 'demo';
   const TEST_TAG = 'portal-integration-test';
-  const TEST_DATA_DIR = path.join(__dirname, '../test-data/discharge-summaries');
+  const TEST_DATA_DIR = path.join(__dirname, './test-data/discharge-summaries');
 
   // Auth tokens (JWT)
   let patientToken: string;
