@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Param, HttpException, HttpStatus, Logger, UseGuards, Inject } from '@nestjs/common';
+import { Controller, Post, Body, Param, Query, HttpException, HttpStatus, Logger, UseGuards, Inject } from '@nestjs/common';
 import { DischargeUploadService } from './discharge-upload.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
@@ -6,6 +6,8 @@ import { CurrentUser } from '../auth/user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard, TenantGuard } from '../auth/guards';
 import { AuditService } from '../audit/audit.service';
+import { GoogleService } from './google.service';
+import { PubSubService } from '../pubsub/pubsub.service';
 
 interface UploadDischargeSummaryRequest {
   id: string;
@@ -33,6 +35,8 @@ export class DischargeUploadController {
   constructor(
     private readonly dischargeUploadService: DischargeUploadService,
     private readonly auditService: AuditService,
+    private readonly googleService: GoogleService,
+    private readonly pubSubService: PubSubService,
   ) {}
 
   /**
@@ -219,6 +223,122 @@ export class DischargeUploadController {
           message: 'Failed to mark discharge as completed',
           error: error.message,
           compositionId,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * POST /api/discharge-summary/republish-events
+   * Republish discharge export events for recently uploaded compositions
+   * Query params: hoursAgo (default: 24), limit (default: 10)
+   */
+  @Post('republish-events')
+  @Roles('tenant_admin', 'system_admin')
+  async republishEvents(
+    @Query('hoursAgo') hoursAgoStr: string,
+    @Query('limit') limitStr: string,
+    @TenantContext() ctx: TenantContextType,
+    @CurrentUser() user: any,
+  ) {
+    try {
+      const hoursAgo = parseInt(hoursAgoStr || '24', 10);
+      const limit = parseInt(limitStr || '10', 10);
+
+      this.logger.log(
+        `🔄 Republishing events for tenant: ${ctx.tenantId}, last ${hoursAgo} hours, limit: ${limit}`,
+      );
+
+      // Calculate date threshold
+      const dateThreshold = new Date(Date.now() - hoursAgo * 60 * 60 * 1000);
+      const dateThresholdISO = dateThreshold.toISOString().split('.')[0]; // Remove milliseconds
+
+      // Search for recent compositions
+      const searchParams: any = {
+        _sort: '-_lastUpdated',
+        _count: limit,
+        _lastUpdated: `ge${dateThresholdISO}`,
+      };
+
+      const searchResult = await this.googleService.fhirSearch('Composition', searchParams, ctx);
+
+      if (!searchResult?.entry || searchResult.entry.length === 0) {
+        return {
+          success: true,
+          message: `No compositions found in the last ${hoursAgo} hours`,
+          republished: 0,
+          failed: 0,
+          total: 0,
+        };
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
+      const errors: string[] = [];
+
+      // Process each composition
+      for (const entry of searchResult.entry) {
+        const composition = entry.resource;
+
+        if (!composition || composition.resourceType !== 'Composition') {
+          continue;
+        }
+
+        const compositionId = composition.id;
+        const patientRef = composition.subject?.reference;
+        const encounterRef = composition.encounter?.reference;
+
+        if (!patientRef) {
+          this.logger.warn(`⚠️  Skipping composition ${compositionId}: no patient reference`);
+          continue;
+        }
+
+        // Extract patient ID from reference (format: "Patient/patient-id")
+        const patientId = patientRef.replace('Patient/', '');
+        const googleEncounterId = encounterRef?.replace('Encounter/', '') || '';
+
+        try {
+          // Create encounter export event
+          const event = {
+            tenantId: ctx.tenantId,
+            patientId,
+            googleCompositionId: compositionId,
+            googleEncounterId,
+            cernerEncounterId: '',
+            exportTimestamp: composition.date || new Date().toISOString(),
+            status: 'success' as const,
+          };
+
+          // Publish event
+          await this.pubSubService.publishEncounterExportEvent(event);
+          this.logger.log(`✅ Published event for composition ${compositionId}`);
+          successCount++;
+        } catch (error) {
+          this.logger.error(`❌ Failed to publish event for composition ${compositionId}: ${error.message}`);
+          errors.push(`${compositionId}: ${error.message}`);
+          errorCount++;
+        }
+      }
+
+      return {
+        success: true,
+        message: `Republished ${successCount} events, ${errorCount} failed`,
+        republished: successCount,
+        failed: errorCount,
+        total: searchResult.entry.length,
+        errors: errors.length > 0 ? errors : undefined,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      this.logger.error(`❌ Failed to republish events: ${error.message}`);
+      throw new HttpException(
+        {
+          message: 'Failed to republish events',
+          error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
