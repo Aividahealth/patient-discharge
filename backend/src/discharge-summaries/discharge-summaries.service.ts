@@ -159,6 +159,7 @@ export class DischargeSummariesService {
 
           // Create Firestore document
           await this.firestoreService.create({
+            tenantId,
             patientName: fileInfo.patientName,
             status,
             files: {
@@ -226,6 +227,7 @@ export class DischargeSummariesService {
 
       if (!existing) {
         existing = await this.firestoreService.create({
+          tenantId,
           patientName: fileInfo.patientName,
           status: DischargeSummaryStatus.RAW_ONLY,
           files: {

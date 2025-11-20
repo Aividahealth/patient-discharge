@@ -19,7 +19,7 @@ import type {
   DischargeSummaryContentQuery,
 } from './discharge-summary.types';
 import { TenantContext } from '../tenant/tenant.decorator';
-import { TenantContext as TenantContextType } from '../tenant/tenant-context';
+import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
 
 @Controller('discharge-summaries')
 export class DischargeSummariesController {
@@ -70,9 +70,9 @@ export class DischargeSummariesController {
   @Get(':id/content')
   async getContent(
     @Param('id') id: string,
+    @TenantContext() ctx: TenantContextType,
     @Query('version') version: DischargeSummaryVersion = DischargeSummaryVersion.SIMPLIFIED,
     @Query('language') language?: DischargeSummaryLanguage,
-    @TenantContext() ctx: TenantContextType,
   ) {
     this.logger.log(
       `Get discharge summary content: ${id}, version: ${version}, language: ${language} for tenant: ${ctx.tenantId}`,

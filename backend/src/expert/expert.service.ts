@@ -586,10 +586,10 @@ export class ExpertService {
       return null;
     }
 
-    const data = doc.data();
+    const docData = doc.data();
     
     // Validate tenantId
-    if (data?.tenantId !== tenantId) {
+    if (docData?.tenantId !== tenantId) {
       return null;
     }
 
@@ -616,13 +616,13 @@ export class ExpertService {
 
     // Return updated feedback
     const updatedDoc = await docRef.get();
-    const data = updatedDoc.data();
+    const updatedData = updatedDoc.data();
     return {
       id: updatedDoc.id,
-      ...data,
-      reviewDate: data?.reviewDate?.toDate?.() || data?.reviewDate,
-      createdAt: data?.createdAt?.toDate?.() || data?.createdAt,
-      updatedAt: data?.updatedAt?.toDate?.() || data?.updatedAt,
+      ...updatedData,
+      reviewDate: updatedData?.reviewDate?.toDate?.() || updatedData?.reviewDate,
+      createdAt: updatedData?.createdAt?.toDate?.() || updatedData?.createdAt,
+      updatedAt: updatedData?.updatedAt?.toDate?.() || updatedData?.updatedAt,
     } as ExpertFeedback;
   }
 }
