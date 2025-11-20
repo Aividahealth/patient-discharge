@@ -17,7 +17,7 @@ import * as YAML from 'yaml';
 const TENANT_ID = 'demo';
 const TEST_TAG = 'portal-integration-test';
 const TEST_DATA_DIR = path.join(__dirname, '../test-data/discharge-summaries');
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3001';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.aividahealth.ai';
 
 // Helper function to get service account path
 function getServiceAccountPath(): string | undefined {
@@ -65,10 +65,10 @@ function initializeClients(): { firestore: Firestore; storage: Storage } {
 // Helper function to login through UI
 async function loginThroughUI(page: Page, tenantId: string, username: string, password: string) {
   // Navigate to login page
-  await page.goto('/login');
+  await page.goto(`/${tenantId}/login`);
   
   // Wait for login form to be visible
-  await page.waitForSelector('input[type="text"], input[name="tenantId"]', { timeout: 10000 });
+  await page.waitForSelector('input[type="text"], input[name="tenantId"], button', { timeout: 10000 });
   
   // Fill in tenant ID if there's a field for it
   const tenantInput = page.locator('input[name="tenantId"], input[placeholder*="Tenant"], input[placeholder*="tenant"]').first();
@@ -77,14 +77,14 @@ async function loginThroughUI(page: Page, tenantId: string, username: string, pa
   }
   
   // Find and click the portal button (Patient, Clinician, Admin, Expert)
-  // The login page has buttons for each portal
-  const portalButton = page.locator(`button:has-text("${username}"), button:has-text("Expert"), a:has-text("Expert")`).first();
+  // The login page has buttons for each portal - look for Expert button
+  const expertButton = page.locator('button:has-text("Expert"), button:has-text("expert"), a:has-text("Expert"), a:has-text("expert")').first();
   
-  if (await portalButton.count() > 0) {
-    // Click the portal button which triggers auto-login
-    await portalButton.click();
+  if (await expertButton.count() > 0) {
+    // Click the Expert portal button which triggers auto-login
+    await expertButton.click();
     
-    // Wait for navigation to the portal
+    // Wait for navigation to the expert portal
     await page.waitForURL(`**/${tenantId}/expert**`, { timeout: 15000 });
   } else {
     // Fallback: try to find username/password fields and login form
@@ -97,6 +97,10 @@ async function loginThroughUI(page: Page, tenantId: string, username: string, pa
       await passwordInput.fill(password);
       await loginButton.click();
       await page.waitForURL(`**/${tenantId}/expert**`, { timeout: 15000 });
+    } else {
+      // Last resort: navigate directly to expert portal (might auto-login)
+      await page.goto(`/${tenantId}/expert`);
+      await page.waitForLoadState('networkidle');
     }
   }
   

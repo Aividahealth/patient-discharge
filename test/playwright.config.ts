@@ -12,7 +12,7 @@ export default defineConfig({
   workers: 1, // Run one test at a time
   reporter: 'html',
   use: {
-    baseURL: process.env.FRONTEND_URL || 'http://localhost:3001',
+    baseURL: process.env.FRONTEND_URL || 'https://www.aividahealth.ai',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -26,8 +26,8 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'echo "Frontend should be running at http://localhost:3001"',
-    url: process.env.FRONTEND_URL || 'http://localhost:3001',
+    command: 'echo "Frontend should be accessible at https://www.aividahealth.ai"',
+    url: process.env.FRONTEND_URL || 'https://www.aividahealth.ai',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
   },
