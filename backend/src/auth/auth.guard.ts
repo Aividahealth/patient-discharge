@@ -134,19 +134,10 @@ export class AuthGuard implements CanActivate {
             `System admin accessing tenant: ${tenantIdHeader}`,
           );
         } else if (jwtPayload.tenantId !== tenantIdHeader) {
-          // For tenant_admin users, allow them to access their own tenant even if token has different tenantId
-          // This handles cases where user was created with wrong tenantId but should access correct tenant
-          if (jwtPayload.role === 'tenant_admin' && tenantIdHeader) {
-            this.logger.warn(
-              `Tenant ID mismatch for tenant_admin: token has ${jwtPayload.tenantId}, header has ${tenantIdHeader}. Allowing access with header tenantId.`,
-            );
-            // Continue - we'll use the header tenantId instead of token tenantId
-          } else {
-            this.logger.warn(
-              `Tenant ID mismatch: token has ${jwtPayload.tenantId}, header has ${tenantIdHeader}`,
-            );
-            throw new UnauthorizedException('Tenant ID in token does not match X-Tenant-ID header');
-          }
+          this.logger.warn(
+            `Tenant ID mismatch: token has ${jwtPayload.tenantId}, header has ${tenantIdHeader}`,
+          );
+          throw new UnauthorizedException('Tenant ID in token does not match X-Tenant-ID header');
         }
 
         // App JWT verification successful
