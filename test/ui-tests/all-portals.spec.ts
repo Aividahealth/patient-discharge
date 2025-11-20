@@ -178,6 +178,46 @@ test.describe('All Portals UI Tests', () => {
     const page = await context.newPage();
 
     try {
+      // Set up network request/response logging
+      let uploadRequest: any = null;
+      let uploadResponse: any = null;
+
+      page.on('request', request => {
+        // Log all POST requests to see what's happening
+        if (request.method() === 'POST') {
+          console.log(`     📤 POST request: ${request.url()}`);
+        }
+        if ((request.url().includes('/api/discharge-summaries') || request.url().includes('/api/discharge-summary')) && request.method() === 'POST') {
+          console.log(`     📤 Upload request detected: ${request.method()} ${request.url()}`);
+          uploadRequest = request;
+        }
+      });
+
+      page.on('response', async response => {
+        if ((response.url().includes('/api/discharge-summaries') || response.url().includes('/api/discharge-summary')) && response.request().method() === 'POST') {
+          console.log(`     📥 Upload response: ${response.status()} ${response.statusText()}`);
+          try {
+            const responseBody = await response.text();
+            console.log(`     Response body (FULL): ${responseBody}`);
+            uploadResponse = { status: response.status(), body: responseBody };
+          } catch (e) {
+            console.log(`     Could not read response body: ${e}`);
+          }
+        }
+      });
+
+      // Log console errors from the page
+      page.on('console', msg => {
+        if (msg.type() === 'error') {
+          console.log(`     🔴 Frontend error: ${msg.text()}`);
+        }
+      });
+
+      // Log page errors
+      page.on('pageerror', error => {
+        console.log(`     🔴 Page error: ${error.message}`);
+      });
+
       // Login as clinician
       await loginThroughUI(page, TENANT_ID, clinicianUser.username, clinicianUser.password, 'clinician');
       await page.waitForLoadState('networkidle');
@@ -208,11 +248,18 @@ test.describe('All Portals UI Tests', () => {
         await page.waitForTimeout(1000);
 
         // Fill in the required fields in the modal
-        // Patient Name, Room, Unit, Attending Physician
+        // MRN, Patient Name, Room, Unit, Attending Physician
+        const mrnInput = page.locator('input[name="mrn"], input[placeholder*="MRN"], label:has-text("MRN") + input').first();
         const patientNameInput = page.locator('input[name="patientName"], input[placeholder*="Patient Name"], label:has-text("Patient Name") + input').first();
         const roomInput = page.locator('input[name="room"], input[placeholder*="Room"], label:has-text("Room") + input').first();
         const unitInput = page.locator('input[name="unit"], input[placeholder*="Unit"], label:has-text("Unit") + input').first();
         const attendingPhysicianInput = page.locator('input[name="attendingPhysician"], input[placeholder*="Attending"], label:has-text("Attending") + input').first();
+
+        // Fill MRN
+        if (await mrnInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+          await mrnInput.fill(`MRN-TEST-${i + 1}`);
+          console.log(`     Filled MRN: MRN-TEST-${i + 1}`);
+        }
 
         // Fill Patient Name
         if (await patientNameInput.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -247,19 +294,51 @@ test.describe('All Portals UI Tests', () => {
           console.log(`     ⚠️  No file input found`);
         }
 
-        // Click "Upload Files" button
+        // Take screenshot before clicking upload
+        await page.screenshot({ path: `before-upload-${i}.png`, fullPage: true });
+        console.log(`     📸 Screenshot saved: before-upload-${i}.png`);
+
+        // Click "Upload Files" button (this opens the file selection screen)
         const uploadFilesButton = page.locator('button:has-text("Upload Files"), button:has-text("Upload File")').first();
         if (await uploadFilesButton.isVisible({ timeout: 2000 }).catch(() => false)) {
           await uploadFilesButton.click();
-          console.log(`     Clicked 'Upload Files' button`);
+          console.log(`     Clicked 'Upload Files' button (first time - opens file selection)`);
 
-          // Wait for upload to complete and modal to close
-          await page.waitForTimeout(5000);
+          // Wait for file selection screen
+          await page.waitForTimeout(1000);
+
+          // Take screenshot after clicking upload
+          await page.screenshot({ path: `after-upload-${i}.png`, fullPage: true });
+          console.log(`     📸 Screenshot saved: after-upload-${i}.png`);
+
+          // Now click the final "Upload Files" button on the file selection screen
+          const finalUploadButton = page.locator('button:has-text("Upload Files")').last();
+          if (await finalUploadButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await finalUploadButton.click();
+            console.log(`     Clicked final 'Upload Files' button to start upload`);
+
+            // Wait for upload to complete
+            await page.waitForTimeout(5000);
+          } else {
+            console.log(`     ⚠️  Final Upload Files button not found`);
+          }
 
           // Check if upload succeeded by looking for the new entry in the table
           await page.waitForLoadState('networkidle');
           const tableRows = await page.locator('table tbody tr').count();
           console.log(`     Table now has ${tableRows} rows after upload`);
+
+          // Show upload request/response details
+          if (uploadResponse) {
+            console.log(`     ✅ Upload API response: ${uploadResponse.status}`);
+            if (uploadResponse.status >= 400) {
+              console.log(`     ❌ Upload failed with error: ${uploadResponse.body}`);
+            } else {
+              console.log(`     Response preview: ${uploadResponse.body.substring(0, 100)}`);
+            }
+          } else {
+            console.log(`     ⚠️  No upload API request detected - upload might have failed silently`);
+          }
 
           console.log(`   ✅ Uploaded ${fileName}`);
         } else {
