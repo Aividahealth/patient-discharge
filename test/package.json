@@ -5,6 +5,9 @@
   "private": true,
   "scripts": {
     "test": "ts-node scripts/run-portal-tests.ts",
+    "test:ui": "playwright test",
+    "test:ui:headed": "playwright test --headed",
+    "test:ui:debug": "playwright test --debug",
     "test:verbose": "ts-node scripts/run-portal-tests.ts --verbose",
     "test:coverage": "ts-node scripts/run-portal-tests.ts --coverage",
     "test:watch": "ts-node scripts/run-portal-tests.ts --watch",
@@ -27,6 +30,7 @@
     "yaml": "^2.8.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^30.0.0",
     "@types/supertest": "^6.0.2",

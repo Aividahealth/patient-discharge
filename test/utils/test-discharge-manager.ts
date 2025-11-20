@@ -185,8 +185,10 @@ export class TestDischargeManager {
     const gcsUri = await this.uploadToGCS(options.filePath, gcsPath);
 
     // Create Firestore document
+    // For test data, use the document ID as compositionId since we don't have real FHIR Compositions
     const summaryData = {
       id: summaryId,
+      compositionId: summaryId, // Use document ID as compositionId for test data
       tenantId: options.tenantId,
       patientId,
       patientName,
