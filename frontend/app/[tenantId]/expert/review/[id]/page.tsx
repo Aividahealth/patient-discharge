@@ -78,6 +78,8 @@ export default function ExpertReviewPage() {
   const [translatedContent, setTranslatedContent] = useState<DischargeSummaryContent | null>(null)
   const [rawText, setRawText] = useState<string>("")
   const [simplifiedText, setSimplifiedText] = useState<string>("")
+  const [simplifiedSummary, setSimplifiedSummary] = useState<string>("")
+  const [simplifiedInstructions, setSimplifiedInstructions] = useState<string>("")
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
 

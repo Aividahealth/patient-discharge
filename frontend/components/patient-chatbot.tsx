@@ -82,6 +82,7 @@ export function PatientChatbot({
         }
         
         // Production fallback: Use the separate chatbot Cloud Run service
+        // This should be overridden by NEXT_PUBLIC_CHATBOT_SERVICE_URL
         return 'https://patient-discharge-chatbot-647433528821.us-central1.run.app/api/patient-chatbot/chat'
       }
 

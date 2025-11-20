@@ -122,10 +122,13 @@ export default function PatientDashboard() {
       
       try {
         const getBackendUrl = () => {
+          if (process.env.NEXT_PUBLIC_API_URL) {
+            return process.env.NEXT_PUBLIC_API_URL
+          }
           if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             return 'http://localhost:3000'
           }
-          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+          return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app'
         }
 
         const response = await fetch(
@@ -183,10 +186,13 @@ export default function PatientDashboard() {
       try {
         // Fetch patient name from FHIR Patient resource
         const getBackendUrl = () => {
+          if (process.env.NEXT_PUBLIC_API_URL) {
+            return process.env.NEXT_PUBLIC_API_URL
+          }
           if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             return 'http://localhost:3000'
           }
-          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+          return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app'
         }
 
         const patientResponse = await fetch(

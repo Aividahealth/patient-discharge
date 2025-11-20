@@ -44,7 +44,17 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
+    const auth = request.auth;
     const user = request.user;
+
+    // Allow service-to-service authentication to bypass role checks
+    // Service accounts are authenticated via Google OIDC and are trusted
+    if (auth && auth.type === 'service') {
+      this.logger.debug(
+        `RolesGuard: Service account ${auth.email} granted access (service-to-service authentication)`,
+      );
+      return true;
+    }
 
     // User should be set by AuthGuard
     if (!user) {

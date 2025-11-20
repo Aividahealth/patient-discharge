@@ -14,16 +14,35 @@ export class TenantService {
   extractTenantId(request: Request): string {
     const headers = request.headers;
 
-    // Try different header variations
+    // Debug: Log all headers to see what we're receiving
+    const allHeaders = Object.keys(headers).filter(key => 
+      key.toLowerCase().includes('tenant')
+    );
+    if (allHeaders.length > 0) {
+      console.log('[TenantService] Tenant-related headers found:', 
+        allHeaders.map(key => `${key}=${headers[key]}`).join(', ')
+      );
+    } else {
+      console.log('[TenantService] No tenant-related headers found. All headers:', Object.keys(headers).join(', '));
+    }
+
+    // Express normalizes headers to lowercase, so check lowercase first
     const tenantId =
-      headers['x-tenant-id'] as string ||
-      headers['X-Tenant-ID'] as string ||
-      headers['tenant-id'] as string;
+      (headers['x-tenant-id'] as string) ||
+      (headers['X-Tenant-ID'] as string) ||
+      (headers['tenant-id'] as string);
 
     if (!tenantId) {
+      console.error('[TenantService] No tenant ID header found. Available headers:', Object.keys(headers));
+      console.error('[TenantService] Checking specific header keys:', {
+        'x-tenant-id': headers['x-tenant-id'],
+        'X-Tenant-ID': headers['X-Tenant-ID'],
+        'tenant-id': headers['tenant-id'],
+      });
       throw new Error('Tenant ID is required. Please provide X-Tenant-ID, x-tenant-id, or tenant-id header.');
     }
 
+    console.log('[TenantService] Extracted tenantId:', tenantId);
     return tenantId;
   }
 

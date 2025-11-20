@@ -24,6 +24,7 @@ import { AddUserDialog, EditUserDialog, DeleteUserDialog } from "@/components/us
 import { listUsers, createUser, updateUser, deleteUser, type User, type CreateUserRequest, type UpdateUserRequest } from "@/lib/api/users"
 import { getTenantMetrics } from "@/lib/api/tenant"
 import { getAuditLogs } from "@/lib/api/audit-logs"
+import { republishDischargeEvents } from "@/lib/api/discharge-events"
 import type { TenantMetrics } from "@/types/tenant-metrics"
 import type { AuditLog } from "@/types/audit-logs"
 import { useToast } from "@/hooks/use-toast"
@@ -99,6 +100,11 @@ export default function AdminDashboard() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false)
   const [auditLogFilter, setAuditLogFilter] = useState<'all' | 'clinician_activity' | 'simplification' | 'translation' | 'chatbot'>('all')
+
+  // Republish events state
+  const [republishing, setRepublishing] = useState(false)
+  const [republishHoursAgo, setRepublishHoursAgo] = useState(1)
+  const [republishLimit, setRepublishLimit] = useState(10)
 
   // Fetch users when component mounts or when users tab is active
   useEffect(() => {
@@ -255,7 +261,7 @@ export default function AdminDashboard() {
 
   return (
     <ErrorBoundary>
-      <AuthGuard>
+      <AuthGuard requiredRole={['tenant_admin', 'system_admin']}>
         <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Admin Portal" />
       
@@ -1329,6 +1335,100 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Event Management */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading">Event Management</CardTitle>
+                <CardDescription>Republish discharge export events to trigger processing</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-900">
+                    <strong>What this does:</strong> Republishes discharge export events for recently uploaded compositions.
+                    This triggers the discharge-export-processor to fetch binaries, simplify content, and write back to FHIR.
+                  </p>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="republish-hours">Hours Ago</Label>
+                    <Input
+                      id="republish-hours"
+                      type="number"
+                      min="1"
+                      max="168"
+                      value={republishHoursAgo}
+                      onChange={(e) => setRepublishHoursAgo(parseInt(e.target.value) || 1)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">How many hours back to look for compositions</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="republish-limit">Limit</Label>
+                    <Input
+                      id="republish-limit"
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={republishLimit}
+                      onChange={(e) => setRepublishLimit(parseInt(e.target.value) || 10)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Maximum number of compositions to process</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={async () => {
+                    // Use tenantId from URL params, not from context (context might be "system" for system_admin)
+                    const urlTenantId = params.tenantId as string
+                    if (!token || !urlTenantId) {
+                      toast({
+                        title: "Error",
+                        description: "Authentication required",
+                        variant: "destructive",
+                      })
+                      return
+                    }
+
+                    try {
+                      setRepublishing(true)
+                      const result = await republishDischargeEvents(republishHoursAgo, republishLimit, token, urlTenantId)
+                      
+                      toast({
+                        title: "Success",
+                        description: `Republished ${result.republished} events. ${result.failed > 0 ? `${result.failed} failed.` : ''}`,
+                      })
+
+                      if (result.errors && result.errors.length > 0) {
+                        console.error("Republish errors:", result.errors)
+                      }
+                    } catch (error) {
+                      toast({
+                        title: "Error",
+                        description: error instanceof Error ? error.message : "Failed to republish events",
+                        variant: "destructive",
+                      })
+                    } finally {
+                      setRepublishing(false)
+                    }
+                  }}
+                  disabled={republishing}
+                  className="w-full"
+                >
+                  {republishing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Republishing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Republish Events
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
 
