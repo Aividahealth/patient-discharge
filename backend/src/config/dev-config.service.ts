@@ -154,32 +154,78 @@ export class DevConfigService {
       }
 
       const data = doc.data();
+      const ehrIntegration = data?.ehrIntegration;
       
-      // Use new structure: data.ehrIntegration (system admin UI structure)
-      if (!data?.ehrIntegration?.cerner) {
-        this.logger.warn(`Cerner config not found in ehrIntegration for tenant: ${tenantId}`);
-        this.tenantConfigCache.set(tenantId, null);
-        return null;
-      }
+      // Get Google config from infrastructure or legacy config
+      const googleConfigFromInfrastructure = data?.infrastructure?.google;
+      const googleConfigFromLegacy = data?.config?.tenantConfig?.google;
       
-      const ehrIntegration = data.ehrIntegration;
-      
-      // Build TenantConfig from ehrIntegration structure
+      // Build base TenantConfig
       const tenantConfig: TenantConfig = {
-        google: {
+        google: googleConfigFromInfrastructure || googleConfigFromLegacy || {
           dataset: '',
           fhir_store: '',
         },
-        cerner: {
-          base_url: ehrIntegration.cerner.base_url || '',
-          system_app: ehrIntegration.cerner.system_app,
-          provider_app: ehrIntegration.cerner.provider_app,
-          patients: ehrIntegration.cerner.patients,
-        },
-        pubsub: undefined,
+        pubsub: data?.config?.tenantConfig?.pubsub,
       };
       
-      this.logger.debug(`Loaded tenant config from ehrIntegration structure for: ${tenantId}`);
+      // Handle EHR Integration
+      if (ehrIntegration) {
+        const ehrType = ehrIntegration.type;
+        
+        if (ehrType === 'Manual') {
+          // Manual tenant - explicitly set no Cerner config to prevent YAML fallback
+          this.logger.debug(`Tenant ${tenantId} is configured as Manual - no EHR integration`);
+          tenantConfig.cerner = undefined;
+          tenantConfig.ehr = undefined;
+        } else if (ehrType === 'Cerner' && ehrIntegration.cerner) {
+          // Cerner tenant - include Cerner config
+          tenantConfig.cerner = {
+            base_url: ehrIntegration.cerner.base_url || '',
+            system_app: ehrIntegration.cerner.system_app,
+            provider_app: ehrIntegration.cerner.provider_app,
+            patients: ehrIntegration.cerner.patients,
+          };
+          
+          // Also populate new 'ehr' structure for vendor-agnostic access
+          tenantConfig.ehr = {
+            vendor: 'cerner',
+            base_url: ehrIntegration.cerner.base_url || '',
+            patients: ehrIntegration.cerner.patients,
+            system_app: ehrIntegration.cerner.system_app,
+            provider_app: ehrIntegration.cerner.provider_app,
+          };
+          
+          this.logger.debug(`Loaded Cerner config from ehrIntegration for tenant: ${tenantId}`);
+        } else if (ehrType === 'EPIC' && ehrIntegration.epic) {
+          // EPIC tenant - populate new 'ehr' structure
+          tenantConfig.ehr = {
+            vendor: 'epic',
+            base_url: ehrIntegration.epic.base_url || '',
+            // EPIC config can be extended here
+          };
+          this.logger.debug(`Loaded EPIC config from ehrIntegration for tenant: ${tenantId}`);
+        } else {
+          // Unknown or incomplete EHR integration type
+          this.logger.warn(`EHR integration type '${ehrType}' found but config incomplete for tenant: ${tenantId}`);
+          tenantConfig.cerner = undefined;
+          tenantConfig.ehr = undefined;
+        }
+      } else {
+        // No ehrIntegration found - check legacy config
+        const legacyCernerConfig = data?.config?.tenantConfig?.cerner;
+        if (legacyCernerConfig) {
+          this.logger.debug(`Using legacy Cerner config for tenant: ${tenantId}`);
+          tenantConfig.cerner = legacyCernerConfig;
+        } else {
+          // No EHR config at all - treat as Manual
+          this.logger.debug(`No EHR integration found for tenant: ${tenantId} - treating as Manual`);
+          tenantConfig.cerner = undefined;
+          tenantConfig.ehr = undefined;
+        }
+      }
+      
+      this.logger.debug(`Loaded tenant config from Firestore for: ${tenantId} (EHR type: ${ehrIntegration?.type || 'none'})`);
 
       // Cache the result
       this.tenantConfigCache.set(tenantId, tenantConfig);
