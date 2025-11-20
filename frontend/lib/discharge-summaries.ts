@@ -21,8 +21,8 @@ const getApiBaseUrl = () => {
     return 'http://localhost:3000';
   }
   
-  // Production fallback: Use your Google Cloud backend URL
-  return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app';
+  // Production fallback: Use dev backend URL (should be overridden by NEXT_PUBLIC_API_URL)
+  return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
 };
 
 const API_BASE_URL = getApiBaseUrl();
