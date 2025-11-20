@@ -252,7 +252,7 @@ export class DischargeUploadController {
         `🔄 Republishing events for tenant: ${ctx.tenantId}, last ${hoursAgo} hours, limit: ${limit}`,
       );
       this.logger.debug(
-        `Republish request details: tenantId=${ctx.tenantId}, hoursAgo=${hoursAgo}, limit=${limit}, X-Tenant-ID header=${request.headers['x-tenant-id']}`,
+        `Republish request details: tenantId=${ctx.tenantId}, hoursAgo=${hoursAgo}, limit=${limit}, X-Tenant-ID header=${request.headers['x-tenant-id']}, user.tenantId=${user?.tenantId}, auth.tenantId=${request.auth?.tenantId}`,
       );
 
       // Calculate date threshold

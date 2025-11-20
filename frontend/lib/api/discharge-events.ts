@@ -27,13 +27,24 @@ export async function republishDischargeEvents(
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
   const url = `${apiUrl}/api/discharge-summary/republish-events?hoursAgo=${hoursAgo}&limit=${limit}`;
 
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  if (tenantId) {
+    headers['X-Tenant-ID'] = tenantId;
+    console.log('[republishDischargeEvents] Sending request with X-Tenant-ID:', tenantId);
+  } else {
+    console.warn('[republishDischargeEvents] No tenantId provided, header will not be set');
+  }
+
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
-    },
+    headers,
   });
 
   if (!response.ok) {
