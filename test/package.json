@@ -1,0 +1,36 @@
+{
+  "name": "patient-discharge-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive portal integration tests",
+  "private": true,
+  "scripts": {
+    "test": "ts-node scripts/run-portal-tests.ts",
+    "test:verbose": "ts-node scripts/run-portal-tests.ts --verbose",
+    "test:coverage": "ts-node scripts/run-portal-tests.ts --coverage",
+    "test:watch": "ts-node scripts/run-portal-tests.ts --watch",
+    "test:no-cleanup": "ts-node scripts/run-portal-tests.ts --no-cleanup",
+    "cleanup": "ts-node scripts/cleanup-test-data.ts"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.10.0",
+    "@google-cloud/storage": "^7.7.0",
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/testing": "^11.0.1",
+    "@types/node": "^22.10.7",
+    "bcryptjs": "^3.0.3",
+    "supertest": "^7.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3",
+    "uuid": "^13.0.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jest": "^30.0.0",
+    "@types/supertest": "^6.0.2",
+    "@types/uuid": "^10.0.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.2.5"
+  }
+}
