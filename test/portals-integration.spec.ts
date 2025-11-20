@@ -80,23 +80,11 @@ describe('Portal Integration Tests - All Portals', () => {
   }
 
   /**
-   * Get GCS bucket name from config
+   * Get GCS bucket name for raw discharge summaries (tenant-specific)
    */
-  function getGCSBucketName(): string {
-    try {
-      // Force dev environment for tests
-      const env = process.env.TEST_ENV || process.env.NODE_ENV || 'dev';
-      const configPath = path.resolve(process.cwd(), `../backend/.settings.${env}/config.yaml`);
-
-      if (fs.existsSync(configPath)) {
-        const raw = fs.readFileSync(configPath, 'utf8');
-        const config = YAML.parse(raw);
-        return config.gcs_bucket_name || 'patient-discharge-dev';
-      }
-    } catch (error) {
-      // Fall back to default
-    }
-    return process.env.GCS_BUCKET_NAME || 'patient-discharge-dev';
+  function getGCSBucketName(tenantId: string = TENANT_ID): string {
+    // Use tenant-specific bucket format: discharge-summaries-raw-{tenantId}
+    return `discharge-summaries-raw-${tenantId}`;
   }
 
   /**

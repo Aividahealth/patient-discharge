@@ -53,12 +53,49 @@ export class TestDischargeManager {
   }
 
   /**
+   * Check if bucket exists
+   */
+  private async bucketExists(bucketName: string): Promise<boolean> {
+    try {
+      const bucket = this.storage.bucket(bucketName);
+      const [exists] = await bucket.exists();
+      return exists;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Ensure bucket exists, create if it doesn't
+   */
+  private async ensureBucketExists(bucketName: string): Promise<void> {
+    const exists = await this.bucketExists(bucketName);
+    if (!exists) {
+      console.log(`Bucket ${bucketName} does not exist, creating it...`);
+      try {
+        const location = process.env.LOCATION || 'us-central1';
+        await this.storage.createBucket(bucketName, {
+          location,
+          storageClass: 'STANDARD',
+        });
+        console.log(`✅ Created bucket: ${bucketName}`);
+      } catch (error) {
+        console.error(`Failed to create bucket ${bucketName}:`, error);
+        throw new Error(`Failed to create bucket ${bucketName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  }
+
+  /**
    * Upload a discharge summary file to GCS
    */
   private async uploadToGCS(
     filePath: string,
     destinationPath: string
   ): Promise<string> {
+    // Ensure bucket exists before uploading
+    await this.ensureBucketExists(this.bucketName);
+
     const bucket = this.storage.bucket(this.bucketName);
     const fileContent = fs.readFileSync(filePath);
     const file = bucket.file(destinationPath);
@@ -200,8 +237,12 @@ export class TestDischargeManager {
     tenantId: string,
     directoryPath: string
   ): Promise<TestDischargeSummary[]> {
+    // Ensure bucket exists before processing files
+    await this.ensureBucketExists(this.bucketName);
+
     const files = fs.readdirSync(directoryPath);
     const summaries: TestDischargeSummary[] = [];
+    const errors: Array<{ file: string; error: string }> = [];
 
     for (const file of files) {
       // Skip non-discharge files
@@ -216,9 +257,19 @@ export class TestDischargeManager {
           filePath,
         });
         summaries.push(summary);
+        console.log(`   ✅ Created summary from ${file}: ${summary.id}`);
       } catch (error) {
-        console.error(`Failed to create discharge summary from ${file}:`, error.message);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`   ❌ Failed to create discharge summary from ${file}:`, errorMsg);
+        errors.push({ file, error: errorMsg });
       }
+    }
+
+    if (errors.length > 0) {
+      console.warn(`⚠️  ${errors.length} file(s) failed to process:`);
+      errors.forEach(({ file, error }) => {
+        console.warn(`   - ${file}: ${error}`);
+      });
     }
 
     return summaries;
