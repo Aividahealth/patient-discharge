@@ -10,6 +10,14 @@ module.exports = {
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
+  // Transform ES modules in node_modules (like uuid v13+)
+  transformIgnorePatterns: [
+    'node_modules/(?!(uuid)/)',
+  ],
+  // Map uuid to CommonJS version if available
+  moduleNameMapper: {
+    '^uuid$': require.resolve('uuid'),
+  },
   collectCoverageFrom: [
     '**/*.ts',
     '!**/*.spec.ts',
