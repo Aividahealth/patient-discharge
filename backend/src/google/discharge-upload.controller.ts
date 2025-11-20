@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Param, Query, HttpException, HttpStatus, Logger, UseGuards, Inject, Req } from '@nestjs/common';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { DischargeUploadService } from './discharge-upload.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
@@ -252,7 +252,7 @@ export class DischargeUploadController {
         `🔄 Republishing events for tenant: ${ctx.tenantId}, last ${hoursAgo} hours, limit: ${limit}`,
       );
       this.logger.debug(
-        `Republish request details: tenantId=${ctx.tenantId}, hoursAgo=${hoursAgo}, limit=${limit}, X-Tenant-ID header=${request.headers['x-tenant-id']}, user.tenantId=${user?.tenantId}, auth.tenantId=${request.auth?.tenantId}`,
+        `Republish request details: tenantId=${ctx.tenantId}, hoursAgo=${hoursAgo}, limit=${limit}, X-Tenant-ID header=${request.headers['x-tenant-id']}, user.tenantId=${user?.tenantId}, auth.tenantId=${(request as any).auth?.tenantId}`,
       );
 
       // Calculate date threshold
