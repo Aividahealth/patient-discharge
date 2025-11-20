@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Param, Query, HttpException, HttpStatus, Logger, UseGuards, Inject } from '@nestjs/common';
+import { Controller, Post, Body, Param, Query, HttpException, HttpStatus, Logger, UseGuards, Inject, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { DischargeUploadService } from './discharge-upload.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
@@ -241,6 +242,7 @@ export class DischargeUploadController {
     @Query('limit') limitStr: string,
     @TenantContext() ctx: TenantContextType,
     @CurrentUser() user: any,
+    @Req() request: Request,
   ) {
     try {
       const hoursAgo = parseInt(hoursAgoStr || '24', 10);
@@ -248,6 +250,9 @@ export class DischargeUploadController {
 
       this.logger.log(
         `🔄 Republishing events for tenant: ${ctx.tenantId}, last ${hoursAgo} hours, limit: ${limit}`,
+      );
+      this.logger.debug(
+        `Republish request details: tenantId=${ctx.tenantId}, hoursAgo=${hoursAgo}, limit=${limit}, X-Tenant-ID header=${request.headers['x-tenant-id']}`,
       );
 
       // Calculate date threshold
@@ -310,9 +315,13 @@ export class DischargeUploadController {
             status: 'success' as const,
           };
 
+          this.logger.debug(
+            `Publishing event for composition ${compositionId} with tenantId: ${event.tenantId}`,
+          );
+
           // Publish event
           await this.pubSubService.publishEncounterExportEvent(event);
-          this.logger.log(`✅ Published event for composition ${compositionId}`);
+          this.logger.log(`✅ Published event for composition ${compositionId} with tenantId: ${event.tenantId}`);
           successCount++;
         } catch (error) {
           this.logger.error(`❌ Failed to publish event for composition ${compositionId}: ${error.message}`);

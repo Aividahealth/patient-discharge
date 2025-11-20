@@ -1200,7 +1200,9 @@ export default function AdminDashboard() {
                 </div>
                 <Button
                   onClick={async () => {
-                    if (!token || !tenantId) {
+                    // Use tenantId from URL params, not from context (context might be "system" for system_admin)
+                    const urlTenantId = params.tenantId as string
+                    if (!token || !urlTenantId) {
                       toast({
                         title: "Error",
                         description: "Authentication required",
@@ -1211,7 +1213,7 @@ export default function AdminDashboard() {
 
                     try {
                       setRepublishing(true)
-                      const result = await republishDischargeEvents(republishHoursAgo, republishLimit, token, tenantId)
+                      const result = await republishDischargeEvents(republishHoursAgo, republishLimit, token, urlTenantId)
                       
                       toast({
                         title: "Success",
