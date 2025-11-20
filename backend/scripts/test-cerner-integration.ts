@@ -216,11 +216,15 @@ async function testBackendAPI(): Promise<TestResult> {
   console.log('\n🌐 Step 3: Testing backend API endpoints...');
   
   try {
-    // Test 1: Get tenant config via API
-    console.log('   Testing GET /config/tenant/:tenantId...');
-    const configResponse = await axios.get(`${DEV_BACKEND_URL}/config/tenant/${TENANT_ID}`);
+    // Test 1: Get tenant config via API (correct endpoint)
+    console.log('   Testing GET /api/config with X-Tenant-ID header...');
+    const configResponse = await axios.get(`${DEV_BACKEND_URL}/api/config`, {
+      headers: {
+        'X-Tenant-ID': TENANT_ID,
+      },
+    });
     
-    if (!configResponse.data?.ehrIntegration?.cerner) {
+    if (!configResponse.data?.tenant?.ehrIntegration?.cerner) {
       return {
         step: 'Backend API',
         success: false,
@@ -230,13 +234,8 @@ async function testBackendAPI(): Promise<TestResult> {
     }
     
     console.log('✅ Tenant config endpoint working');
-    console.log('   EHR Integration Type:', configResponse.data.ehrIntegration.type);
-    console.log('   Has Cerner Config:', !!configResponse.data.ehrIntegration.cerner);
-    
-    // Test 2: Test Cerner authentication via backend
-    console.log('   Testing Cerner authentication via backend...');
-    // Note: We can't directly test this without a token, but we can check if the endpoint exists
-    // The actual authentication test will be done via the Cerner service
+    console.log('   EHR Integration Type:', configResponse.data.tenant.ehrIntegration.type);
+    console.log('   Has Cerner Config:', !!configResponse.data.tenant.ehrIntegration.cerner);
     
     return {
       step: 'Backend API',
@@ -245,7 +244,7 @@ async function testBackendAPI(): Promise<TestResult> {
       data: {
         configEndpoint: 'working',
         tenantId: TENANT_ID,
-        hasCernerConfig: !!configResponse.data.ehrIntegration.cerner,
+        hasCernerConfig: !!configResponse.data.tenant.ehrIntegration.cerner,
       },
     };
   } catch (error) {
@@ -305,33 +304,29 @@ async function testCernerResourceFetch(): Promise<TestResult> {
       };
     }
     
-    // Test 1: Fetch Patient resource (using a known test patient if available)
-    console.log('   Testing Patient search...');
-    const patientSearchUrl = `${baseUrl}/Patient?_count=1`;
+    // Test 1: Fetch a specific Patient resource (using test patient ID from config)
+    const testPatientId = cernerConfig.patients?.[0] || '1';
+    console.log(`   Testing Patient fetch with ID: ${testPatientId}...`);
+    const patientUrl = `${baseUrl}/Patient/${testPatientId}`;
     const patientHeaders = {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/fhir+json',
     };
     
     try {
-      const patientResponse = await axios.get(patientSearchUrl, { headers: patientHeaders });
-      console.log('✅ Patient search successful');
-      console.log('   Total Patients:', patientResponse.data.total || 0);
-      
-      if (patientResponse.data.entry && patientResponse.data.entry.length > 0) {
-        const patientId = patientResponse.data.entry[0].resource?.id;
-        console.log('   Sample Patient ID:', patientId || 'N/A');
-      }
+      const patientResponse = await axios.get(patientUrl, { headers: patientHeaders });
+      console.log('✅ Patient fetch successful');
+      console.log('   Patient ID:', patientResponse.data.id || 'N/A');
+      console.log('   Patient Name:', patientResponse.data.name?.[0]?.text || 'N/A');
       
       return {
         step: 'Cerner Resource Fetch',
         success: true,
-        message: 'Successfully fetched resources from Cerner',
+        message: 'Successfully fetched Patient resource from Cerner',
         data: {
-          patientSearch: {
-            total: patientResponse.data.total || 0,
-            hasResults: (patientResponse.data.entry?.length || 0) > 0,
-          },
+          patientId: patientResponse.data.id,
+          patientName: patientResponse.data.name?.[0]?.text,
+          hasResource: !!patientResponse.data,
         },
       };
     } catch (error) {
@@ -342,7 +337,7 @@ async function testCernerResourceFetch(): Promise<TestResult> {
       return {
         step: 'Cerner Resource Fetch',
         success: false,
-        message: `Failed to fetch Patient resources: ${errorDetails}`,
+        message: `Failed to fetch Patient resource: ${errorDetails}`,
         error: {
           status: error.response?.status,
           statusText: error.response?.statusText,
