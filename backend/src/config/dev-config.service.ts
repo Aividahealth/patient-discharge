@@ -154,32 +154,32 @@ export class DevConfigService {
       }
 
       const data = doc.data();
-      if (!data || !data.config) {
-        this.tenantConfigCache.set(tenantId, null);
-        return null;
-      }
-
-      // Extract the TenantConfig structure from Firestore data
-      // The config.tenantConfig field contains the actual google, cerner, pubsub structure
-      const firestoreConfig = data.config as any;
       
-      if (!firestoreConfig.tenantConfig) {
-        this.logger.warn(`Tenant config structure not found in Firestore for: ${tenantId}`);
+      // Use new structure: data.ehrIntegration (system admin UI structure)
+      if (!data?.ehrIntegration?.cerner) {
+        this.logger.warn(`Cerner config not found in ehrIntegration for tenant: ${tenantId}`);
         this.tenantConfigCache.set(tenantId, null);
         return null;
       }
       
-      // Build TenantConfig from Firestore data
+      const ehrIntegration = data.ehrIntegration;
+      
+      // Build TenantConfig from ehrIntegration structure
       const tenantConfig: TenantConfig = {
-        google: firestoreConfig.tenantConfig.google || {
+        google: {
           dataset: '',
           fhir_store: '',
         },
-        cerner: firestoreConfig.tenantConfig.cerner || {
-          base_url: '',
+        cerner: {
+          base_url: ehrIntegration.cerner.base_url || '',
+          system_app: ehrIntegration.cerner.system_app,
+          provider_app: ehrIntegration.cerner.provider_app,
+          patients: ehrIntegration.cerner.patients,
         },
-        pubsub: firestoreConfig.tenantConfig.pubsub,
+        pubsub: undefined,
       };
+      
+      this.logger.debug(`Loaded tenant config from ehrIntegration structure for: ${tenantId}`);
 
       // Cache the result
       this.tenantConfigCache.set(tenantId, tenantConfig);
