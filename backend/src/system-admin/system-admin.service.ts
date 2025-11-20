@@ -514,23 +514,20 @@ export class SystemAdminService {
         }
       });
 
-      // Get expert feedback stats
+      // Get expert feedback stats (filtered by tenantId)
       const feedbackSnapshot = await this.getFirestore()
         .collection('expert_feedback')
+        .where('tenantId', '==', tenantId)
         .get();
 
       let totalFeedback = 0;
       let totalRating = 0;
 
-      // Filter feedback by tenantId from related discharge summaries
-      const summaryIds = summariesSnapshot.docs.map(doc => doc.id);
       feedbackSnapshot.forEach(doc => {
         const data = doc.data();
-        if (summaryIds.includes(data.dischargeSummaryId)) {
-          totalFeedback++;
-          if (data.rating) {
-            totalRating += data.rating;
-          }
+        totalFeedback++;
+        if (data.overallRating) {
+          totalRating += data.overallRating;
         }
       });
 

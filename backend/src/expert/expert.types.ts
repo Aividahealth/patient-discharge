@@ -7,6 +7,9 @@ export type ReviewType = 'simplification' | 'translation';
 export interface ExpertFeedback {
   id?: string;
 
+  // Multi-tenant isolation
+  tenantId: string; // Tenant identifier (required for multi-tenant isolation)
+
   // What's being reviewed
   dischargeSummaryId: string;
   reviewType: ReviewType;

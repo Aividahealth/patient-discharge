@@ -84,6 +84,7 @@ export interface QualityMetrics {
 
 export interface DischargeSummaryMetadata {
   id: string; // Unique identifier
+  tenantId: string; // Tenant identifier (required for multi-tenant isolation)
   patientId?: string; // Patient identifier
   patientName?: string; // Patient name (if available)
   mrn?: string; // Medical Record Number
