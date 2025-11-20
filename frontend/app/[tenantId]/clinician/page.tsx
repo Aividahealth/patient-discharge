@@ -547,7 +547,7 @@ export default function ClinicianDashboard() {
   // Helper function to fetch simplified content from the API
   const fetchSimplifiedContent = async (compositionId: string, token: string, tenantId: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://patient-discharge-backend-dev-qnzythtpnq-uc.a.run.app';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
       const simplifiedResponse = await fetch(
         `${apiUrl}/google/fhir/Composition/${compositionId}/simplified`,
         {

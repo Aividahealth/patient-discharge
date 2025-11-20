@@ -10,7 +10,7 @@ export async function getTenantMetrics(
   tenantId: string,
   token: string
 ): Promise<TenantMetrics> {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app')
 
   const response = await fetch(`${baseUrl}/api/tenant/metrics`, {
     method: 'GET',
