@@ -23,7 +23,7 @@ function parseArgs(): TestRunOptions {
   const options: TestRunOptions = {
     verbose: false,
     coverage: false,
-    cleanup: true,
+    cleanup: false, // Default to false - cleanup should be run separately
     watch: false,
   };
 
@@ -66,7 +66,8 @@ Usage: npm run test:portals [OPTIONS]
 Options:
   --verbose, -v      Show verbose test output
   --coverage, -c     Generate code coverage report
-  --no-cleanup       Skip cleanup after tests
+  --cleanup          Run cleanup after tests (default: false)
+  --no-cleanup       Skip cleanup after tests (default behavior)
   --watch, -w        Watch mode (re-run tests on file changes)
   --help, -h         Show this help message
 
@@ -77,8 +78,11 @@ Examples:
   # Run tests with verbose output and coverage
   npm run test:portals -- --verbose --coverage
 
-  # Run tests without cleanup (for debugging)
-  npm run test:portals -- --no-cleanup
+  # Run tests with cleanup (explicit)
+  npm run test:portals -- --cleanup
+  
+  # Run tests without cleanup (default)
+  npm run test:portals
 
   # Run tests in watch mode
   npm run test:portals -- --watch
@@ -87,7 +91,9 @@ The test suite will:
   1. Create test users for all portal roles (clinician, expert, patient, admin)
   2. Upload sample discharge summaries from test-data directory
   3. Test all portal functionality
-  4. Clean up all test data (unless --no-cleanup is specified)
+  4. Wait for discharge summaries to be simplified and translated
+  5. Verify simplification and translation were successful
+  6. Clean up all test data (only if --cleanup is specified)
 
 All test data is tagged with 'portal-integration-test' for easy identification
 and cleanup. You can manually clean up test data at any time by running:
@@ -237,9 +243,12 @@ async function main() {
   // Run tests
   const testResult = runTests(options);
 
-  // Run cleanup if enabled
+  // Run cleanup if explicitly enabled
   if (options.cleanup && !options.watch) {
     runCleanup();
+  } else if (!options.cleanup) {
+    console.log('\n💡 Note: Cleanup was skipped. Run cleanup manually with:');
+    console.log('   npm run cleanup\n');
   }
 
   // Exit with test result code

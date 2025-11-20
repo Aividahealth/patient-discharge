@@ -8,6 +8,7 @@
     "test:verbose": "ts-node scripts/run-portal-tests.ts --verbose",
     "test:coverage": "ts-node scripts/run-portal-tests.ts --coverage",
     "test:watch": "ts-node scripts/run-portal-tests.ts --watch",
+    "test:cleanup": "ts-node scripts/run-portal-tests.ts --cleanup",
     "test:no-cleanup": "ts-node scripts/run-portal-tests.ts --no-cleanup",
     "cleanup": "ts-node scripts/cleanup-test-data.ts"
   },

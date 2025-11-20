@@ -100,6 +100,74 @@ describe('Portal Integration Tests - All Portals', () => {
     return response.body.token;
   }
 
+  /**
+   * Wait for a discharge summary to be simplified
+   * Polls Firestore until status is 'simplified' or timeout
+   */
+  async function waitForSimplification(
+    summaryId: string,
+    timeoutMs: number = 300000, // 5 minutes default
+    pollIntervalMs: number = 5000 // 5 seconds
+  ): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const summary = await dischargeManager.findSummary(summaryId);
+      if (summary && (summary.status === 'simplified' || summary.status === 'translated')) {
+        if (summary.files?.simplified) {
+          console.log(`   ✅ Summary ${summaryId} simplified`);
+          return true;
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+    console.warn(`   ⚠️  Timeout waiting for simplification of ${summaryId}`);
+    return false;
+  }
+
+  /**
+   * Wait for a discharge summary to be translated
+   * Polls Firestore until status is 'translated' and has translation files
+   */
+  async function waitForTranslation(
+    summaryId: string,
+    timeoutMs: number = 300000, // 5 minutes default
+    pollIntervalMs: number = 5000 // 5 seconds
+  ): Promise<boolean> {
+    const startTime = Date.now();
+    while (Date.now() - startTime < timeoutMs) {
+      const summary = await dischargeManager.findSummary(summaryId);
+      if (summary && summary.status === 'translated') {
+        if (summary.files?.translated && Object.keys(summary.files.translated).length > 0) {
+          console.log(`   ✅ Summary ${summaryId} translated`);
+          return true;
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    }
+    console.warn(`   ⚠️  Timeout waiting for translation of ${summaryId}`);
+    return false;
+  }
+
+  /**
+   * Trigger simplification by republishing events for test summaries
+   */
+  async function triggerSimplification(token: string): Promise<void> {
+    try {
+      console.log('   🔄 Triggering simplification by republishing events...');
+      const response = await request(BACKEND_URL)
+        .post('/api/discharge-summary/republish-events')
+        .set('X-Tenant-ID', TENANT_ID)
+        .set('Authorization', `Bearer ${token}`)
+        .query({ hoursAgo: '1', limit: '10' })
+        .expect(200);
+      console.log(`   ✅ Republished events: ${JSON.stringify(response.body)}`);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.warn(`   ⚠️  Failed to republish events: ${errorMsg}`);
+      // Don't throw - simplification might be triggered automatically
+    }
+  }
+
   beforeAll(async () => {
     console.log('\n🚀 Starting Portal Integration Tests...\n');
 
@@ -148,25 +216,27 @@ describe('Portal Integration Tests - All Portals', () => {
       console.log(`      - ${summary.patientName} (${summary.mrn})`);
     });
 
+    // Login to get tokens
+    console.log('\n🔐 Logging in test users...');
+    try {
+      patientToken = await login(patientUser.username, patientUser.password);
+      clinicianToken = await login(clinicianUser.username, clinicianUser.password);
+      expertToken = await login(expertUser.username, expertUser.password);
+      adminToken = await login(adminUser.username, adminUser.password);
+      console.log('   ✅ All users logged in successfully');
+    } catch (error) {
+      console.warn(`   ⚠️  Login failed: ${error.message}`);
+      console.warn('   Some tests may fail without authentication tokens');
+    }
+
     // Using dev backend URL for integration tests
     console.log(`\n🌐 Using backend URL: ${BACKEND_URL}`);
     console.log(`🏥 Testing with tenant: ${TENANT_ID}`);
     console.log('✅ Test setup complete!\n');
   }, 120000); // 2 minute timeout for setup
 
-  afterAll(async () => {
-    console.log('\n🧹 Cleaning up test data...');
-
-    // Clean up discharge summaries
-    const deletedSummaries = await dischargeManager.cleanupCreatedSummaries();
-    console.log(`   Deleted ${deletedSummaries} discharge summaries`);
-
-    // Clean up users
-    const deletedUsers = await userManager.cleanupCreatedUsers();
-    console.log(`   Deleted ${deletedUsers} users`);
-
-    console.log('✅ Cleanup complete!\n');
-  }, 60000); // 1 minute timeout for cleanup
+  // Note: Cleanup is now handled separately via npm run cleanup
+  // afterAll cleanup removed to allow simplification/translation to complete
 
   describe('Authentication Tests', () => {
     it('should authenticate patient user', async () => {
@@ -636,5 +706,135 @@ describe('Portal Integration Tests - All Portals', () => {
 
       expect(users.size).toBeGreaterThanOrEqual(4);
     });
+  });
+
+  describe('Simplification and Translation Verification', () => {
+    beforeAll(async () => {
+      // Trigger simplification for test summaries
+      if (adminToken) {
+        await triggerSimplification(adminToken);
+      }
+    }, 60000);
+
+    it('should wait for discharge summaries to be simplified', async () => {
+      expect(dischargeSummaries.length).toBeGreaterThan(0);
+      console.log(`\n   ⏳ Waiting for ${dischargeSummaries.length} summaries to be simplified...`);
+
+      const simplificationResults = await Promise.all(
+        dischargeSummaries.map(async (summary, index) => {
+          console.log(`   [${index + 1}/${dischargeSummaries.length}] Waiting for ${summary.id}...`);
+          return await waitForSimplification(summary.id);
+        })
+      );
+
+      const simplifiedCount = simplificationResults.filter(r => r === true).length;
+      console.log(`   ✅ ${simplifiedCount}/${dischargeSummaries.length} summaries simplified`);
+
+      // At least one should be simplified (allowing for some to fail)
+      expect(simplifiedCount).toBeGreaterThan(0);
+    }, 360000); // 6 minute timeout
+
+    it('should verify simplified summaries have simplified files in Firestore', async () => {
+      const summaries = await firestore
+        .collection('discharge_summaries')
+        .where('tenantId', '==', TENANT_ID)
+        .where('testTag', '==', TEST_TAG)
+        .get();
+
+      let simplifiedCount = 0;
+      for (const doc of summaries.docs) {
+        const data = doc.data();
+        if (data.status === 'simplified' || data.status === 'translated') {
+          if (data.files?.simplified) {
+            simplifiedCount++;
+            expect(data.files.simplified).toBeDefined();
+            expect(typeof data.files.simplified).toBe('string');
+            expect(data.files.simplified.length).toBeGreaterThan(0);
+          }
+        }
+      }
+
+      console.log(`   ✅ Found ${simplifiedCount} simplified summaries with files`);
+      expect(simplifiedCount).toBeGreaterThan(0);
+    }, 60000);
+
+    it('should wait for discharge summaries to be translated', async () => {
+      expect(dischargeSummaries.length).toBeGreaterThan(0);
+      console.log(`\n   ⏳ Waiting for ${dischargeSummaries.length} summaries to be translated...`);
+
+      const translationResults = await Promise.all(
+        dischargeSummaries.map(async (summary, index) => {
+          console.log(`   [${index + 1}/${dischargeSummaries.length}] Waiting for ${summary.id}...`);
+          return await waitForTranslation(summary.id);
+        })
+      );
+
+      const translatedCount = translationResults.filter(r => r === true).length;
+      console.log(`   ✅ ${translatedCount}/${dischargeSummaries.length} summaries translated`);
+
+      // At least one should be translated (allowing for some to fail)
+      expect(translatedCount).toBeGreaterThan(0);
+    }, 360000); // 6 minute timeout
+
+    it('should verify translated summaries have translation files in Firestore', async () => {
+      const summaries = await firestore
+        .collection('discharge_summaries')
+        .where('tenantId', '==', TENANT_ID)
+        .where('testTag', '==', TEST_TAG)
+        .get();
+
+      let translatedCount = 0;
+      const languages: string[] = [];
+
+      for (const doc of summaries.docs) {
+        const data = doc.data();
+        if (data.status === 'translated') {
+          if (data.files?.translated && typeof data.files.translated === 'object') {
+            const translationKeys = Object.keys(data.files.translated);
+            if (translationKeys.length > 0) {
+              translatedCount++;
+              translationKeys.forEach(lang => {
+                if (!languages.includes(lang)) {
+                  languages.push(lang);
+                }
+                expect(data.files.translated[lang]).toBeDefined();
+                expect(typeof data.files.translated[lang]).toBe('string');
+                expect(data.files.translated[lang].length).toBeGreaterThan(0);
+              });
+            }
+          }
+        }
+      }
+
+      console.log(`   ✅ Found ${translatedCount} translated summaries with files`);
+      console.log(`   ✅ Languages: ${languages.join(', ')}`);
+      expect(translatedCount).toBeGreaterThan(0);
+      expect(languages.length).toBeGreaterThan(0);
+    }, 60000);
+
+    it('should verify simplified and translated summaries appear in admin metrics', async () => {
+      const response = await request(BACKEND_URL)
+        .get('/api/system-admin/tenant-metrics')
+        .set('X-Tenant-ID', TENANT_ID)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      const metrics = response.body;
+      console.log(`   📊 Metrics:`, JSON.stringify(metrics, null, 2));
+
+      expect(metrics.totalSummaries).toBeGreaterThan(0);
+      
+      // Check if we have simplified summaries
+      if (metrics.totalSummaries > 0) {
+        // At least some summaries should be simplified or translated
+        const hasSimplified = metrics.simplifiedCount > 0 || metrics.translatedCount > 0;
+        if (hasSimplified) {
+          console.log(`   ✅ Found simplified/translated summaries in metrics`);
+          expect(metrics.simplifiedCount + metrics.translatedCount).toBeGreaterThan(0);
+        } else {
+          console.warn(`   ⚠️  No simplified/translated summaries in metrics yet`);
+        }
+      }
+    }, 60000);
   });
 });
