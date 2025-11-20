@@ -744,6 +744,187 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* Readability Metrics */}
+            {metrics?.qualityMetrics && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-heading font-semibold mb-2">Readability Metrics</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Automated quality assessment of simplified discharge summaries
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Grade Distribution Histogram */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="font-heading">Reading Grade Distribution</CardTitle>
+                      <CardDescription>
+                        Flesch-Kincaid grade levels across {metrics.qualityMetrics.totalWithMetrics} summaries
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-3">
+                        {/* Elementary (≤5th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Elementary (≤5th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.elementary}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-green-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.elementary / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.elementary / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+
+                        {/* Middle School (6-8th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Middle School (6-8th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.middleSchool}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-blue-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.middleSchool / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.middleSchool / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+
+                        {/* High School (9-12th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">High School (9-12th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.highSchool}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-yellow-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.highSchool / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.highSchool / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+
+                        {/* College (>12th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">College (>12th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.college}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-red-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.college / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.college / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+
+                      <Separator />
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>• Target: 5th-9th grade reading level for patient comprehension</p>
+                        <p>• Color coding: Green (excellent), Blue (good), Yellow (acceptable), Red (needs review)</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Target Compliance & Averages */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="font-heading">Quality Metrics Summary</CardTitle>
+                      <CardDescription>
+                        Average readability scores and target compliance
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Target Compliance */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">Target Compliance</h4>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Meets Target</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default" className="bg-green-600">
+                              {metrics.qualityMetrics.targetCompliance.meetsTarget}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              ({((metrics.qualityMetrics.targetCompliance.meetsTarget / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Needs Review</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="destructive">
+                              {metrics.qualityMetrics.targetCompliance.needsReview}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              ({((metrics.qualityMetrics.targetCompliance.needsReview / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Average Metrics */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">Average Scores</h4>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Flesch-Kincaid Grade</span>
+                            <span className={`font-medium ${metrics.qualityMetrics.averageFleschKincaid <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
+                              {metrics.qualityMetrics.averageFleschKincaid.toFixed(1)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Reading Ease Score</span>
+                            <span className={`font-medium ${metrics.qualityMetrics.averageReadingEase >= 60 ? 'text-green-600' : 'text-yellow-600'}`}>
+                              {metrics.qualityMetrics.averageReadingEase.toFixed(1)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">SMOG Index</span>
+                            <span className={`font-medium ${metrics.qualityMetrics.averageSmog <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
+                              {metrics.qualityMetrics.averageSmog.toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Separator />
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>• FK Grade ≤ 9.0 (target)</p>
+                        <p>• Reading Ease ≥ 60 (fairly easy)</p>
+                        <p>• SMOG ≤ 9.0 (9th grade level)</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
           </TabsContent>
 
           {/* User Management */}

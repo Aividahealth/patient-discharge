@@ -115,3 +115,6 @@ backend/.settings.*/
 **/*_sa.json
 **/*service-account*.json
 **/*credentials*.json
+
+# TypeScript build cache
+*.tsbuildinfo

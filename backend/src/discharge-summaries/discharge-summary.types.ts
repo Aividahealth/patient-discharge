@@ -38,6 +38,50 @@ export interface DischargeSummaryFiles {
   };
 }
 
+/**
+ * Quality metrics for text simplification
+ */
+export interface QualityMetrics {
+  // Readability Metrics
+  readability: {
+    fleschKincaidGradeLevel: number;
+    fleschReadingEase: number;
+    smogIndex: number;
+    colemanLiauIndex: number;
+    automatedReadabilityIndex: number;
+  };
+
+  // Simplification Metrics
+  simplification: {
+    compressionRatio: number; // (original - simplified) / original
+    sentenceLengthReduction: number; // average sentence length reduction
+    avgSentenceLength: number;
+    avgWordLength: number;
+  };
+
+  // Lexical Metrics
+  lexical: {
+    typeTokenRatio: number; // vocabulary diversity
+    wordCount: number;
+    sentenceCount: number;
+    syllableCount: number;
+    complexWordCount: number; // words with 3+ syllables
+  };
+
+  // Semantic Preservation (placeholder for future BERTScore)
+  semantic?: {
+    bertScore?: number;
+    similarity?: number;
+  };
+
+  // Metadata
+  metadata: {
+    calculatedAt: Date;
+    originalWordCount: number;
+    simplifiedWordCount: number;
+  };
+}
+
 export interface DischargeSummaryMetadata {
   id: string; // Unique identifier
   tenantId: string; // Tenant identifier (required for multi-tenant isolation)
@@ -53,6 +97,7 @@ export interface DischargeSummaryMetadata {
   updatedAt: Date;
   simplifiedAt?: Date; // When simplified version was created
   translatedAt?: Date; // When translation was created
+  qualityMetrics?: QualityMetrics; // Quality metrics for simplified version
   metadata?: {
     // Additional metadata
     facility?: string;

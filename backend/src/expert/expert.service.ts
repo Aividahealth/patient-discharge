@@ -104,6 +104,15 @@ export class ExpertService {
         latestReviewDate = reviewDates.sort((a, b) => b.getTime() - a.getTime())[0];
       }
 
+      // Extract quality metrics if available
+      const qualityMetrics = data.qualityMetrics ? {
+        fleschKincaidGradeLevel: data.qualityMetrics.readability?.fleschKincaidGradeLevel,
+        fleschReadingEase: data.qualityMetrics.readability?.fleschReadingEase,
+        smogIndex: data.qualityMetrics.readability?.smogIndex,
+        compressionRatio: data.qualityMetrics.simplification?.compressionRatio,
+        avgSentenceLength: data.qualityMetrics.simplification?.avgSentenceLength,
+      } : undefined;
+
       const summary: ReviewSummary = {
         id: doc.id,
         patientName: data.patientName,
@@ -113,6 +122,7 @@ export class ExpertService {
         reviewCount,
         avgRating: avgRating ? Math.round(avgRating * 10) / 10 : undefined,
         latestReviewDate,
+        qualityMetrics,
       };
 
       // Apply filters

@@ -431,6 +431,69 @@ export class SystemAdminService {
         }
       });
 
+      // Calculate quality metrics aggregations
+      const qualityMetricsData = {
+        totalWithMetrics: 0,
+        fleschKincaidSum: 0,
+        readingEaseSum: 0,
+        smogSum: 0,
+        gradeDistribution: {
+          elementary: 0,      // FK ≤ 5
+          middleSchool: 0,     // FK 6-8
+          highSchool: 0,       // FK 9-12
+          college: 0,          // FK > 12
+        },
+        targetCompliance: {
+          meetsTarget: 0,
+          needsReview: 0,
+        },
+      };
+
+      summariesSnapshot.forEach(doc => {
+        const data = doc.data();
+        const qualityMetrics = data.qualityMetrics;
+
+        if (qualityMetrics?.readability) {
+          qualityMetricsData.totalWithMetrics++;
+
+          // Sum for averages
+          const fk = qualityMetrics.readability.fleschKincaidGradeLevel;
+          const re = qualityMetrics.readability.fleschReadingEase;
+          const smog = qualityMetrics.readability.smogIndex;
+
+          if (typeof fk === 'number') qualityMetricsData.fleschKincaidSum += fk;
+          if (typeof re === 'number') qualityMetricsData.readingEaseSum += re;
+          if (typeof smog === 'number') qualityMetricsData.smogSum += smog;
+
+          // Grade distribution buckets
+          if (typeof fk === 'number') {
+            if (fk <= 5) {
+              qualityMetricsData.gradeDistribution.elementary++;
+            } else if (fk <= 8) {
+              qualityMetricsData.gradeDistribution.middleSchool++;
+            } else if (fk <= 12) {
+              qualityMetricsData.gradeDistribution.highSchool++;
+            } else {
+              qualityMetricsData.gradeDistribution.college++;
+            }
+          }
+
+          // Target compliance: FK ≤ 9, Reading Ease ≥ 60, SMOG ≤ 9, avg sentence ≤ 20
+          const avgSentence = qualityMetrics.simplification?.avgSentenceLength;
+          const meetsTarget =
+            fk <= 9 &&
+            re >= 60 &&
+            smog <= 9 &&
+            (!avgSentence || avgSentence <= 20);
+
+          if (meetsTarget) {
+            qualityMetricsData.targetCompliance.meetsTarget++;
+          } else {
+            qualityMetricsData.targetCompliance.needsReview++;
+          }
+        }
+      });
+
       // Get users count by role
       const usersSnapshot = await this.getFirestore()
         .collection('users')
@@ -483,6 +546,14 @@ export class SystemAdminService {
           total: totalFeedback,
           averageRating: totalFeedback > 0 ? totalRating / totalFeedback : 0,
         },
+        qualityMetrics: qualityMetricsData.totalWithMetrics > 0 ? {
+          totalWithMetrics: qualityMetricsData.totalWithMetrics,
+          averageFleschKincaid: qualityMetricsData.fleschKincaidSum / qualityMetricsData.totalWithMetrics,
+          averageReadingEase: qualityMetricsData.readingEaseSum / qualityMetricsData.totalWithMetrics,
+          averageSmog: qualityMetricsData.smogSum / qualityMetricsData.totalWithMetrics,
+          gradeDistribution: qualityMetricsData.gradeDistribution,
+          targetCompliance: qualityMetricsData.targetCompliance,
+        } : undefined,
       };
     } catch (error) {
       this.logger.error(`Error getting metrics for tenant ${tenantId}: ${error.message}`);
