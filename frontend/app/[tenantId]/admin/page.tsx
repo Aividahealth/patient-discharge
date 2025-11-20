@@ -261,7 +261,7 @@ export default function AdminDashboard() {
 
   return (
     <ErrorBoundary>
-      <AuthGuard>
+      <AuthGuard requiredRole={['tenant_admin', 'system_admin']}>
         <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Admin Portal" />
       
