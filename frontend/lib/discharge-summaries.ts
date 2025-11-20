@@ -319,7 +319,14 @@ export async function getDischargeQueue(
   token: string,
   tenantId: string
 ): Promise<DischargeQueueResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/patients/discharge-queue`, {
+  const url = `${API_BASE_URL}/api/patients/discharge-queue`;
+  console.log('[getDischargeQueue] Making request to:', url, {
+    tenantId,
+    hasToken: !!token,
+    tokenPreview: token ? `${token.substring(0, 20)}...` : null
+  });
+
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -328,11 +335,29 @@ export async function getDischargeQueue(
     },
   });
 
+  console.log('[getDischargeQueue] Response received:', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+    headers: Object.fromEntries(response.headers.entries())
+  });
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch discharge queue: ${response.statusText}`);
+    const errorText = await response.text().catch(() => 'Could not read error response');
+    console.error('[getDischargeQueue] Error response:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText
+    });
+    throw new Error(`Failed to fetch discharge queue: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('[getDischargeQueue] Response data:', {
+    patientCount: data.patients?.length || 0,
+    meta: data.meta
+  });
+  return data;
 }
 
 /**
@@ -341,6 +366,7 @@ export async function getDischargeQueue(
 export interface PatientDetailsResponse {
   patientId: string;
   compositionId: string;
+  preferredLanguage?: string; // Patient's preferred language from FHIR
   rawSummary?: {
     text: string;
     parsedData?: any;
@@ -471,6 +497,37 @@ export async function getPatientDetails(
 
   const compositionData = await binariesResponse.json();
 
+  // Fetch patient preferred language from FHIR
+  let preferredLanguage: string | undefined;
+  try {
+    const patientResponse = await fetch(
+      `${apiUrl}/google/fhir/Patient/${patientId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      }
+    );
+    if (patientResponse.ok) {
+      const patient = await patientResponse.json() as any;
+      // Extract preferred language from patient.communication array
+      // FHIR format: communication: [{ language: { coding: [{ code: "es" }] }, preferred: true }]
+      const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
+      if (preferredComm?.language?.coding?.[0]?.code) {
+        preferredLanguage = preferredComm.language.coding[0].code;
+      } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+        // Fallback to first communication language if no preferred
+        preferredLanguage = patient.communication[0].language.coding[0].code;
+      }
+    }
+  } catch (error) {
+    // Ignore errors fetching patient preferred language
+    console.warn('Failed to fetch patient preferred language:', error);
+  }
+
   // Find raw and simplified content
   const rawSummary = compositionData.dischargeSummaries?.find((summary: any) =>
     !summary.tags?.some((tag: any) => tag.code === 'simplified-content')
@@ -519,6 +576,7 @@ export async function getPatientDetails(
   return {
     patientId,
     compositionId,
+    preferredLanguage,
     rawSummary: rawSummary ? {
       text: rawSummary.text,
       parsedData: rawSummary.parsedData

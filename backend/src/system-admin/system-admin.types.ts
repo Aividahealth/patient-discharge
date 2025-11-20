@@ -12,6 +12,43 @@ export interface TenantConfig {
     expertPortal: boolean;
     chatbot: boolean;
   };
+  ehrIntegration?: {
+    type: 'Manual' | 'Cerner' | 'EPIC';
+    cerner?: {
+      base_url: string;
+      system_app?: {
+        client_id: string;
+        client_secret: string;
+        token_url: string;
+        scopes: string;
+      };
+      provider_app?: {
+        client_id: string;
+        client_secret: string;
+        authorization_url: string;
+        token_url: string;
+        redirect_uri: string;
+        scopes: string;
+      };
+      patients?: string[];
+    };
+    epic?: {
+      // EPIC config can be added later
+      base_url?: string;
+    };
+  };
+  infrastructure?: {
+    buckets: {
+      raw: boolean;
+      simplified: boolean;
+      translated: boolean;
+    };
+    fhir: {
+      dataset: boolean;
+      store: boolean;
+    };
+    lastChecked?: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +67,30 @@ export interface CreateTenantRequest {
     expertPortal?: boolean;
     chatbot?: boolean;
   };
+  ehrIntegration?: {
+    type: 'Manual' | 'Cerner' | 'EPIC';
+    cerner?: {
+      base_url: string;
+      system_app?: {
+        client_id: string;
+        client_secret: string;
+        token_url: string;
+        scopes: string;
+      };
+      provider_app?: {
+        client_id: string;
+        client_secret: string;
+        authorization_url: string;
+        token_url: string;
+        redirect_uri: string;
+        scopes: string;
+      };
+      patients?: string[];
+    };
+    epic?: {
+      base_url?: string;
+    };
+  };
 }
 
 export interface UpdateTenantRequest {
@@ -44,6 +105,30 @@ export interface UpdateTenantRequest {
     clinicianPortal?: boolean;
     expertPortal?: boolean;
     chatbot?: boolean;
+  };
+  ehrIntegration?: {
+    type: 'Manual' | 'Cerner' | 'EPIC';
+    cerner?: {
+      base_url: string;
+      system_app?: {
+        client_id: string;
+        client_secret: string;
+        token_url: string;
+        scopes: string;
+      };
+      provider_app?: {
+        client_id: string;
+        client_secret: string;
+        authorization_url: string;
+        token_url: string;
+        redirect_uri: string;
+        scopes: string;
+      };
+      patients?: string[];
+    };
+    epic?: {
+      base_url?: string;
+    };
   };
 }
 

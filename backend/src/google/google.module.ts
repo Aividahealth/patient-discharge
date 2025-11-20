@@ -8,9 +8,10 @@ import { SimplifiedContentService } from './simplified-content.service';
 import { DischargeUploadService } from './discharge-upload.service';
 import { ConfigModule } from '../config/config.module';
 import { PubSubModule } from '../pubsub/pubsub.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [ConfigModule, PubSubModule],
+  imports: [ConfigModule, PubSubModule, AuditModule],
   controllers: [GoogleController, CompositionSimplifiedController, DischargeUploadController, PatientsController],
   providers: [GoogleService, SimplifiedContentService, DischargeUploadService],
   exports: [GoogleService],

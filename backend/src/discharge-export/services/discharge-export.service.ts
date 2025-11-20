@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CernerService } from '../../cerner/cerner.service';
+import { EHRServiceFactory } from '../../ehr/factories/ehr-service.factory';
 import { GoogleService } from '../../google/google.service';
 import { AuditService } from '../../audit/audit.service';
 import { DevConfigService } from '../../config/dev-config.service';
@@ -11,14 +11,15 @@ export class DischargeExportService {
   private readonly logger = new Logger(DischargeExportService.name);
 
   constructor(
-    private readonly cernerService: CernerService,
+    private readonly ehrFactory: EHRServiceFactory,
     private readonly googleService: GoogleService,
     private readonly auditService: AuditService,
     private readonly configService: DevConfigService,
   ) {}
 
   /**
-   * Complete pipeline: Export discharge summary from Cerner to Google FHIR
+   * Complete pipeline: Export discharge summary from EHR to Google FHIR
+   * Supports Cerner, EPIC, and other EHR vendors
    */
   async exportDischargeSummary(
     ctx: TenantContext,
@@ -26,96 +27,101 @@ export class DischargeExportService {
     encounterId?: string,
   ): Promise<ExportResult> {
     const exportTimestamp = new Date().toISOString();
-    this.logger.log(`🚀 Starting discharge summary export for ${documentId ? ` (document: ${documentId})` : ''}`);
 
-    let cernerPatientId: string | undefined;
+    // Get EHR service for this tenant
+    const ehrService = await this.ehrFactory.getEHRService(ctx);
+    const vendor = ehrService.getVendor();
+    this.logger.log(`🚀 Starting discharge summary export from ${vendor} for ${documentId ? ` (document: ${documentId})` : ''}`);
+
+    let ehrPatientId: string | undefined;
 
     try {
-      // Step 1: Find discharge summary metadata in Cerner
-      this.logger.log(`📋 Step 1: Searching for discharge summary metadata in Cerner...`);
-      const cernerDoc = await this.findCernerDischargeSummary(ctx, documentId);
-      if (!cernerDoc) {
-        this.logger.warn(`❌ No discharge summary found in Cerner for document ${documentId || 'unknown'}`);
+      // Step 1: Find discharge summary metadata in EHR
+      this.logger.log(`📋 Step 1: Searching for discharge summary metadata in ${vendor}...`);
+      const ehrDoc = await this.findEHRDischargeSummary(ehrService, ctx, documentId);
+      if (!ehrDoc) {
+        this.logger.warn(`❌ No discharge summary found in ${vendor} for document ${documentId || 'unknown'}`);
         return {
           success: false,
-          error: 'No discharge summary found in Cerner',
-          metadata: { exportTimestamp },
+          error: `No discharge summary found in ${vendor}`,
+          metadata: { exportTimestamp, vendor },
         };
       }
-      this.logger.log(`✅ Found Cerner document: ${cernerDoc.id} (encounter: ${cernerDoc.encounterId})`);
+      this.logger.log(`✅ Found ${vendor} document: ${ehrDoc.id} (encounter: ${ehrDoc.encounterId})`);
 
       // Extract patient ID from the document
-      cernerPatientId = cernerDoc.patientId;
-      if (!cernerPatientId) {
-        this.logger.error(`❌ No patient ID found in Cerner document ${cernerDoc.id}`);
+      ehrPatientId = ehrDoc.patientId;
+      if (!ehrPatientId) {
+        this.logger.error(`❌ No patient ID found in ${vendor} document ${ehrDoc.id}`);
         return {
           success: false,
-          error: 'No patient ID found in Cerner document',
-          metadata: { exportTimestamp },
+          error: `No patient ID found in ${vendor} document`,
+          metadata: { exportTimestamp, vendor },
         };
       }
-      this.logger.log(`✅ Extracted patient ID from document: ${cernerPatientId}`);
+      this.logger.log(`✅ Extracted patient ID from document: ${ehrPatientId}`);
 
       // Step 2: Check for duplicate export
       this.logger.log(`🔍 Step 2: Checking for duplicate export...`);
-      const duplicateCheck = await this.checkForDuplicateExport(cernerDoc.id, ctx);
+      const duplicateCheck = await this.checkForDuplicateExport(ehrDoc.id, ctx);
       if (duplicateCheck.isDuplicate) {
-        this.logger.log(`⚠️ Document ${cernerDoc.id} already exported to Google FHIR, skipping`);
+        this.logger.log(`⚠️ Document ${ehrDoc.id} already exported to Google FHIR, skipping`);
         return {
           success: true,
-          cernerDocumentId: cernerDoc.id,
-          cernerPatientId,
+          cernerDocumentId: ehrDoc.id,
+          cernerPatientId: ehrPatientId,
           googlePatientId: duplicateCheck.googlePatientId,
-          encounterId: cernerDoc.encounterId,
+          encounterId: ehrDoc.encounterId,
           metadata: {
             exportTimestamp,
             duplicateCheck: 'duplicate',
             patientMapping: 'found',
+            vendor,
           },
         };
       }
       this.logger.log(`✅ No duplicate found, proceeding with export`);
 
-      // Step 3: Map Cerner patient to Google FHIR patient
-      this.logger.log(`👤 Step 3: Mapping Cerner patient to Google FHIR patient...`);
-      const patientMapping = await this.mapCernerPatientToGoogle(cernerPatientId, ctx);
+      // Step 3: Map EHR patient to Google FHIR patient
+      this.logger.log(`👤 Step 3: Mapping ${vendor} patient to Google FHIR patient...`);
+      const patientMapping = await this.mapEHRPatientToGoogle(ehrService, ehrPatientId, ctx);
       if (!patientMapping.success) {
         this.logger.error(`❌ Failed to map patient: ${patientMapping.error}`);
         return {
           success: false,
           error: `Failed to map patient: ${patientMapping.error}`,
-          metadata: { exportTimestamp, patientMapping: 'failed' },
+          metadata: { exportTimestamp, patientMapping: 'failed', vendor },
         };
       }
       this.logger.log(`✅ Patient mapping successful: ${patientMapping.action} (Google patient: ${patientMapping.googlePatientId})`);
 
-      // Step 4: Download Binary data from Cerner
-      this.logger.log(`📥 Step 4: Downloading Binary data from Cerner...`);
-      const pdfData = await this.downloadCernerPDF(cernerDoc, ctx);
+      // Step 4: Download Binary data from EHR
+      this.logger.log(`📥 Step 4: Downloading Binary data from ${vendor}...`);
+      const pdfData = await this.downloadEHRBinary(ehrService, ehrDoc, ctx);
       if (!pdfData) {
-        this.logger.error(`❌ Failed to download Binary data from Cerner`);
+        this.logger.error(`❌ Failed to download Binary data from ${vendor}`);
         return {
           success: false,
-          error: 'Failed to download Binary data from Cerner',
-          metadata: { exportTimestamp, patientMapping: patientMapping.action },
+          error: `Failed to download Binary data from ${vendor}`,
+          metadata: { exportTimestamp, patientMapping: patientMapping.action, vendor },
         };
       }
       this.logger.log(`✅ Binary data downloaded successfully (${pdfData.size} bytes, ${pdfData.contentType})`);
 
       // Step 5: Transform and prepare for Google FHIR
       this.logger.log(`🔄 Step 5: Transforming data for Google FHIR...`);
-      const transformedData = this.transformForGoogleFHIR(cernerDoc, pdfData);
+      const transformedData = this.transformForGoogleFHIR(ehrDoc, pdfData);
       this.logger.log(`✅ Data transformation completed`);
 
       // Step 6: Store Binary data in Google FHIR Binary
       this.logger.log(`💾 Step 6: Storing Binary data in Google FHIR Binary...`);
-      const googleBinary = await this.storeInGoogleBinary(transformedData, cernerDoc, ctx);
+      const googleBinary = await this.storeInGoogleBinary(transformedData, ehrDoc, ctx);
       if (!googleBinary) {
         this.logger.error(`❌ Failed to store Binary data in Google FHIR Binary`);
         return {
           success: false,
           error: 'Failed to store Binary data in Google FHIR Binary',
-          metadata: { exportTimestamp, patientMapping: patientMapping.action },
+          metadata: { exportTimestamp, patientMapping: patientMapping.action, vendor },
         };
       }
       this.logger.log(`✅ Binary data stored in Google FHIR Binary: ${googleBinary.id}`);
@@ -123,7 +129,7 @@ export class DischargeExportService {
       // Step 7: Create DocumentReference in Google FHIR
       this.logger.log(`📄 Step 7: Creating DocumentReference in Google FHIR...`);
       const googleDocRef = await this.createGoogleDocumentReference(
-        cernerDoc,
+        ehrDoc,
         googleBinary,
         patientMapping.googlePatientId!,
         ctx,
@@ -134,7 +140,7 @@ export class DischargeExportService {
         return {
           success: false,
           error: 'Failed to create DocumentReference in Google FHIR',
-          metadata: { exportTimestamp, patientMapping: patientMapping.action },
+          metadata: { exportTimestamp, patientMapping: patientMapping.action, vendor },
         };
       }
       this.logger.log(`✅ DocumentReference created: ${googleDocRef.id}`);
@@ -142,7 +148,7 @@ export class DischargeExportService {
       // Step 8: Create Composition (optional structured summary)
       this.logger.log(`📝 Step 8: Creating Composition in Google FHIR...`);
       const googleComposition = await this.createGoogleComposition(
-        cernerDoc,
+        ehrDoc,
         googleDocRef,
         patientMapping.googlePatientId!,
         ctx,
@@ -155,47 +161,49 @@ export class DischargeExportService {
 
       const result: ExportResult = {
         success: true,
-        cernerDocumentId: cernerDoc.id,
+        cernerDocumentId: ehrDoc.id,
         googleBinaryId: googleBinary.id,
         googleDocumentReferenceId: googleDocRef.id,
         googleCompositionId: googleComposition?.id,
-        cernerPatientId,
+        cernerPatientId: ehrPatientId,
         googlePatientId: patientMapping.googlePatientId,
-        encounterId: cernerDoc.encounterId,
+        encounterId: ehrDoc.encounterId,
         metadata: {
           originalSize: pdfData.size,
           contentType: pdfData.contentType,
           exportTimestamp,
           patientMapping: patientMapping.action,
           duplicateCheck: 'new',
+          vendor,
         },
       };
 
       // Audit log the successful export
       this.auditService.logDocumentProcessing(
-        cernerDoc.id,
-        cernerPatientId,
+        ehrDoc.id,
+        ehrPatientId,
         'stored',
         {
           googlePatientId: patientMapping.googlePatientId,
           googleBinaryId: googleBinary.id,
           googleDocumentReferenceId: googleDocRef.id,
           googleCompositionId: googleComposition?.id,
+          vendor,
         },
       );
 
       this.logger.log(`🎉 Export completed successfully!`);
       this.logger.log(`📊 Export Summary:`);
-      this.logger.log(`   • Cerner Patient: ${cernerPatientId} → Google Patient: ${patientMapping.googlePatientId}`);
-      this.logger.log(`   • Cerner Document: ${cernerDoc.id} → Google DocumentReference: ${googleDocRef.id}`);
+      this.logger.log(`   • ${vendor} Patient: ${ehrPatientId} → Google Patient: ${patientMapping.googlePatientId}`);
+      this.logger.log(`   • ${vendor} Document: ${ehrDoc.id} → Google DocumentReference: ${googleDocRef.id}`);
       this.logger.log(`   • Google Binary: ${googleBinary.id} (${pdfData.size} bytes)`);
       this.logger.log(`   • Google Composition: ${googleComposition?.id || 'N/A'}`);
       this.logger.log(`   • Patient Mapping: ${patientMapping.action}`);
       this.logger.log(`   • Export Time: ${exportTimestamp}`);
-      
+
       return result;
     } catch (error) {
-      this.logger.error(`💥 Export failed for patient ${cernerPatientId}: ${error.message}`);
+      this.logger.error(`💥 Export failed for patient ${ehrPatientId}: ${error.message}`);
       return {
         success: false,
         error: error.message,
@@ -449,18 +457,21 @@ export class DischargeExportService {
   }
 
   /**
-   * Step 1: Find discharge summary metadata in Cerner
+   * Step 1: Find discharge summary metadata in EHR
    */
-  private async findCernerDischargeSummary(
+  private async findEHRDischargeSummary(
+    ehrService: any,
     ctx: TenantContext,
     documentId?: string,
   ): Promise<any | null> {
+    const vendor = ehrService.getVendor();
+
     if (documentId) {
       // Fetch specific document
-      this.logger.log(`Searching for specific document in Cerner: ${documentId}`);
-      const doc = await this.cernerService.fetchResource('DocumentReference', documentId, ctx);
+      this.logger.log(`Searching for specific document in ${vendor}: ${documentId}`);
+      const doc = await ehrService.fetchResource('DocumentReference', documentId, ctx);
       if (doc && doc.resourceType === 'DocumentReference') {
-        return this.cernerService.parseDocumentReference(doc);
+        return ehrService.parseDocumentReference(doc);
       }
     } else {
       this.logger.error(`❌ No documentId provided - cannot search without patient ID`);
@@ -508,35 +519,36 @@ export class DischargeExportService {
   }
 
   /**
-   * Step 3: Map Cerner patient to Google FHIR patient
+   * Step 3: Map EHR patient to Google FHIR patient
    */
-  private async mapCernerPatientToGoogle(cernerPatientId: string, ctx: TenantContext): Promise<{
+  private async mapEHRPatientToGoogle(ehrService: any, ehrPatientId: string, ctx: TenantContext): Promise<{
     success: boolean;
     googlePatientId?: string;
     action: 'found' | 'created' | 'failed';
     error?: string;
   }> {
-    this.logger.log(`👤 Mapping Cerner patient ${cernerPatientId} to Google FHIR`);
+    const vendor = ehrService.getVendor();
+    this.logger.log(`👤 Mapping ${vendor} patient ${ehrPatientId} to Google FHIR`);
 
     try {
-      // First, get Cerner patient details
-      this.logger.log(`   📥 Fetching Cerner patient details...`);
-      const cernerPatient = await this.cernerService.fetchResource('Patient', cernerPatientId, ctx);
-      if (!cernerPatient || cernerPatient.resourceType !== 'Patient') {
-        this.logger.error(`   ❌ Cerner patient ${cernerPatientId} not found`);
+      // First, get EHR patient details
+      this.logger.log(`   📥 Fetching ${vendor} patient details...`);
+      const ehrPatient = await ehrService.fetchResource('Patient', ehrPatientId, ctx);
+      if (!ehrPatient || ehrPatient.resourceType !== 'Patient') {
+        this.logger.error(`   ❌ ${vendor} patient ${ehrPatientId} not found`);
         return {
           success: false,
           action: 'failed',
-          error: 'Cerner patient not found',
+          error: `${vendor} patient not found`,
         };
       }
-      this.logger.log(`   ✅ Cerner patient found: ${cernerPatient.name?.[0]?.family || 'Unknown'}, ${cernerPatient.name?.[0]?.given?.[0] || 'Unknown'}`);
+      this.logger.log(`   ✅ ${vendor} patient found: ${ehrPatient.name?.[0]?.family || 'Unknown'}, ${ehrPatient.name?.[0]?.given?.[0] || 'Unknown'}`);
 
-      // Search for existing Google patient by Cerner identifier
-      this.logger.log(`   🔍 Searching for existing Google patient by Cerner identifier...`);
-      const existingGooglePatient = await this.findGooglePatientByCernerId(cernerPatientId, ctx);
+      // Search for existing Google patient by EHR identifier
+      this.logger.log(`   🔍 Searching for existing Google patient by ${vendor} identifier...`);
+      const existingGooglePatient = await this.findGooglePatientByEHRId(ehrPatientId, ctx);
       if (existingGooglePatient) {
-        this.logger.log(`   ✅ Found existing Google patient ${existingGooglePatient.id} for Cerner patient ${cernerPatientId}`);
+        this.logger.log(`   ✅ Found existing Google patient ${existingGooglePatient.id} for ${vendor} patient ${ehrPatientId}`);
         return {
           success: true,
           googlePatientId: existingGooglePatient.id,
@@ -545,10 +557,10 @@ export class DischargeExportService {
       }
 
       // Create new Google patient
-      this.logger.log(`   🆕 Creating new Google patient from Cerner data...`);
-      const newGooglePatient = await this.createGooglePatientFromCerner(cernerPatient, cernerPatientId, ctx);
+      this.logger.log(`   🆕 Creating new Google patient from ${vendor} data...`);
+      const newGooglePatient = await this.createGooglePatientFromEHR(ehrPatient, ehrPatientId, ctx);
       if (newGooglePatient) {
-        this.logger.log(`   ✅ Created new Google patient ${newGooglePatient.id} for Cerner patient ${cernerPatientId}`);
+        this.logger.log(`   ✅ Created new Google patient ${newGooglePatient.id} for ${vendor} patient ${ehrPatientId}`);
         return {
           success: true,
           googlePatientId: newGooglePatient.id,
@@ -563,7 +575,7 @@ export class DischargeExportService {
         error: 'Failed to create Google patient',
       };
     } catch (error) {
-      this.logger.error(`Error mapping Cerner patient ${cernerPatientId} to Google: ${error.message}`);
+      this.logger.error(`Error mapping ${vendor} patient ${ehrPatientId} to Google: ${error.message}`);
       return {
         success: false,
         action: 'failed',
@@ -573,12 +585,12 @@ export class DischargeExportService {
   }
 
   /**
-   * Find Google patient by Cerner identifier
+   * Find Google patient by EHR identifier
    */
-  private async findGooglePatientByCernerId(cernerPatientId: string, ctx: TenantContext): Promise<any | null> {
+  private async findGooglePatientByEHRId(ehrPatientId: string, ctx: TenantContext): Promise<any | null> {
     try {
       const searchResult = await this.googleService.fhirSearch('Patient', {
-        identifier: `urn:oid:2.16.840.1.113883.3.787.0.0|${cernerPatientId}`,
+        identifier: `urn:oid:2.16.840.1.113883.3.787.0.0|${ehrPatientId}`,
         _count: 1,
       }, ctx);
 
@@ -588,7 +600,7 @@ export class DischargeExportService {
 
       return null;
     } catch (error) {
-      this.logger.warn(`Error searching for Google patient by Cerner ID: ${error.message}`);
+      this.logger.warn(`Error searching for Google patient by EHR ID: ${error.message}`);
       return null;
     }
   }
@@ -622,15 +634,15 @@ export class DischargeExportService {
   }
 
   /**
-   * Create Google patient from Cerner patient data
+   * Create Google patient from EHR patient data
    */
-  private async createGooglePatientFromCerner(cernerPatient: any, cernerPatientId: string, ctx: TenantContext): Promise<any | null> {
+  private async createGooglePatientFromEHR(ehrPatient: any, ehrPatientId: string, ctx: TenantContext): Promise<any | null> {
     try {
-      this.logger.log(`   🆕 Creating Google patient from Cerner data...`);
-      this.logger.log(`   📋 Cerner patient data: ${cernerPatient.id} - ${cernerPatient.name?.[0]?.family || 'N/A'}`);
+      this.logger.log(`   🆕 Creating Google patient from EHR data...`);
+      this.logger.log(`   📋 EHR patient data: ${ehrPatient.id} - ${ehrPatient.name?.[0]?.family || 'N/A'}`);
 
       // Clean null characters from all string fields
-      const cleanPatientData = this.cleanNullCharacters(cernerPatient);
+      const cleanPatientData = this.cleanNullCharacters(ehrPatient);
       this.logger.log(`   🧹 Cleaned patient data: ${cleanPatientData.name?.[0]?.family || 'N/A'}`);
       
       // Validate and clean the patient data
@@ -657,10 +669,10 @@ export class DischargeExportService {
               ],
             },
             system: 'urn:oid:2.16.840.1.113883.3.787.0.0',
-            value: cernerPatientId,
+            value: ehrPatientId,
           },
         ],
-        active: cernerPatient.active !== false, // Default to true if not explicitly false
+        active: ehrPatient.active !== false, // Default to true if not explicitly false
         ...(cleanName.length > 0 && { name: cleanName }),
         ...(cleanGender && { gender: cleanGender }),
         ...(cleanBirthDate && { birthDate: cleanBirthDate }),
@@ -673,8 +685,8 @@ export class DischargeExportService {
             },
             {
               system: 'http://aivida.com/fhir/tags',
-              code: `original-cerner-id-${cernerPatientId}`,
-              display: `Original Cerner ID: ${cernerPatientId}`,
+              code: `original-ehr-id-${ehrPatientId}`,
+              display: `Original EHR ID: ${ehrPatientId}`,
             },
           ],
         },
@@ -703,12 +715,12 @@ export class DischargeExportService {
   /**
    * Step 2: Download PDF from Cerner Binary
    */
-  private async downloadCernerPDF(cernerDoc: any, ctx: TenantContext): Promise<any | null> {
-    this.logger.log(`📥 Downloading PDF for document ${cernerDoc.id}`);
+  private async downloadEHRBinary(ehrService: any, ehrDoc: any, ctx: TenantContext): Promise<any | null> {
+    this.logger.log(`📥 Downloading binary data for document ${ehrDoc.id}`);
 
-    const content = cernerDoc.content?.[0];
+    const content = ehrDoc.content?.[0];
     if (!content) {
-      this.logger.error(`   ❌ No content found in Cerner document ${cernerDoc.id}`);
+      this.logger.error(`   ❌ No content found in EHR document ${ehrDoc.id}`);
       return null;
     }
 
@@ -716,7 +728,7 @@ export class DischargeExportService {
       // Inline data - check if it's already base64 or plain text
       const contentType = content.contentType || 'application/octet-stream';
       let data = content.data;
-      
+
       // If content type is text/plain, we need to encode it to base64
       if (contentType === 'text/plain' || contentType.startsWith('text/')) {
         this.logger.log(`   📝 Found plain text data, encoding to base64 (${content.size || 0} bytes, ${contentType})`);
@@ -724,9 +736,9 @@ export class DischargeExportService {
       } else {
         this.logger.log(`   ✅ Found inline base64 data (${content.size || 0} bytes, ${contentType})`);
       }
-      
+
       this.logger.log(`   🔍 Debug - Data type: ${typeof data}, Length: ${data.length}, Is base64: ${/^[A-Za-z0-9+/]*={0,2}$/.test(data)}`);
-      
+
       return {
         data: data,
         contentType: contentType,
@@ -740,7 +752,7 @@ export class DischargeExportService {
         this.logger.log(`   📥 Fetching Binary resource: ${binaryId}`);
         // Use the content type from the attachment, or default to application/octet-stream
         const acceptType = content.contentType || 'application/octet-stream';
-        const binary = await this.cernerService.fetchBinaryDocument(binaryId, ctx, acceptType);
+        const binary = await ehrService.fetchBinaryDocument(binaryId, ctx, acceptType);
         if (binary && binary.data) {
           const binaryContentType = binary.contentType || acceptType;
           let data = binary.data;
@@ -771,7 +783,7 @@ export class DischargeExportService {
       }
     }
 
-    this.logger.error(`   ❌ No PDF data found in Cerner document ${cernerDoc.id}`);
+    this.logger.error(`   ❌ No PDF data found in EHR document ${ehrDoc.id}`);
     return null;
   }
 
