@@ -8,7 +8,7 @@ import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import * as fs from 'fs';
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 export interface TestDischargeSummaryOptions {
   tenantId: string;
@@ -163,7 +163,7 @@ export class TestDischargeManager {
   async createDischargeSummary(
     options: TestDischargeSummaryOptions
   ): Promise<TestDischargeSummary> {
-    const summaryId = uuidv4();
+    const summaryId = randomUUID();
     const now = new Date();
 
     // Read file and extract metadata

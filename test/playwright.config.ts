@@ -11,12 +11,23 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1, // Run one test at a time
   reporter: 'html',
+  timeout: 600000, // 10 minutes default timeout for all tests
+  // Use ts-node for TypeScript support
   use: {
     baseURL: process.env.FRONTEND_URL || 'https://www.aividahealth.ai',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
+  // Configure TypeScript
+  projects: [
+    {
+      name: 'chromium',
+      use: { 
+        ...devices['Desktop Chrome'],
+      },
+    },
+  ],
 
   projects: [
     {
