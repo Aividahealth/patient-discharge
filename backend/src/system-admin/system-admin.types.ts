@@ -165,6 +165,22 @@ export interface TenantMetrics {
     total: number;
     averageRating: number;
   };
+  qualityMetrics?: {
+    totalWithMetrics: number;
+    averageFleschKincaid: number;
+    averageReadingEase: number;
+    averageSmog: number;
+    gradeDistribution: {
+      elementary: number;      // FK ≤ 5
+      middleSchool: number;     // FK 6-8
+      highSchool: number;       // FK 9-12
+      college: number;          // FK > 12
+    };
+    targetCompliance: {
+      meetsTarget: number;      // Summaries meeting 5-9th grade target
+      needsReview: number;      // Summaries not meeting target
+    };
+  };
 }
 
 export interface AggregatedMetrics {
