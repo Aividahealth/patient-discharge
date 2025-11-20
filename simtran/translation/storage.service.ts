@@ -74,6 +74,9 @@ export class StorageService {
     const translatedFiles: TranslatedFile[] = [];
 
     try {
+      // Ensure bucket exists before writing
+      await this.ensureBucketExists(bucketName);
+
       const bucket = this.storage.bucket(bucketName);
 
       // Write discharge summary if provided
@@ -150,6 +153,40 @@ export class StorageService {
         compositionId,
       });
       throw error;
+    }
+  }
+
+  /**
+   * Check if bucket exists
+   */
+  private async bucketExists(bucketName: string): Promise<boolean> {
+    try {
+      const [exists] = await this.storage.bucket(bucketName).exists();
+      return exists;
+    } catch (error) {
+      logger.error('Failed to check bucket existence', error as Error, { bucketName });
+      return false;
+    }
+  }
+
+  /**
+   * Ensure bucket exists, create if it doesn't
+   */
+  private async ensureBucketExists(bucketName: string): Promise<void> {
+    const exists = await this.bucketExists(bucketName);
+    if (!exists) {
+      logger.info(`Bucket ${bucketName} does not exist, creating it...`);
+      try {
+        const location = process.env.LOCATION || 'us-central1';
+        await this.storage.createBucket(bucketName, {
+          location,
+          storageClass: 'STANDARD',
+        });
+        logger.info(`✅ Created bucket: ${bucketName}`);
+      } catch (error) {
+        logger.error(`Failed to create bucket ${bucketName}`, error as Error);
+        throw new Error(`Failed to create bucket ${bucketName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     }
   }
 }
