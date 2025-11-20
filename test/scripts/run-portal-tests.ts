@@ -120,9 +120,9 @@ function checkPrerequisites(): boolean {
 
   console.log(`✅ Found ${mdFiles.length} test discharge summary files`);
 
-  // Check for service account configuration
-  const env = process.env.NODE_ENV || 'dev';
-  const configPath = path.resolve(process.cwd(), `.settings.${env}/config.yaml`);
+  // Check for service account configuration (force dev environment)
+  const env = process.env.TEST_ENV || process.env.NODE_ENV || 'dev';
+  const configPath = path.resolve(process.cwd(), `../backend/.settings.${env}/config.yaml`);
 
   if (!fs.existsSync(configPath) && !process.env.SERVICE_ACCOUNT_PATH) {
     console.warn('⚠️  Warning: No service account configuration found');
@@ -195,9 +195,9 @@ function runCleanup(): void {
   console.log('\n🧹 Running cleanup...\n');
 
   try {
-    execSync('ts-node test/scripts/cleanup-test-data.ts', {
+    execSync('ts-node scripts/cleanup-test-data.ts', {
       stdio: 'inherit',
-      cwd: process.cwd(),
+      cwd: path.join(__dirname, '..'),
       env: { ...process.env, NON_INTERACTIVE: 'true' },
     });
   } catch (error) {
@@ -215,6 +215,16 @@ async function main() {
   console.log('  PORTAL INTEGRATION TEST SUITE');
   console.log('='.repeat(60));
   console.log('');
+
+  // Set environment variables for dev environment and demo tenant
+  process.env.TEST_ENV = 'dev';
+  process.env.NODE_ENV = process.env.NODE_ENV || 'dev';
+  if (!process.env.BACKEND_API_URL && !process.env.NEXT_PUBLIC_API_URL) {
+    process.env.BACKEND_API_URL = 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
+  }
+  console.log(`🔧 Environment: ${process.env.TEST_ENV || process.env.NODE_ENV}`);
+  console.log(`🌐 Backend URL: ${process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'Not set'}`);
+  console.log(`🏥 Tenant: demo (hardcoded in test)\n`);
 
   const options = parseArgs();
 

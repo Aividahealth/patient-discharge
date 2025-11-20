@@ -5,11 +5,9 @@
  * Uses demo tenant and tags all created resources for cleanup
  */
 
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
 import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
-import * as request from 'supertest';
+import request from 'supertest';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as YAML from 'yaml';
@@ -18,7 +16,6 @@ import { TestUserManager, TestUser } from './utils/test-user-manager';
 import { TestDischargeManager, TestDischargeSummary } from './utils/test-discharge-manager';
 
 describe('Portal Integration Tests - All Portals', () => {
-  let app: INestApplication;
   let firestore: Firestore;
   let storage: Storage;
   let userManager: TestUserManager;
@@ -42,6 +39,9 @@ describe('Portal Integration Tests - All Portals', () => {
   let expertToken: string;
   let adminToken: string;
 
+  // Backend URL for dev environment
+  const BACKEND_URL = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
+
   /**
    * Initialize Firestore and Storage clients
    */
@@ -64,8 +64,9 @@ describe('Portal Integration Tests - All Portals', () => {
    */
   function getServiceAccountPath(): string | undefined {
     try {
-      const env = process.env.NODE_ENV || 'dev';
-      const configPath = path.resolve(process.cwd(), `.settings.${env}/config.yaml`);
+      // Force dev environment for tests
+      const env = process.env.TEST_ENV || process.env.NODE_ENV || 'dev';
+      const configPath = path.resolve(process.cwd(), `../backend/.settings.${env}/config.yaml`);
 
       if (fs.existsSync(configPath)) {
         const raw = fs.readFileSync(configPath, 'utf8');
@@ -83,8 +84,9 @@ describe('Portal Integration Tests - All Portals', () => {
    */
   function getGCSBucketName(): string {
     try {
-      const env = process.env.NODE_ENV || 'dev';
-      const configPath = path.resolve(process.cwd(), `.settings.${env}/config.yaml`);
+      // Force dev environment for tests
+      const env = process.env.TEST_ENV || process.env.NODE_ENV || 'dev';
+      const configPath = path.resolve(process.cwd(), `../backend/.settings.${env}/config.yaml`);
 
       if (fs.existsSync(configPath)) {
         const raw = fs.readFileSync(configPath, 'utf8');
@@ -98,10 +100,10 @@ describe('Portal Integration Tests - All Portals', () => {
   }
 
   /**
-   * Login helper
+   * Login helper - uses dev backend URL
    */
   async function login(username: string, password: string): Promise<string> {
-    const response = await request(app.getHttpServer())
+    const response = await request(BACKEND_URL)
       .post('/api/auth/login')
       .set('X-Tenant-ID', TENANT_ID)
       .send({ username, password })
@@ -158,19 +160,10 @@ describe('Portal Integration Tests - All Portals', () => {
       console.log(`      - ${summary.patientName} (${summary.mrn})`);
     });
 
-    // Initialize NestJS application
-    console.log('\n🏗️  Initializing NestJS application...');
-    // Note: This would need to import your actual AppModule
-    // For now, we'll set up a minimal test module
-    // const moduleFixture: TestingModule = await Test.createTestingModule({
-    //   imports: [AppModule],
-    // }).compile();
-    //
-    // app = moduleFixture.createNestApplication();
-    // await app.init();
-    // console.log('✅ NestJS application initialized');
-
-    console.log('\n✅ Test setup complete!\n');
+    // Using dev backend URL for integration tests
+    console.log(`\n🌐 Using backend URL: ${BACKEND_URL}`);
+    console.log(`🏥 Testing with tenant: ${TENANT_ID}`);
+    console.log('✅ Test setup complete!\n');
   }, 120000); // 2 minute timeout for setup
 
   afterAll(async () => {
@@ -183,11 +176,6 @@ describe('Portal Integration Tests - All Portals', () => {
     // Clean up users
     const deletedUsers = await userManager.cleanupCreatedUsers();
     console.log(`   Deleted ${deletedUsers} users`);
-
-    // Close app
-    if (app) {
-      await app.close();
-    }
 
     console.log('✅ Cleanup complete!\n');
   }, 60000); // 1 minute timeout for cleanup
