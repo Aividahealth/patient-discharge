@@ -1,6 +1,6 @@
 # DISCHARGE SUMMARY
 
-**Patient Name:** Maria Garcia
+**Patient Name:** [TEST] Maria Garcia
 **MRN:** 23456789
 **Encounter ID:** ENC-002
 **Admission Date:** 2025-01-12

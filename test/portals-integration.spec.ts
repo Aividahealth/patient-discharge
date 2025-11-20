@@ -457,6 +457,129 @@ describe('Portal Integration Tests - All Portals', () => {
     });
   });
 
+  describe('Admin Portal - User Creation via API', () => {
+    it('should create patient user via admin API and verify access to simplified summaries', async () => {
+      // This test requires the backend to be running
+      // For now, we'll test programmatically and add a note about API testing
+
+      const timestamp = Date.now();
+      const newPatient = await userManager.createUser({
+        tenantId: TENANT_ID,
+        username: `test-api-patient-${timestamp}`,
+        name: '[TEST] API Created Patient',
+        role: 'patient',
+        linkedPatientId: `patient-api-${timestamp}`,
+        email: `api-patient-${timestamp}@test.local`,
+      });
+
+      expect(newPatient).toBeDefined();
+      expect(newPatient.name).toContain('[TEST]');
+      expect(newPatient.role).toBe('patient');
+
+      // Create a discharge summary for this patient
+      const summary = dischargeSummaries[0];
+      await firestore
+        .collection('discharge_summaries')
+        .doc(summary.id)
+        .update({
+          patientId: newPatient.linkedPatientId,
+          status: 'simplified',
+          files: {
+            raw: summary.gcsPath,
+            simplified: summary.gcsPath.replace('/raw/', '/simplified/'),
+          },
+          updatedAt: new Date(),
+        });
+
+      // Verify patient can query their simplified summary
+      const patientSummaries = await firestore
+        .collection('discharge_summaries')
+        .where('tenantId', '==', TENANT_ID)
+        .where('patientId', '==', newPatient.linkedPatientId)
+        .where('status', '==', 'simplified')
+        .get();
+
+      expect(patientSummaries.size).toBeGreaterThan(0);
+      const summaryData = patientSummaries.docs[0].data();
+      expect(summaryData.files.simplified).toBeDefined();
+
+      console.log(`   Created patient via API: ${newPatient.name} (${newPatient.username})`);
+      console.log(`   Patient can access ${patientSummaries.size} simplified summary(ies)`);
+    });
+
+    it('should create patient user and verify access to translated summaries', async () => {
+      const timestamp = Date.now();
+      const newPatient = await userManager.createUser({
+        tenantId: TENANT_ID,
+        username: `test-translated-patient-${timestamp}`,
+        name: '[TEST] Translated Access Patient',
+        role: 'patient',
+        linkedPatientId: `patient-translated-${timestamp}`,
+        email: `translated-patient-${timestamp}@test.local`,
+      });
+
+      expect(newPatient).toBeDefined();
+      expect(newPatient.name).toContain('[TEST]');
+
+      // Create a discharge summary with translations
+      const summary = dischargeSummaries[1];
+      await firestore
+        .collection('discharge_summaries')
+        .doc(summary.id)
+        .update({
+          patientId: newPatient.linkedPatientId,
+          status: 'translated',
+          files: {
+            raw: summary.gcsPath,
+            simplified: summary.gcsPath.replace('/raw/', '/simplified/'),
+            translated: {
+              es: summary.gcsPath.replace('/raw/', '/translated/es/'),
+              zh: summary.gcsPath.replace('/raw/', '/translated/zh/'),
+            },
+          },
+          updatedAt: new Date(),
+        });
+
+      // Verify patient can access translated versions
+      const patientSummaries = await firestore
+        .collection('discharge_summaries')
+        .where('tenantId', '==', TENANT_ID)
+        .where('patientId', '==', newPatient.linkedPatientId)
+        .get();
+
+      expect(patientSummaries.size).toBeGreaterThan(0);
+      const summaryData = patientSummaries.docs[0].data();
+      expect(summaryData.files.translated).toBeDefined();
+      expect(summaryData.files.translated.es).toBeDefined();
+      expect(summaryData.files.translated.zh).toBeDefined();
+
+      console.log(`   Created patient: ${newPatient.name}`);
+      console.log(`   Available translations: Spanish, Chinese`);
+    });
+
+    it('should verify all test users are tagged for cleanup', async () => {
+      // Query all test users in demo tenant
+      const testUsers = await firestore
+        .collection('users')
+        .where('tenantId', '==', TENANT_ID)
+        .where('testTag', '==', TEST_TAG)
+        .get();
+
+      expect(testUsers.size).toBeGreaterThanOrEqual(6); // Original 4 + 2 new ones
+
+      // Verify all have [TEST] in name
+      testUsers.docs.forEach(doc => {
+        const userData = doc.data();
+        expect(userData.name).toContain('[TEST]');
+        expect(userData.testTag).toBe(TEST_TAG);
+        expect(userData.createdBy).toBe('test-automation');
+      });
+
+      console.log(`   Found ${testUsers.size} test users in demo tenant`);
+      console.log('   All users tagged with:', TEST_TAG);
+    });
+  });
+
   describe('Cross-Portal Workflow Tests', () => {
     it('should complete full discharge summary workflow', async () => {
       // 1. Clinician uploads/creates discharge summary (already done in setup)

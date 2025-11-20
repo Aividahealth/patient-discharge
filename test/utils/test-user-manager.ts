@@ -231,7 +231,7 @@ export class TestUserManager {
     const patient = await this.createUser({
       tenantId,
       username: `test-patient-${timestamp}`,
-      name: 'Test Patient User',
+      name: '[TEST] Patient User',
       role: 'patient',
       linkedPatientId: `patient-test-${timestamp}`,
       email: `patient-${timestamp}@test.local`,
@@ -240,7 +240,7 @@ export class TestUserManager {
     const clinician = await this.createUser({
       tenantId,
       username: `test-clinician-${timestamp}`,
-      name: 'Test Clinician User',
+      name: '[TEST] Clinician User',
       role: 'clinician',
       email: `clinician-${timestamp}@test.local`,
     });
@@ -248,7 +248,7 @@ export class TestUserManager {
     const expert = await this.createUser({
       tenantId,
       username: `test-expert-${timestamp}`,
-      name: 'Test Expert User',
+      name: '[TEST] Expert User',
       role: 'expert',
       email: `expert-${timestamp}@test.local`,
     });
@@ -256,7 +256,7 @@ export class TestUserManager {
     const admin = await this.createUser({
       tenantId,
       username: `test-admin-${timestamp}`,
-      name: 'Test Admin User',
+      name: '[TEST] Admin User',
       role: 'tenant_admin',
       email: `admin-${timestamp}@test.local`,
     });

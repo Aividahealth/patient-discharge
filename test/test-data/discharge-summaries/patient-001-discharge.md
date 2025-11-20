@@ -1,6 +1,6 @@
 # DISCHARGE SUMMARY
 
-**Patient Name:** John Smith
+**Patient Name:** [TEST] John Smith
 **MRN:** 12345678
 **Encounter ID:** ENC-001
 **Admission Date:** 2025-01-10

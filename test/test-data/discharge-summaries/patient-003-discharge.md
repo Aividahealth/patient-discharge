@@ -1,6 +1,6 @@
 # DISCHARGE SUMMARY
 
-**Patient Name:** David Johnson
+**Patient Name:** [TEST] David Johnson
 **MRN:** 34567890
 **Encounter ID:** ENC-003
 **Admission Date:** 2025-01-08
