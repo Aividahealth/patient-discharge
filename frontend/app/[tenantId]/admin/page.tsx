@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
@@ -892,24 +893,60 @@ export default function AdminDashboard() {
                       <div className="space-y-2">
                         <h4 className="text-sm font-medium">Average Scores</h4>
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Flesch-Kincaid Grade</span>
-                            <span className={`font-medium ${metrics.qualityMetrics.averageFleschKincaid <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
-                              {metrics.qualityMetrics.averageFleschKincaid.toFixed(1)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Reading Ease Score</span>
-                            <span className={`font-medium ${metrics.qualityMetrics.averageReadingEase >= 60 ? 'text-green-600' : 'text-yellow-600'}`}>
-                              {metrics.qualityMetrics.averageReadingEase.toFixed(1)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">SMOG Index</span>
-                            <span className={`font-medium ${metrics.qualityMetrics.averageSmog <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
-                              {metrics.qualityMetrics.averageSmog.toFixed(1)}
-                            </span>
-                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-between text-sm cursor-help">
+                                <span className="text-muted-foreground">Flesch-Kincaid Grade</span>
+                                <span className={`font-medium ${metrics.qualityMetrics.averageFleschKincaid <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {metrics.qualityMetrics.averageFleschKincaid.toFixed(1)}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="max-w-xs">
+                                <p className="font-semibold mb-1">Average Flesch-Kincaid Grade: {metrics.qualityMetrics.averageFleschKincaid.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Average U.S. school grade level across all summaries. Target: ≤9.0 (5th-9th grade). Lower is better.
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-between text-sm cursor-help">
+                                <span className="text-muted-foreground">Reading Ease Score</span>
+                                <span className={`font-medium ${metrics.qualityMetrics.averageReadingEase >= 60 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {metrics.qualityMetrics.averageReadingEase.toFixed(1)}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="max-w-xs">
+                                <p className="font-semibold mb-1">Average Reading Ease: {metrics.qualityMetrics.averageReadingEase.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Average readability score (0-100 scale). Target: ≥60. Higher scores indicate easier reading.
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-between text-sm cursor-help">
+                                <span className="text-muted-foreground">SMOG Index</span>
+                                <span className={`font-medium ${metrics.qualityMetrics.averageSmog <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {metrics.qualityMetrics.averageSmog.toFixed(1)}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="max-w-xs">
+                                <p className="font-semibold mb-1">Average SMOG Index: {metrics.qualityMetrics.averageSmog.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Average years of education needed to understand text. Target: ≤9.0. Lower values indicate simpler language.
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
 
@@ -923,6 +960,7 @@ export default function AdminDashboard() {
                   </Card>
                 </div>
               </div>
+              </TooltipProvider>
             )}
 
           </TabsContent>

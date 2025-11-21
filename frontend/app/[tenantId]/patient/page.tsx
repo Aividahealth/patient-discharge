@@ -24,6 +24,14 @@ import { useTenant } from "@/contexts/tenant-context"
 import { login } from "@/lib/api/auth"
 import { getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
 import { 
+  parseDischargeIntoSections,
+  extractMedications,
+  extractAppointments,
+  type DischargeSections,
+  type Medication,
+  type Appointment
+} from "@/lib/parse-discharge-sections"
+import { 
   SimplifiedDischargeSummary, 
   SimplifiedDischargeInstructions,
   MedicationsSection,
@@ -131,8 +139,16 @@ export default function PatientDashboard() {
           return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app'
         }
 
+        const backendUrl = getBackendUrl()
+        const endpoint = `${backendUrl}/google/patient/${patientId}/composition`
+        console.log('[Patient Portal] Fetching compositionId from:', endpoint, {
+          patientId,
+          tenantId: tenant.id,
+          hasToken: !!token
+        })
+
         const response = await fetch(
-          `${getBackendUrl()}/google/patient/${patientId}/composition`,
+          endpoint,
           {
             method: 'GET',
             headers: {
@@ -143,18 +159,64 @@ export default function PatientDashboard() {
           }
         )
 
+        console.log('[Patient Portal] Response status:', response.status, response.statusText)
+
         if (response.ok) {
           const data = await response.json()
           console.log('[Patient Portal] Auto-fetched compositionId:', data.compositionId)
           setCompositionId(data.compositionId)
         } else {
-          console.error('[Patient Portal] Failed to fetch compositionId:', response.statusText)
-          alert('Could not find discharge information for this patient. Please contact support.')
+          // Get error details from response
+          let errorMessage = response.statusText || `HTTP ${response.status}`
+          let errorData: any = null
+          
+          try {
+            const text = await response.text()
+            if (text) {
+              try {
+                errorData = JSON.parse(text)
+                errorMessage = errorData.message || errorData.error || errorMessage
+              } catch (e) {
+                errorMessage = text || errorMessage
+              }
+            }
+          } catch (e) {
+            // If we can't parse the response, use status text
+            console.warn('[Patient Portal] Could not parse error response:', e)
+          }
+          
+          console.error('[Patient Portal] Failed to fetch compositionId:', {
+            status: response.status,
+            statusText: response.statusText || 'No status text',
+            error: errorMessage,
+            details: errorData,
+            endpoint,
+            patientId,
+            tenantId: tenant.id
+          })
+          
+          // Only show alert for 404 (not found), not for auth errors
+          if (response.status === 404) {
+            alert('Could not find discharge information for this patient. Please contact support.')
+          } else if (response.status === 401 || response.status === 403) {
+            console.error('[Patient Portal] Authentication/Authorization error. Please log in again.')
+            // Don't show alert for auth errors - let the auth system handle it
+          } else {
+            console.error('[Patient Portal] Server error. Please try again later.')
+            // Don't show alert for other errors - just log them
+          }
           setIsLoadingData(false)
         }
       } catch (error) {
         console.error('[Patient Portal] Error fetching compositionId:', error)
-        alert('Could not load discharge information. Please try again or contact support.')
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[Patient Portal] Error details:', {
+          error: errorMessage,
+          patientId,
+          tenantId: tenant?.id,
+          hasToken: !!token
+        })
+        // Don't show alert for network errors - just log them
         setIsLoadingData(false)
       }
     }
@@ -888,7 +950,7 @@ EMERGENCY CONTACTS:
 
             <Card>
               <CardContent className="pt-6">
-                <SimplifiedDischargeInstructions 
+                <MedicationsSection 
                   content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
                 />
               </CardContent>
@@ -920,7 +982,7 @@ EMERGENCY CONTACTS:
 
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
-                <DietActivitySection 
+                <SimplifiedDischargeInstructions 
                   content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
                 />
               </CardContent>

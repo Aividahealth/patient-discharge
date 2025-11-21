@@ -1407,7 +1407,11 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           <p className="text-xs opacity-60 truncate">{patient.specialty}</p>
                           {patient.qualityMetrics && (
                             <div className="mt-1">
-                              <QualityMetricsCard metrics={patient.qualityMetrics} compact />
+                              <QualityMetricsCard 
+                                metrics={patient.qualityMetrics} 
+                                compact 
+                                inverted={selectedPatient === patient.id}
+                              />
                             </div>
                           )}
                         </div>
