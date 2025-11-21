@@ -730,7 +730,7 @@ EMERGENCY CONTACTS:
   if (isLoadingData) {
     return (
       <ErrorBoundary>
-        <AuthGuard>
+        <AuthGuard requiredRole="patient">
           <div className="min-h-screen bg-background flex flex-col">
             <CommonHeader />
             <main className="flex-1 flex items-center justify-center">

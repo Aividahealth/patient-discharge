@@ -1267,7 +1267,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
 
   return (
     <ErrorBoundary>
-      <AuthGuard>
+      <AuthGuard requiredRole="clinician">
         <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Clinician Portal" />
       
