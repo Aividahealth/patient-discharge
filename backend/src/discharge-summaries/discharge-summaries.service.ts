@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GcsService } from './gcs.service';
 import { FirestoreService } from './firestore.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
 import {
   DischargeSummaryMetadata,
   DischargeSummaryResponse,
@@ -19,6 +20,7 @@ export class DischargeSummariesService {
   constructor(
     private gcsService: GcsService,
     private firestoreService: FirestoreService,
+    private qualityMetricsService: QualityMetricsService,
   ) {}
 
   /**
@@ -28,14 +30,51 @@ export class DischargeSummariesService {
     query: DischargeSummaryListQuery,
     tenantId: string,
   ): Promise<DischargeSummaryListResponse> {
-    return this.firestoreService.list(query, tenantId);
+    const response = await this.firestoreService.list(query, tenantId);
+
+    // Skip quality metrics fetch if no items
+    if (!response.items || response.items.length === 0) {
+      return response;
+    }
+
+    try {
+      // Fetch quality metrics for all discharge summaries
+      const compositionIds = response.items.map(item => item.id);
+      const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
+
+      // Merge quality metrics into discharge summary metadata
+      const itemsWithMetrics = response.items.map(item => {
+        const metrics = qualityMetricsMap.get(item.id);
+        return {
+          ...item,
+          qualityMetrics: (metrics as any) || item.qualityMetrics,
+        };
+      });
+
+      return {
+        ...response,
+        items: itemsWithMetrics,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to fetch quality metrics: ${error.message}`);
+      // Return response without quality metrics if fetching fails
+      return response;
+    }
   }
 
   /**
    * Get discharge summary by ID (metadata only)
    */
   async getById(id: string, tenantId: string): Promise<DischargeSummaryMetadata> {
-    return this.firestoreService.getById(id, tenantId);
+    const metadata = await this.firestoreService.getById(id, tenantId);
+
+    // Fetch quality metrics for this discharge summary
+    const qualityMetrics = await this.qualityMetricsService.getMetrics(id);
+
+    return {
+      ...metadata,
+      qualityMetrics: (qualityMetrics as any) || metadata.qualityMetrics,
+    };
   }
 
   /**

@@ -300,6 +300,13 @@ export interface DischargeQueuePatient {
     id: string;
   };
   avatar: string | null;
+  qualityMetrics?: {
+    fleschKincaidGradeLevel?: number;
+    fleschReadingEase?: number;
+    smogIndex?: number;
+    compressionRatio?: number;
+    avgSentenceLength?: number;
+  };
 }
 
 export interface DischargeQueueResponse {

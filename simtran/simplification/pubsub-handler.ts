@@ -5,8 +5,10 @@ import { SimplificationService } from './simplification.service';
 import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
 import { PubSubPublisherService } from './pubsub-publisher.service';
+import { QualityMetricsService } from './quality-metrics.service';
 import { createLogger } from './common/utils/logger';
 import { logPipelineEvent } from './common/utils/pipeline-logger';
+import { calculateQualityMetrics } from './common/utils/quality-metrics';
 
 const logger = createLogger('PubSubHandler');
 
@@ -16,6 +18,7 @@ let simplificationService: SimplificationService;
 let backendClient: BackendClientService;
 let storageService: StorageService;
 let pubsubPublisher: PubSubPublisherService;
+let qualityMetricsService: QualityMetricsService;
 
 /**
  * Initialize services lazily (on first invocation)
@@ -37,6 +40,9 @@ function initializeServices(): void {
   }
   if (!pubsubPublisher) {
     pubsubPublisher = new PubSubPublisherService();
+  }
+  if (!qualityMetricsService) {
+    qualityMetricsService = new QualityMetricsService();
   }
 }
 
@@ -287,6 +293,30 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
       dischargeInstructionsSimplified: !!simplifiedResults.dischargeInstructions,
     });
 
+    // Step 4a: Calculate and store quality metrics
+    logger.debug('Step 4a: Calculating and storing quality metrics');
+    if (simplifiedResults.dischargeSummary?.content && simplifiedResults.dischargeSummary?.originalContent) {
+      const qualityMetrics = calculateQualityMetrics(
+        simplifiedResults.dischargeSummary.originalContent,
+        simplifiedResults.dischargeSummary.content
+      );
+
+      // Store quality metrics in Firestore
+      await qualityMetricsService.storeMetrics(
+        event.googleCompositionId,
+        tenantId,
+        qualityMetrics
+      );
+
+      logger.info('Quality metrics calculated and stored', {
+        compositionId: event.googleCompositionId,
+        fleschKincaidGrade: qualityMetrics.readability.fleschKincaidGradeLevel,
+        fleschReadingEase: qualityMetrics.readability.fleschReadingEase,
+        smogIndex: qualityMetrics.readability.smogIndex,
+        compressionRatio: qualityMetrics.simplification.compressionRatio,
+      });
+    }
+
     // Log pipeline event for metrics/dashboard
     const totalTokens = (simplifiedResults.dischargeSummary?.tokensUsed || 0) +
                        (simplifiedResults.dischargeInstructions?.tokensUsed || 0);
@@ -412,12 +442,12 @@ async function simplifyBinaries(
   dischargeSummaries: Array<{ id: string; text: string }>,
   dischargeInstructions: Array<{ id: string; text: string }>
 ): Promise<{
-  dischargeSummary?: { content: string; tokensUsed: number };
-  dischargeInstructions?: { content: string; tokensUsed: number };
+  dischargeSummary?: { content: string; tokensUsed: number; originalContent: string };
+  dischargeInstructions?: { content: string; tokensUsed: number; originalContent: string };
 }> {
   const results: {
-    dischargeSummary?: { content: string; tokensUsed: number };
-    dischargeInstructions?: { content: string; tokensUsed: number };
+    dischargeSummary?: { content: string; tokensUsed: number; originalContent: string };
+    dischargeInstructions?: { content: string; tokensUsed: number; originalContent: string };
   } = {};
 
   // Simplify discharge summary (if available)
@@ -444,6 +474,7 @@ async function simplifyBinaries(
     results.dischargeSummary = {
       content: simplificationResult.simplifiedContent,
       tokensUsed: simplificationResult.tokensUsed || 0,
+      originalContent: summary.text,
     };
 
     logger.info('Discharge summary simplified', {
@@ -477,6 +508,7 @@ async function simplifyBinaries(
     results.dischargeInstructions = {
       content: simplificationResult.simplifiedContent,
       tokensUsed: simplificationResult.tokensUsed || 0,
+      originalContent: instruction.text,
     };
 
     logger.info('Discharge instructions simplified', {
@@ -490,4 +522,4 @@ async function simplifyBinaries(
 }
 
 // Export services for testing
-export { fhirApiService, simplificationService, backendClient, storageService, pubsubPublisher };
+export { fhirApiService, simplificationService, backendClient, storageService, pubsubPublisher, qualityMetricsService };

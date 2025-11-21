@@ -4,6 +4,9 @@ import { PubSubService, EncounterExportEvent } from '../pubsub/pubsub.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { logPipelineEvent } from '../utils/pipeline-logger';
 import { AuditService } from '../audit/audit.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
+import { FirestoreService } from '../discharge-summaries/firestore.service';
+import { DischargeSummaryStatus } from '../discharge-summaries/discharge-summary.types';
 
 interface UploadDischargeSummaryRequest {
   id: string; // patientId
@@ -31,6 +34,8 @@ export class DischargeUploadService {
     private readonly googleService: GoogleService,
     private readonly pubSubService: PubSubService,
     private readonly auditService: AuditService,
+    private readonly qualityMetricsService: QualityMetricsService,
+    private readonly firestoreService: FirestoreService,
   ) {}
 
   /**
@@ -516,6 +521,33 @@ export class DischargeUploadService {
       );
 
       this.logger.log(`✅ Successfully uploaded discharge summary. Composition ID: ${compositionId}`);
+
+      // Step 6: Write discharge summary metadata to Firestore
+      try {
+        await this.firestoreService.createWithId(
+          compositionId,
+          {
+            tenantId: ctx.tenantId,
+            patientId: request.id,
+            patientName: request.name,
+            mrn: request.mrn,
+            encounterId: encounterId,
+            dischargeDate: new Date(request.dischargeDate),
+            status: DischargeSummaryStatus.PROCESSING,
+            files: {
+              raw: `Binary/${dischargeSummaryBinaryId}`,
+            },
+            metadata: {
+              attendingPhysician: request.attendingPhysician?.name || 'Unknown',
+            },
+          },
+          ctx.tenantId,
+        );
+        this.logger.log(`✅ Created discharge summary metadata in Firestore: ${compositionId}`);
+      } catch (firestoreError) {
+        // Log error but don't fail the upload - quality metrics will still be created
+        this.logger.error(`❌ Failed to write discharge summary metadata to Firestore: ${firestoreError.message}`);
+      }
       // Log frontend_upload completion
       logPipelineEvent({
         tenantId: ctx.tenantId,
@@ -629,6 +661,13 @@ export class DischargeUploadService {
         id: string;
       };
       avatar: string | null;
+      qualityMetrics?: {
+        fleschKincaidGradeLevel: number;
+        fleschReadingEase: number;
+        smogIndex: number;
+        compressionRatio: number;
+        avgSentenceLength: number;
+      };
     }>;
     meta: {
       total: number;
@@ -676,6 +715,13 @@ export class DischargeUploadService {
           id: string;
         };
         avatar: string | null;
+        qualityMetrics?: {
+          fleschKincaidGradeLevel: number;
+          fleschReadingEase: number;
+          smogIndex: number;
+          compressionRatio: number;
+          avgSentenceLength: number;
+        };
       }> = [];
       const statusCounts = { pending: 0, review: 0, approved: 0 };
 
@@ -776,6 +822,20 @@ export class DischargeUploadService {
       }
 
       this.logger.log(`✅ Retrieved ${patients.length} patients from discharge queue`);
+
+      // Fetch quality metrics for all compositions in batch
+      const compositionIds = patients.map(p => p.compositionId);
+      const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
+
+      // Add quality metrics to each patient
+      patients.forEach(patient => {
+        const metrics = qualityMetricsMap.get(patient.compositionId);
+        if (metrics) {
+          patient.qualityMetrics = metrics;
+        }
+      });
+
+      this.logger.log(`✅ Added quality metrics to ${qualityMetricsMap.size}/${patients.length} patients`);
 
       return {
         patients,

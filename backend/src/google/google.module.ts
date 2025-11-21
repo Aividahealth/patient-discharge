@@ -9,9 +9,11 @@ import { DischargeUploadService } from './discharge-upload.service';
 import { ConfigModule } from '../config/config.module';
 import { PubSubModule } from '../pubsub/pubsub.module';
 import { AuditModule } from '../audit/audit.module';
+import { QualityMetricsModule } from '../quality-metrics/quality-metrics.module';
+import { DischargeSummariesModule } from '../discharge-summaries/discharge-summaries.module';
 
 @Module({
-  imports: [ConfigModule, PubSubModule, AuditModule],
+  imports: [ConfigModule, PubSubModule, AuditModule, QualityMetricsModule, DischargeSummariesModule],
   controllers: [GoogleController, CompositionSimplifiedController, DischargeUploadController, PatientsController],
   providers: [GoogleService, SimplifiedContentService, DischargeUploadService],
   exports: [GoogleService],

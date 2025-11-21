@@ -4,6 +4,7 @@ import { DevConfigService } from '../config/dev-config.service';
 import { AuthService } from '../auth/auth.service';
 import { UserService } from '../auth/user.service';
 import { GcpInfrastructureService } from './gcp-infrastructure.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
 import { resolveServiceAccountPath } from '../utils/path.helper';
 import {
   TenantConfig,
@@ -24,6 +25,7 @@ export class SystemAdminService {
     private readonly authService: AuthService,
     private readonly userService: UserService,
     private readonly gcpInfrastructure: GcpInfrastructureService,
+    private readonly qualityMetricsService: QualityMetricsService,
   ) {}
 
   /**
@@ -449,50 +451,62 @@ export class SystemAdminService {
         },
       };
 
+      // Extract composition IDs from discharge summaries
+      const compositionIds: string[] = [];
       summariesSnapshot.forEach(doc => {
         const data = doc.data();
-        const qualityMetrics = data.qualityMetrics;
-
-        if (qualityMetrics?.readability) {
-          qualityMetricsData.totalWithMetrics++;
-
-          // Sum for averages
-          const fk = qualityMetrics.readability.fleschKincaidGradeLevel;
-          const re = qualityMetrics.readability.fleschReadingEase;
-          const smog = qualityMetrics.readability.smogIndex;
-
-          if (typeof fk === 'number') qualityMetricsData.fleschKincaidSum += fk;
-          if (typeof re === 'number') qualityMetricsData.readingEaseSum += re;
-          if (typeof smog === 'number') qualityMetricsData.smogSum += smog;
-
-          // Grade distribution buckets
-          if (typeof fk === 'number') {
-            if (fk <= 5) {
-              qualityMetricsData.gradeDistribution.elementary++;
-            } else if (fk <= 8) {
-              qualityMetricsData.gradeDistribution.middleSchool++;
-            } else if (fk <= 12) {
-              qualityMetricsData.gradeDistribution.highSchool++;
-            } else {
-              qualityMetricsData.gradeDistribution.college++;
-            }
-          }
-
-          // Target compliance: FK ≤ 9, Reading Ease ≥ 60, SMOG ≤ 9, avg sentence ≤ 20
-          const avgSentence = qualityMetrics.simplification?.avgSentenceLength;
-          const meetsTarget =
-            fk <= 9 &&
-            re >= 60 &&
-            smog <= 9 &&
-            (!avgSentence || avgSentence <= 20);
-
-          if (meetsTarget) {
-            qualityMetricsData.targetCompliance.meetsTarget++;
-          } else {
-            qualityMetricsData.targetCompliance.needsReview++;
-          }
+        if (data.id) {
+          compositionIds.push(data.id);
         }
       });
+
+      // Fetch quality metrics from separate collection
+      if (compositionIds.length > 0) {
+        const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
+
+        // Aggregate the metrics
+        qualityMetricsMap.forEach((qualityMetrics, compositionId) => {
+          if (qualityMetrics) {
+            qualityMetricsData.totalWithMetrics++;
+
+            // Sum for averages
+            const fk = qualityMetrics.fleschKincaidGradeLevel;
+            const re = qualityMetrics.fleschReadingEase;
+            const smog = qualityMetrics.smogIndex;
+
+            if (typeof fk === 'number') qualityMetricsData.fleschKincaidSum += fk;
+            if (typeof re === 'number') qualityMetricsData.readingEaseSum += re;
+            if (typeof smog === 'number') qualityMetricsData.smogSum += smog;
+
+            // Grade distribution buckets
+            if (typeof fk === 'number') {
+              if (fk <= 5) {
+                qualityMetricsData.gradeDistribution.elementary++;
+              } else if (fk <= 8) {
+                qualityMetricsData.gradeDistribution.middleSchool++;
+              } else if (fk <= 12) {
+                qualityMetricsData.gradeDistribution.highSchool++;
+              } else {
+                qualityMetricsData.gradeDistribution.college++;
+              }
+            }
+
+            // Target compliance: FK ≤ 9, Reading Ease ≥ 60, SMOG ≤ 9, avg sentence ≤ 20
+            const avgSentence = qualityMetrics.avgSentenceLength;
+            const meetsTarget =
+              fk <= 9 &&
+              re >= 60 &&
+              smog <= 9 &&
+              (!avgSentence || avgSentence <= 20);
+
+            if (meetsTarget) {
+              qualityMetricsData.targetCompliance.meetsTarget++;
+            } else {
+              qualityMetricsData.targetCompliance.needsReview++;
+            }
+          }
+        });
+      }
 
       // Get users count by role
       const usersSnapshot = await this.getFirestore()

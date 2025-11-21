@@ -181,6 +181,42 @@ export class FirestoreService {
   }
 
   /**
+   * Create new discharge summary metadata with specific ID (compositionId)
+   */
+  async createWithId(
+    id: string,
+    metadata: Omit<DischargeSummaryMetadata, 'id' | 'createdAt' | 'updatedAt'>,
+    tenantId: string,
+  ): Promise<DischargeSummaryMetadata> {
+    const now = new Date();
+    const docRef = this.getFirestore().collection(this.collectionName).doc(id);
+
+    // Check if document already exists
+    const existing = await docRef.get();
+    if (existing.exists) {
+      this.logger.log(`Discharge summary already exists: ${id}, updating instead`);
+      return this.update(id, metadata, tenantId);
+    }
+
+    const data = {
+      ...metadata,
+      id, // Include the ID in the data
+      tenantId, // Ensure tenantId is set
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // Remove undefined values (Firestore doesn't accept them)
+    const cleanData = this.removeUndefined(data);
+
+    await docRef.set(cleanData);
+
+    this.logger.log(`Created discharge summary: ${id} for tenant: ${tenantId}`);
+
+    return this.documentToMetadata(id, data);
+  }
+
+  /**
    * Update discharge summary metadata
    */
   async update(
@@ -356,6 +392,7 @@ export class FirestoreService {
       updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
       simplifiedAt: data.simplifiedAt?.toDate ? data.simplifiedAt.toDate() : data.simplifiedAt,
       translatedAt: data.translatedAt?.toDate ? data.translatedAt.toDate() : data.translatedAt,
+      qualityMetrics: data.qualityMetrics,
       metadata: data.metadata,
     };
   }

@@ -18,6 +18,7 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { FileUploadModal } from "@/components/file-upload-modal"
 import { MarkdownRenderer, markdownToHtml } from "@/components/markdown-renderer"
 import { SimplifiedDischargeSummary, SimplifiedDischargeInstructions } from "@/components/simplified-discharge-renderer"
+import { QualityMetricsCard } from "@/components/quality-metrics-card"
 import { useTenant } from "@/contexts/tenant-context"
 import { usePDFExport } from "@/hooks/use-pdf-export"
 import { getDischargeSummaryRenderer } from "@/components/discharge-renderers/renderer-registry"
@@ -1394,6 +1395,11 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           <p className="font-medium truncate">{patient.name}</p>
                           <p className="text-sm opacity-80 truncate">{patient.mrn}</p>
                           <p className="text-xs opacity-60 truncate">{patient.specialty}</p>
+                          {patient.qualityMetrics && (
+                            <div className="mt-1">
+                              <QualityMetricsCard metrics={patient.qualityMetrics} compact />
+                            </div>
+                          )}
                         </div>
                         <Badge variant={patient.status === 'approved' ? 'default' : 'secondary'}>
                           {patient.status === 'approved' ? t.approved : t.review}
@@ -1453,7 +1459,12 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                     </div>
                   </CardHeader>
                 </Card>
-                
+
+                {/* Quality Metrics */}
+                {currentPatient?.qualityMetrics && (
+                  <QualityMetricsCard metrics={currentPatient.qualityMetrics} />
+                )}
+
                 {/* Side-by-Side Editor */}
                 <div className="grid lg:grid-cols-2 gap-6 mb-6">
                   {/* Original Document */}
