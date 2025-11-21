@@ -10,6 +10,7 @@ import {
   getDischargeSummaryContent,
   DischargeSummaryContent,
 } from "@/lib/discharge-summaries"
+import { QualityMetricsCard } from "@/components/quality-metrics-card"
 
 interface DischargeSummaryViewerProps {
   summaryId: string
@@ -240,6 +241,11 @@ export function DischargeSummaryViewer({
           </CardContent>
         </Card>
       </div>
+
+      {/* Quality Metrics */}
+      {simplifiedContent?.metadata?.qualityMetrics && (
+        <QualityMetricsCard metrics={simplifiedContent.metadata.qualityMetrics} />
+      )}
     </div>
   )
 }

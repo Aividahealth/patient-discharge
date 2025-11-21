@@ -128,6 +128,8 @@ export async function processSimplificationCompletedEvent(cloudEvent: CloudEvent
       tenantId: message.tenantId,
       compositionId: message.compositionId,
       filesCount: message.simplifiedFiles.length,
+      preferredLanguage: message.preferredLanguage,
+      patientId: message.patientId,
     });
 
     // Process the simplification completed event

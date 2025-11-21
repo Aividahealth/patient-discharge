@@ -64,14 +64,15 @@ export class ExpertService {
   /**
    * Get list of discharge summaries for expert review
    */
-  async getReviewList(query: ReviewListQuery): Promise<ReviewListResponse> {
+  async getReviewList(query: ReviewListQuery, tenantId: string): Promise<ReviewListResponse> {
     const firestore = this.getFirestore();
     const limit = query.limit || 20;
     const offset = query.offset || 0;
 
-    // Get all discharge summaries
+    // Get discharge summaries for this tenant only
     let summariesQuery = firestore
       .collection(this.summariesCollection)
+      .where('tenantId', '==', tenantId)
       .orderBy('updatedAt', 'desc') as any;
 
     // Get summaries
@@ -82,9 +83,10 @@ export class ExpertService {
     for (const doc of summariesSnapshot.docs) {
       const data = doc.data();
 
-      // Get feedback count and average rating for this summary
+      // Get feedback count and average rating for this summary (filtered by tenantId)
       const feedbackSnapshot = await firestore
         .collection(this.feedbackCollection)
+        .where('tenantId', '==', tenantId)
         .where('dischargeSummaryId', '==', doc.id)
         .get();
 
@@ -102,6 +104,15 @@ export class ExpertService {
         latestReviewDate = reviewDates.sort((a, b) => b.getTime() - a.getTime())[0];
       }
 
+      // Extract quality metrics if available
+      const qualityMetrics = data.qualityMetrics ? {
+        fleschKincaidGradeLevel: data.qualityMetrics.readability?.fleschKincaidGradeLevel,
+        fleschReadingEase: data.qualityMetrics.readability?.fleschReadingEase,
+        smogIndex: data.qualityMetrics.readability?.smogIndex,
+        compressionRatio: data.qualityMetrics.simplification?.compressionRatio,
+        avgSentenceLength: data.qualityMetrics.simplification?.avgSentenceLength,
+      } : undefined;
+
       const summary: ReviewSummary = {
         id: doc.id,
         patientName: data.patientName,
@@ -111,6 +122,7 @@ export class ExpertService {
         reviewCount,
         avgRating: avgRating ? Math.round(avgRating * 10) / 10 : undefined,
         latestReviewDate,
+        qualityMetrics,
       };
 
       // Apply filters
@@ -132,12 +144,13 @@ export class ExpertService {
   /**
    * Submit expert feedback
    */
-  async submitFeedback(dto: SubmitFeedbackDto): Promise<ExpertFeedback> {
+  async submitFeedback(dto: SubmitFeedbackDto, tenantId: string): Promise<ExpertFeedback> {
     const firestore = this.getFirestore();
     const now = new Date();
 
     // Build feedback object, excluding undefined values
     const feedback: any = {
+      tenantId, // Store tenantId for multi-tenant isolation
       dischargeSummaryId: dto.dischargeSummaryId,
       reviewType: dto.reviewType,
       reviewerName: dto.reviewerName,
@@ -170,7 +183,7 @@ export class ExpertService {
       .add(feedback);
 
     this.logger.log(
-      `Expert feedback submitted: ${docRef.id} for summary ${dto.dischargeSummaryId}`,
+      `Expert feedback submitted: ${docRef.id} for summary ${dto.dischargeSummaryId} for tenant: ${tenantId}`,
     );
 
     return {
@@ -184,6 +197,7 @@ export class ExpertService {
    */
   async getFeedbackForSummary(
     summaryId: string,
+    tenantId: string,
     options: {
       reviewType?: 'simplification' | 'translation';
       includeStats?: boolean;
@@ -192,7 +206,6 @@ export class ExpertService {
       offset?: number;
       sortBy?: 'reviewDate' | 'rating' | 'createdAt';
       sortOrder?: 'asc' | 'desc';
-      tenantId?: string;
     } = {},
   ): Promise<FeedbackResponse> {
     const {
@@ -203,20 +216,15 @@ export class ExpertService {
       offset = 0,
       sortBy = 'reviewDate',
       sortOrder = 'desc',
-      tenantId,
     } = options;
 
     const firestore = this.getFirestore();
 
-    // Build base query
+    // Build base query - always filter by tenantId (required for multi-tenant isolation)
     let query = firestore
       .collection(this.feedbackCollection)
+      .where('tenantId', '==', tenantId)
       .where('dischargeSummaryId', '==', summaryId) as any;
-
-    // Filter by tenant if provided
-    if (tenantId) {
-      query = query.where('tenantId', '==', tenantId);
-    }
 
     // Filter by review type if provided
     if (reviewType) {
@@ -551,7 +559,7 @@ export class ExpertService {
   /**
    * Get feedback by ID
    */
-  async getFeedbackById(id: string): Promise<ExpertFeedback | null> {
+  async getFeedbackById(id: string, tenantId: string): Promise<ExpertFeedback | null> {
     const firestore = this.getFirestore();
     const docRef = firestore.collection(this.feedbackCollection).doc(id);
     const doc = await docRef.get();
@@ -561,6 +569,12 @@ export class ExpertService {
     }
 
     const data = doc.data();
+    
+    // Validate tenantId
+    if (data?.tenantId !== tenantId) {
+      return null;
+    }
+
     return {
       id: doc.id,
       ...data,
@@ -573,12 +587,19 @@ export class ExpertService {
   /**
    * Update existing feedback
    */
-  async updateFeedback(id: string, dto: UpdateFeedbackDto): Promise<ExpertFeedback | null> {
+  async updateFeedback(id: string, dto: UpdateFeedbackDto, tenantId: string): Promise<ExpertFeedback | null> {
     const firestore = this.getFirestore();
     const docRef = firestore.collection(this.feedbackCollection).doc(id);
     const doc = await docRef.get();
 
     if (!doc.exists) {
+      return null;
+    }
+
+    const docData = doc.data();
+    
+    // Validate tenantId
+    if (docData?.tenantId !== tenantId) {
       return null;
     }
 
@@ -601,17 +622,17 @@ export class ExpertService {
 
     await docRef.update(updateData);
 
-    this.logger.log(`Expert feedback updated: ${id}`);
+    this.logger.log(`Expert feedback updated: ${id} for tenant: ${tenantId}`);
 
     // Return updated feedback
     const updatedDoc = await docRef.get();
-    const data = updatedDoc.data();
+    const updatedData = updatedDoc.data();
     return {
       id: updatedDoc.id,
-      ...data,
-      reviewDate: data?.reviewDate?.toDate?.() || data?.reviewDate,
-      createdAt: data?.createdAt?.toDate?.() || data?.createdAt,
-      updatedAt: data?.updatedAt?.toDate?.() || data?.updatedAt,
+      ...updatedData,
+      reviewDate: updatedData?.reviewDate?.toDate?.() || updatedData?.reviewDate,
+      createdAt: updatedData?.createdAt?.toDate?.() || updatedData?.createdAt,
+      updatedAt: updatedData?.updatedAt?.toDate?.() || updatedData?.updatedAt,
     } as ExpertFeedback;
   }
 }

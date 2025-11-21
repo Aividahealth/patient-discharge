@@ -7,6 +7,9 @@ export type ReviewType = 'simplification' | 'translation';
 export interface ExpertFeedback {
   id?: string;
 
+  // Multi-tenant isolation
+  tenantId: string; // Tenant identifier (required for multi-tenant isolation)
+
   // What's being reviewed
   dischargeSummaryId: string;
   reviewType: ReviewType;
@@ -59,6 +62,17 @@ export interface UpdateFeedbackDto {
   hasMissingInfo?: boolean;
 }
 
+/**
+ * Quality metrics for text simplification (subset for review summary)
+ */
+export interface ReviewQualityMetrics {
+  fleschKincaidGradeLevel?: number;
+  fleschReadingEase?: number;
+  smogIndex?: number;
+  compressionRatio?: number;
+  avgSentenceLength?: number;
+}
+
 export interface ReviewSummary {
   id: string;
   patientName?: string;
@@ -68,6 +82,7 @@ export interface ReviewSummary {
   reviewCount: number;
   avgRating?: number;
   latestReviewDate?: Date;
+  qualityMetrics?: ReviewQualityMetrics;
 }
 
 export interface ReviewListQuery {

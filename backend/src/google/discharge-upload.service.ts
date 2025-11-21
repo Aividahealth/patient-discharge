@@ -1,8 +1,12 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { GoogleService } from './google.service';
 import { PubSubService, EncounterExportEvent } from '../pubsub/pubsub.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { logPipelineEvent } from '../utils/pipeline-logger';
+import { AuditService } from '../audit/audit.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
+import { FirestoreService } from '../discharge-summaries/firestore.service';
+import { DischargeSummaryStatus } from '../discharge-summaries/discharge-summary.types';
 
 interface UploadDischargeSummaryRequest {
   id: string; // patientId
@@ -29,6 +33,9 @@ export class DischargeUploadService {
   constructor(
     private readonly googleService: GoogleService,
     private readonly pubSubService: PubSubService,
+    private readonly auditService: AuditService,
+    private readonly qualityMetricsService: QualityMetricsService,
+    private readonly firestoreService: FirestoreService,
   ) {}
 
   /**
@@ -88,6 +95,9 @@ export class DischargeUploadService {
       const family = nameParts[nameParts.length - 1] || '';
       const given = nameParts.slice(0, -1);
 
+      // Default to Spanish if no preferred language provided (for manual EHR integration)
+      const finalPreferredLanguage = preferredLanguage || 'es';
+
       const patient = {
         resourceType: 'Patient',
         id: patientId,
@@ -114,18 +124,14 @@ export class DischargeUploadService {
             text: name,
           },
         ],
-        ...(preferredLanguage
-          ? {
-              communication: [
-                {
-                  language: {
-                    coding: [{ system: 'urn:ietf:bcp:47', code: preferredLanguage }],
-                  },
-                  preferred: true,
-                },
-              ],
-            }
-          : {}),
+        communication: [
+          {
+            language: {
+              coding: [{ system: 'urn:ietf:bcp:47', code: finalPreferredLanguage }],
+            },
+            preferred: true,
+          },
+        ],
         ...(avatar ? {
           photo: [
             {
@@ -515,6 +521,33 @@ export class DischargeUploadService {
       );
 
       this.logger.log(`✅ Successfully uploaded discharge summary. Composition ID: ${compositionId}`);
+
+      // Step 6: Write discharge summary metadata to Firestore
+      try {
+        await this.firestoreService.createWithId(
+          compositionId,
+          {
+            tenantId: ctx.tenantId,
+            patientId: request.id,
+            patientName: request.name,
+            mrn: request.mrn,
+            encounterId: encounterId,
+            dischargeDate: new Date(request.dischargeDate),
+            status: DischargeSummaryStatus.PROCESSING,
+            files: {
+              raw: `Binary/${dischargeSummaryBinaryId}`,
+            },
+            metadata: {
+              attendingPhysician: request.attendingPhysician?.name || 'Unknown',
+            },
+          },
+          ctx.tenantId,
+        );
+        this.logger.log(`✅ Created discharge summary metadata in Firestore: ${compositionId}`);
+      } catch (firestoreError) {
+        // Log error but don't fail the upload - quality metrics will still be created
+        this.logger.error(`❌ Failed to write discharge summary metadata to Firestore: ${firestoreError.message}`);
+      }
       // Log frontend_upload completion
       logPipelineEvent({
         tenantId: ctx.tenantId,
@@ -541,10 +574,11 @@ export class DischargeUploadService {
           exportTimestamp: new Date().toISOString(),
           status: 'success',
           // Include preferredLanguage to help downstream services
-          // (simtran will also verify via FHIR Patient if needed)
-          ...(request.preferredLanguage ? { preferredLanguage: request.preferredLanguage } : {}),
+          // Default to Spanish if not provided (for manual uploads)
+          preferredLanguage: request.preferredLanguage || 'es',
         };
 
+        this.logger.log(`📤 Publishing Pub/Sub event for composition: ${compositionId} with preferredLanguage: ${event.preferredLanguage}`);
         await this.pubSubService.publishEncounterExportEvent(event);
         this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}`);
         // Log backend_publish_to_topic completion
@@ -628,6 +662,13 @@ export class DischargeUploadService {
         id: string;
       };
       avatar: string | null;
+      qualityMetrics?: {
+        fleschKincaidGradeLevel: number;
+        fleschReadingEase: number;
+        smogIndex: number;
+        compressionRatio: number;
+        avgSentenceLength: number;
+      };
     }>;
     meta: {
       total: number;
@@ -675,6 +716,13 @@ export class DischargeUploadService {
           id: string;
         };
         avatar: string | null;
+        qualityMetrics?: {
+          fleschKincaidGradeLevel: number;
+          fleschReadingEase: number;
+          smogIndex: number;
+          compressionRatio: number;
+          avgSentenceLength: number;
+        };
       }> = [];
       const statusCounts = { pending: 0, review: 0, approved: 0 };
 
@@ -743,23 +791,26 @@ export class DischargeUploadService {
             physicianId = parts[1] || '';
           }
 
-          patients.push({
-            id: patientId,
-            mrn,
-            name,
-            room,
-            unit,
-            dischargeDate,
-            compositionId,
-            status,
-            attendingPhysician: {
-              name: physicianName,
-              id: physicianId,
-            },
-            avatar,
-          });
+          // Only add to queue if not approved (approved discharges should not appear in queue)
+          if (status !== 'approved') {
+            patients.push({
+              id: patientId,
+              mrn,
+              name,
+              room,
+              unit,
+              dischargeDate,
+              compositionId,
+              status,
+              attendingPhysician: {
+                name: physicianName,
+                id: physicianId,
+              },
+              avatar,
+            });
+          }
 
-          // Count statuses
+          // Count statuses (still count approved for meta, but don't include in queue)
           if (status === 'pending') statusCounts.pending++;
           else if (status === 'review') statusCounts.review++;
           else if (status === 'approved') statusCounts.approved++;
@@ -772,6 +823,20 @@ export class DischargeUploadService {
       }
 
       this.logger.log(`✅ Retrieved ${patients.length} patients from discharge queue`);
+
+      // Fetch quality metrics for all compositions in batch
+      const compositionIds = patients.map(p => p.compositionId);
+      const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
+
+      // Add quality metrics to each patient
+      patients.forEach(patient => {
+        const metrics = qualityMetricsMap.get(patient.compositionId);
+        if (metrics) {
+          patient.qualityMetrics = metrics;
+        }
+      });
+
+      this.logger.log(`✅ Added quality metrics to ${qualityMetricsMap.size}/${patients.length} patients`);
 
       return {
         patients,
@@ -926,6 +991,167 @@ export class DischargeUploadService {
       throw new HttpException(
         {
           message: 'Failed to mark discharge as completed',
+          error: error.message,
+          compositionId,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Add additional clarifications to discharge instructions
+   */
+  async addClarificationsToInstructions(
+    compositionId: string,
+    clarifications: string,
+    ctx: TenantContext,
+  ): Promise<{ success: boolean; binaryId?: string }> {
+    try {
+      this.logger.log(`📝 Adding clarifications to discharge instructions for Composition: ${compositionId}`);
+
+      // Step 1: Get Composition to find Binary references
+      const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
+      if (!composition || !composition.section) {
+        throw new HttpException(
+          {
+            message: 'Composition not found or has no sections',
+            compositionId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Step 2: Find discharge instructions Binary
+      let instructionsBinaryId: string | null = null;
+      for (const section of composition.section) {
+        if (section.entry) {
+          for (const entry of section.entry) {
+            if (entry.reference?.startsWith('Binary/')) {
+              const binaryId = entry.reference.replace('Binary/', '');
+              const binary = await this.googleService.fhirRead('Binary', binaryId, ctx);
+              
+              // Check if this is a discharge-instructions binary
+              if (binary?.meta?.tag) {
+                for (const tag of binary.meta.tag) {
+                  if (tag.system === 'http://aivida.com/fhir/tags' && 
+                      (tag.code === 'discharge-instructions' || tag.code.startsWith('discharge-instructions-'))) {
+                    instructionsBinaryId = binaryId;
+                    break;
+                  }
+                }
+              }
+              if (instructionsBinaryId) break;
+            }
+          }
+        }
+        if (instructionsBinaryId) break;
+      }
+
+      if (!instructionsBinaryId) {
+        // Try to find simplified instructions
+        for (const section of composition.section) {
+          if (section.entry) {
+            for (const entry of section.entry) {
+              if (entry.reference?.startsWith('Binary/')) {
+                const binaryId = entry.reference.replace('Binary/', '');
+                const binary = await this.googleService.fhirRead('Binary', binaryId, ctx);
+                
+                if (binary?.meta?.tag) {
+                  for (const tag of binary.meta.tag) {
+                    if (tag.system === 'http://aivida.com/fhir/tags' && 
+                        (tag.code === 'discharge-instructions-simplified' || tag.code === 'discharge-instructions-translated')) {
+                      instructionsBinaryId = binaryId;
+                      break;
+                    }
+                  }
+                }
+                if (instructionsBinaryId) break;
+              }
+            }
+          }
+          if (instructionsBinaryId) break;
+        }
+      }
+
+      if (!instructionsBinaryId) {
+        this.logger.warn(`⚠️ No discharge instructions Binary found for Composition: ${compositionId}`);
+        return { success: false };
+      }
+
+      // Step 3: Get current instructions content
+      const currentBinary = await this.googleService.fhirRead('Binary', instructionsBinaryId, ctx);
+      if (!currentBinary || !currentBinary.data) {
+        throw new HttpException(
+          {
+            message: 'Binary resource not found or has no data',
+            binaryId: instructionsBinaryId,
+          },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // Decode current content
+      const currentContent = Buffer.from(currentBinary.data, 'base64').toString('utf8');
+
+      // Step 4: Append clarifications section
+      const clarificationsSection = `\n\n## Additional Clarifications\n\n${clarifications.trim()}\n`;
+      const updatedContent = currentContent + clarificationsSection;
+
+      // Step 5: Create new Binary with updated content
+      const newBinary = {
+        resourceType: 'Binary',
+        contentType: 'text/plain',
+        data: Buffer.from(updatedContent, 'utf8').toString('base64'),
+        meta: currentBinary.meta || {
+          tag: [],
+        },
+      };
+
+      // Preserve tags
+      if (!newBinary.meta.tag) {
+        newBinary.meta.tag = [];
+      }
+
+      const result = await this.googleService.fhirCreate('Binary', newBinary, ctx);
+      this.logger.log(`✅ Created new Binary with clarifications: ${result.id}`);
+
+      // Step 6: Update DocumentReference to point to new Binary
+      // Find DocumentReference that references the old Binary
+      const docRefQuery = {
+        'content.attachment.url': `Binary/${instructionsBinaryId}`,
+      };
+      const docRefResult = await this.googleService.fhirSearch('DocumentReference', docRefQuery, ctx);
+      
+      if (docRefResult?.entry && docRefResult.entry.length > 0) {
+        const docRef = docRefResult.entry[0].resource;
+        docRef.content = [
+          {
+            attachment: {
+              contentType: 'text/plain',
+              url: `Binary/${result.id}`,
+              title: docRef.content?.[0]?.attachment?.title || 'Discharge Instructions',
+            },
+          },
+        ];
+        docRef.date = new Date().toISOString();
+        
+        await this.googleService.fhirUpdate('DocumentReference', docRef.id, docRef, ctx);
+        this.logger.log(`✅ Updated DocumentReference: ${docRef.id}`);
+      }
+
+      return {
+        success: true,
+        binaryId: result.id,
+      };
+    } catch (error) {
+      this.logger.error(`❌ Failed to add clarifications: ${error.message}`);
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          message: 'Failed to add clarifications to discharge instructions',
           error: error.message,
           compositionId,
         },

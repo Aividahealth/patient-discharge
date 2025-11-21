@@ -1,5 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import { createLogger } from './common/utils/logger';
+import { QualityMetrics } from './common/utils/quality-metrics';
 
 const logger = createLogger('FirestoreService');
 
@@ -17,6 +18,7 @@ export interface DischargeSummaryMetadata {
     dischargeDate?: Date;
     diagnosis?: string[];
   };
+  qualityMetrics?: QualityMetrics;
   createdAt: Date;
   updatedAt: Date;
   simplifiedAt?: Date;
@@ -39,6 +41,7 @@ export class FirestoreService {
   async upsertDischargeSummary(
     rawFileName: string,
     simplifiedFileName: string,
+    qualityMetrics?: QualityMetrics,
   ): Promise<void> {
     try {
       const now = new Date();
@@ -56,17 +59,25 @@ export class FirestoreService {
       if (!existingSnapshot.empty) {
         // Update existing record
         const doc = existingSnapshot.docs[0];
-        await doc.ref.update({
+        const updateData: any = {
           'files.simplified': simplifiedFileName,
           status: 'simplified',
           simplifiedAt: now,
           updatedAt: now,
-        });
+        };
+
+        // Add quality metrics if provided
+        if (qualityMetrics) {
+          updateData.qualityMetrics = qualityMetrics;
+        }
+
+        await doc.ref.update(updateData);
 
         logger.info('Updated existing Firestore record', {
           id: doc.id,
           rawFileName,
           simplifiedFileName,
+          hasQualityMetrics: !!qualityMetrics,
         });
       } else {
         // Create new record
@@ -84,12 +95,18 @@ export class FirestoreService {
           simplifiedAt: now,
         };
 
+        // Add quality metrics if provided
+        if (qualityMetrics) {
+          newDoc.qualityMetrics = qualityMetrics;
+        }
+
         const docRef = await this.firestore.collection(this.collection).add(newDoc);
 
         logger.info('Created new Firestore record', {
           id: docRef.id,
           rawFileName,
           simplifiedFileName,
+          hasQualityMetrics: !!qualityMetrics,
         });
       }
     } catch (error) {

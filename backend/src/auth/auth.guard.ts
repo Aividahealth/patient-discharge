@@ -137,14 +137,13 @@ export class AuthGuard implements CanActivate {
         }
 
         // Verify tenantId from token matches X-Tenant-ID header
-        // Special handling for system_admin: token may have null tenantId but header should be 'system'
+        // Special handling for system_admin: can use any tenantId in header to access that tenant's resources
         if (jwtPayload.role === 'system_admin') {
-          if (tenantIdHeader !== 'system') {
-            this.logger.warn(
-              `System admin must use 'system' as tenantId. Got: ${tenantIdHeader}`,
-            );
-            throw new UnauthorizedException('System admin must use X-Tenant-ID: system');
-          }
+          // System admin can access any tenant, so we allow any tenantId in the header
+          // The tenantId will be validated later when accessing tenant-specific resources
+          this.logger.debug(
+            `System admin accessing tenant: ${tenantIdHeader}`,
+          );
         } else if (jwtPayload.tenantId !== tenantIdHeader) {
           this.logger.warn(
             `Tenant ID mismatch: token has ${jwtPayload.tenantId}, header has ${tenantIdHeader}`,

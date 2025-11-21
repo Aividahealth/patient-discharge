@@ -23,6 +23,8 @@ import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { TenantGuard } from '../auth/guards/tenant.guard';
+import { TenantContext } from '../tenant/tenant.decorator';
+import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
 
 @Controller('discharge-summaries')
 @UseGuards(AuthGuard, RolesGuard, TenantGuard)
@@ -39,8 +41,11 @@ export class DischargeSummariesController {
    * GET /discharge-summaries?patientName=Smith&status=simplified&limit=20
    */
   @Get()
-  async list(@Query() query: DischargeSummaryListQuery) {
-    this.logger.log(`List discharge summaries: ${JSON.stringify(query)}`);
+  async list(
+    @Query() query: DischargeSummaryListQuery,
+    @TenantContext() ctx: TenantContextType,
+  ) {
+    this.logger.log(`List discharge summaries: ${JSON.stringify(query)} for tenant: ${ctx.tenantId}`);
 
     // Parse numeric query parameters
     const parsedQuery: DischargeSummaryListQuery = {
@@ -49,7 +54,7 @@ export class DischargeSummariesController {
       offset: query.offset ? parseInt(query.offset as any, 10) : undefined,
     };
 
-    return this.dischargeSummariesService.list(parsedQuery);
+    return this.dischargeSummariesService.list(parsedQuery, ctx.tenantId);
   }
 
   /**
@@ -57,9 +62,12 @@ export class DischargeSummariesController {
    * GET /discharge-summaries/:id
    */
   @Get(':id')
-  async getById(@Param('id') id: string) {
-    this.logger.log(`Get discharge summary: ${id}`);
-    return this.dischargeSummariesService.getById(id);
+  async getById(
+    @Param('id') id: string,
+    @TenantContext() ctx: TenantContextType,
+  ) {
+    this.logger.log(`Get discharge summary: ${id} for tenant: ${ctx.tenantId}`);
+    return this.dischargeSummariesService.getById(id, ctx.tenantId);
   }
 
   /**
@@ -69,11 +77,12 @@ export class DischargeSummariesController {
   @Get(':id/content')
   async getContent(
     @Param('id') id: string,
+    @TenantContext() ctx: TenantContextType,
     @Query('version') version: DischargeSummaryVersion = DischargeSummaryVersion.SIMPLIFIED,
     @Query('language') language?: DischargeSummaryLanguage,
   ) {
     this.logger.log(
-      `Get discharge summary content: ${id}, version: ${version}, language: ${language}`,
+      `Get discharge summary content: ${id}, version: ${version}, language: ${language} for tenant: ${ctx.tenantId}`,
     );
 
     const query: DischargeSummaryContentQuery = {
@@ -82,7 +91,7 @@ export class DischargeSummariesController {
       language,
     };
 
-    return this.dischargeSummariesService.getWithContent(query);
+    return this.dischargeSummariesService.getWithContent(query, ctx.tenantId);
   }
 
   /**
@@ -90,9 +99,9 @@ export class DischargeSummariesController {
    * GET /discharge-summaries/stats/overview
    */
   @Get('stats/overview')
-  async getStats() {
-    this.logger.log('Get discharge summaries statistics');
-    return this.dischargeSummariesService.getStats();
+  async getStats(@TenantContext() ctx: TenantContextType) {
+    this.logger.log(`Get discharge summaries statistics for tenant: ${ctx.tenantId}`);
+    return this.dischargeSummariesService.getStats(ctx.tenantId);
   }
 
   /**
@@ -101,9 +110,9 @@ export class DischargeSummariesController {
    */
   @Post('sync/all')
   @HttpCode(HttpStatus.OK)
-  async syncAll() {
-    this.logger.log('Starting full sync from GCS to Firestore');
-    return this.dischargeSummariesService.syncFromGcs();
+  async syncAll(@TenantContext() ctx: TenantContextType) {
+    this.logger.log(`Starting full sync from GCS to Firestore for tenant: ${ctx.tenantId}`);
+    return this.dischargeSummariesService.syncFromGcs(ctx.tenantId);
   }
 
   /**
@@ -113,9 +122,13 @@ export class DischargeSummariesController {
    */
   @Post('sync/file')
   @HttpCode(HttpStatus.OK)
-  async syncFile(@Query('bucket') bucketName: string, @Query('file') fileName: string) {
-    this.logger.log(`Syncing file: ${bucketName}/${fileName}`);
-    return this.dischargeSummariesService.syncSingleFile(bucketName, fileName);
+  async syncFile(
+    @Query('bucket') bucketName: string,
+    @Query('file') fileName: string,
+    @TenantContext() ctx: TenantContextType,
+  ) {
+    this.logger.log(`Syncing file: ${bucketName}/${fileName} for tenant: ${ctx.tenantId}`);
+    return this.dischargeSummariesService.syncSingleFile(bucketName, fileName, ctx.tenantId);
   }
 
   /**
@@ -124,9 +137,12 @@ export class DischargeSummariesController {
    */
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  async delete(@Param('id') id: string) {
-    this.logger.log(`Delete discharge summary: ${id}`);
-    return this.dischargeSummariesService.delete(id);
+  async delete(
+    @Param('id') id: string,
+    @TenantContext() ctx: TenantContextType,
+  ) {
+    this.logger.log(`Delete discharge summary: ${id} for tenant: ${ctx.tenantId}`);
+    return this.dischargeSummariesService.delete(id, ctx.tenantId);
   }
 
   /**

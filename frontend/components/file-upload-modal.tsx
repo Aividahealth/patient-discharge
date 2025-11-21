@@ -172,6 +172,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
     attendingPhysician: {
       name: '',
     },
+    preferredLanguage: 'es', // Default to Spanish
   })
 
   const handleFileSelect = (files: FileList | null) => {
@@ -305,7 +306,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
               name: patientFormData.attendingPhysician?.name || '',
               id: patientFormData.attendingPhysician?.id || `physician-${Date.now()}`
             },
-            preferredLanguage: patientFormData.preferredLanguage || undefined,
+            preferredLanguage: patientFormData.preferredLanguage || 'es', // Default to Spanish
             avatar: undefined // Optional field
           };
 
@@ -563,10 +564,10 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
                   <select
                     id="preferredLanguage"
                     className="w-full border rounded-md h-9 px-3 text-sm"
-                    value={patientFormData.preferredLanguage || ''}
+                    value={patientFormData.preferredLanguage || 'es'}
                     onChange={(e) => setPatientFormData({ ...patientFormData, preferredLanguage: e.target.value })}
                   >
-                    <option value="">Select language</option>
+                    <option value="en">English</option>
                     <option value="es">Spanish</option>
                     <option value="vi">Vietnamese</option>
                     <option value="fr">French</option>

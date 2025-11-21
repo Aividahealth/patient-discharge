@@ -23,7 +23,22 @@ import { usePDFExport } from "@/hooks/use-pdf-export"
 import { useTenant } from "@/contexts/tenant-context"
 import { login } from "@/lib/api/auth"
 import { getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
-import { parseDischargeIntoSections, extractMedications, extractAppointments, type DischargeSections, type Medication, type Appointment } from "@/lib/parse-discharge-sections"
+import { 
+  parseDischargeIntoSections,
+  extractMedications,
+  extractAppointments,
+  type DischargeSections,
+  type Medication,
+  type Appointment
+} from "@/lib/parse-discharge-sections"
+import { 
+  SimplifiedDischargeSummary, 
+  SimplifiedDischargeInstructions,
+  MedicationsSection,
+  AppointmentsSection,
+  DietActivitySection,
+  WarningSignsSection
+} from "@/components/simplified-discharge-renderer"
 import html2canvas from "html2canvas"
 import {
   Heart,
@@ -95,17 +110,12 @@ export default function PatientDashboard() {
   useEffect(() => {
     const pid = searchParams.get('patientId')
     const cid = searchParams.get('compositionId')
-    const lang = searchParams.get('language')
 
-    console.log('[Patient Portal] URL parameters:', { patientId: pid, compositionId: cid, language: lang })
+    console.log('[Patient Portal] URL parameters:', { patientId: pid, compositionId: cid })
 
     if (pid) setPatientId(pid)
     if (cid) setCompositionId(cid)
-    if (lang) {
-      setPreferredLanguage(lang)
-      // Default to showing translated content if preferred language is non-English
-      setViewTranslated(lang !== 'en')
-    }
+    // Preferred language is now fetched from getPatientDetails
   }, [searchParams])
 
   // Auto-fetch compositionId if only patientId is provided
@@ -120,14 +130,25 @@ export default function PatientDashboard() {
       
       try {
         const getBackendUrl = () => {
+          if (process.env.NEXT_PUBLIC_API_URL) {
+            return process.env.NEXT_PUBLIC_API_URL
+          }
           if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             return 'http://localhost:3000'
           }
-          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+          return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app'
         }
 
+        const backendUrl = getBackendUrl()
+        const endpoint = `${backendUrl}/google/patient/${patientId}/composition`
+        console.log('[Patient Portal] Fetching compositionId from:', endpoint, {
+          patientId,
+          tenantId: tenant.id,
+          hasToken: !!token
+        })
+
         const response = await fetch(
-          `${getBackendUrl()}/google/patient/${patientId}/composition`,
+          endpoint,
           {
             method: 'GET',
             headers: {
@@ -138,18 +159,64 @@ export default function PatientDashboard() {
           }
         )
 
+        console.log('[Patient Portal] Response status:', response.status, response.statusText)
+
         if (response.ok) {
           const data = await response.json()
           console.log('[Patient Portal] Auto-fetched compositionId:', data.compositionId)
           setCompositionId(data.compositionId)
         } else {
-          console.error('[Patient Portal] Failed to fetch compositionId:', response.statusText)
-          alert('Could not find discharge information for this patient. Please contact support.')
+          // Get error details from response
+          let errorMessage = response.statusText || `HTTP ${response.status}`
+          let errorData: any = null
+          
+          try {
+            const text = await response.text()
+            if (text) {
+              try {
+                errorData = JSON.parse(text)
+                errorMessage = errorData.message || errorData.error || errorMessage
+              } catch (e) {
+                errorMessage = text || errorMessage
+              }
+            }
+          } catch (e) {
+            // If we can't parse the response, use status text
+            console.warn('[Patient Portal] Could not parse error response:', e)
+          }
+          
+          console.error('[Patient Portal] Failed to fetch compositionId:', {
+            status: response.status,
+            statusText: response.statusText || 'No status text',
+            error: errorMessage,
+            details: errorData,
+            endpoint,
+            patientId,
+            tenantId: tenant.id
+          })
+          
+          // Only show alert for 404 (not found), not for auth errors
+          if (response.status === 404) {
+            alert('Could not find discharge information for this patient. Please contact support.')
+          } else if (response.status === 401 || response.status === 403) {
+            console.error('[Patient Portal] Authentication/Authorization error. Please log in again.')
+            // Don't show alert for auth errors - let the auth system handle it
+          } else {
+            console.error('[Patient Portal] Server error. Please try again later.')
+            // Don't show alert for other errors - just log them
+          }
           setIsLoadingData(false)
         }
       } catch (error) {
         console.error('[Patient Portal] Error fetching compositionId:', error)
-        alert('Could not load discharge information. Please try again or contact support.')
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[Patient Portal] Error details:', {
+          error: errorMessage,
+          patientId,
+          tenantId: tenant?.id,
+          hasToken: !!token
+        })
+        // Don't show alert for network errors - just log them
         setIsLoadingData(false)
       }
     }
@@ -181,10 +248,13 @@ export default function PatientDashboard() {
       try {
         // Fetch patient name from FHIR Patient resource
         const getBackendUrl = () => {
+          if (process.env.NEXT_PUBLIC_API_URL) {
+            return process.env.NEXT_PUBLIC_API_URL
+          }
           if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             return 'http://localhost:3000'
           }
-          return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app'
+          return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app'
         }
 
         const patientResponse = await fetch(
@@ -223,6 +293,16 @@ export default function PatientDashboard() {
         )
         console.log('[Patient Portal] Patient details fetched successfully')
 
+        // Set preferred language from patient details
+        if (details.preferredLanguage) {
+          setPreferredLanguage(details.preferredLanguage)
+          // Default to translated version for non-English patients
+          setViewTranslated(details.preferredLanguage !== 'en')
+        } else {
+          setPreferredLanguage(null)
+          setViewTranslated(false)
+        }
+
         // Set discharge summary and instructions
         const summaryText = details.simplifiedSummary?.text || details.rawSummary?.text || ""
         const instructionsText = details.simplifiedInstructions?.text || details.rawInstructions?.text || ""
@@ -249,10 +329,10 @@ export default function PatientDashboard() {
         }
 
         // Fetch translated content if preferred language is set and not English
-        if (preferredLanguage && preferredLanguage !== 'en') {
+        if (details.preferredLanguage && details.preferredLanguage !== 'en') {
           const translated = await getTranslatedContent(
             compositionId,
-            preferredLanguage,
+            details.preferredLanguage,
             token,
             tenant.id
           )
@@ -297,7 +377,7 @@ export default function PatientDashboard() {
     }
 
     fetchPatientData()
-  }, [patientId, compositionId, token, tenant, preferredLanguage])
+  }, [patientId, compositionId, token, tenant])
 
   // Mock patient data for UI elements (will be replaced with real data later)
   const patientData = {
@@ -683,9 +763,9 @@ EMERGENCY CONTACTS:
               </div>
             </div>
             <div className="flex items-center gap-3">
-              {/* Language Toggle - Only show if preferred language is non-English */}
+              {/* Language Toggle - Show 2 buttons: English and Patient Preferred Language */}
               {preferredLanguage && preferredLanguage !== 'en' && (
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                   <Button
                     variant={!viewTranslated ? "default" : "outline"}
                     size="sm"
@@ -700,9 +780,9 @@ EMERGENCY CONTACTS:
                     onClick={() => setViewTranslated(true)}
                     className="px-3"
                   >
-                    {SUPPORTED_LANGUAGES.find(l => l.code === preferredLanguage)?.nativeName || preferredLanguage}
+                    {SUPPORTED_LANGUAGES[preferredLanguage]?.nativeName || preferredLanguage}
                   </Button>
-              </div>
+                </div>
               )}
               <FeedbackButton userType="patient" />
               <Button
@@ -802,35 +882,9 @@ EMERGENCY CONTACTS:
                   </div>
                     
                     <div className="space-y-4">
-                      {/* Reasons for Hospital Stay */}
-                      <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-                        <h4 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4" />
-                          Reasons for Hospital Stay
-                        </h4>
-                        <div className="text-sm text-gray-900 leading-relaxed prose prose-sm max-w-none">
-                          {viewTranslated && translatedSummary ? (
-                            <div dangerouslySetInnerHTML={{ __html: translatedSummary.split('What happened during your stay')[0].replace(/\n/g, '<br />') }} />
-                          ) : (
-                            <div dangerouslySetInnerHTML={{ __html: dischargeSummary.split('What happened during your stay')[0].replace(/\n/g, '<br />') }} />
-                          )}
-                  </div>
-                      </div>
-
-                      {/* What Happened During Your Stay */}
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          What Happened During Your Stay
-                        </h4>
-                        <div className="text-sm text-gray-900 leading-relaxed prose prose-sm max-w-none">
-                          {viewTranslated && translatedSummary ? (
-                            <div dangerouslySetInnerHTML={{ __html: (translatedSummary.split('What happened during your stay')[1] || translatedSummary).replace(/\n/g, '<br />') }} />
-                          ) : (
-                            <div dangerouslySetInnerHTML={{ __html: (dischargeSummary.split('What happened during your stay')[1] || dischargeSummary).replace(/\n/g, '<br />') }} />
-                          )}
-                        </div>
-                      </div>
+                      <SimplifiedDischargeSummary 
+                        content={viewTranslated && translatedSummary ? translatedSummary : dischargeSummary} 
+                      />
                     </div>
                   </div>
                   </div>
@@ -894,69 +948,13 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
-            {(viewTranslated ? translatedStructuredMedications : structuredMedications).length > 0 ? (
-            <div className="grid gap-4">
-                {(viewTranslated ? translatedStructuredMedications : structuredMedications).map((med, index) => (
-                  <Card key={`med-${index}`} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6">
-                      <div className="flex items-start gap-4">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                            <Pill className="h-6 w-6 text-blue-600" />
-                        </div>
-                          </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-3">
-                            <h3 className="font-heading text-xl font-semibold text-gray-900">{med.name}</h3>
-                            {med.dose && (
-                              <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 text-sm font-medium px-3 py-1">
-                                {med.dose}
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          {/* Medication Details */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            {med.frequency && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Clock className="h-4 w-4 text-gray-500" />
-                                <span className="text-gray-700"><strong>Frequency:</strong> {med.frequency}</span>
-                        </div>
-                            )}
-                            {med.howToTake && (
-                              <div className="flex items-center gap-2 text-sm">
-                                <Pill className="h-4 w-4 text-gray-500" />
-                                <span className="text-gray-700"><strong>How:</strong> {med.howToTake}</span>
-                        </div>
-                          )}
-                        </div>
-                          
-                          {/* Full Instructions */}
-                          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                            <p className="text-sm font-semibold text-gray-700 mb-2">Complete Instructions:</p>
-                            <p className="text-sm text-gray-900 leading-relaxed">{med.instructions}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            ) : (viewTranslated ? translatedParsedSections.medications : parsedSections.medications) ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                    {viewTranslated ? translatedParsedSections.medications : parsedSections.medications}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="text-muted-foreground">No medication information available</p>
-                </CardContent>
-              </Card>
-            )}
+            <Card>
+              <CardContent className="pt-6">
+                <MedicationsSection 
+                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Appointments Tab */}
@@ -969,275 +967,39 @@ EMERGENCY CONTACTS:
               </Button>
             </div>
 
-            {(viewTranslated ? translatedStructuredAppointments : structuredAppointments).length > 0 ? (
-            <div className="grid gap-4">
-                {(viewTranslated ? translatedStructuredAppointments : structuredAppointments).map((apt, index) => (
-                <Card key={index} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 mt-1">
-                        <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-                          <Calendar className="h-5 w-5 text-green-600" />
-                      </div>
-                    </div>
-                      <div className="flex-1 min-w-0">
-                        {apt.specialty && (
-                          <h3 className="font-heading text-xl font-semibold text-gray-900 mb-2">
-                            {apt.specialty}
-                          </h3>
-                        )}
-                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                          {apt.date && (
-                            <Badge className="bg-green-100 text-green-700 hover:bg-green-200 text-sm font-medium px-3 py-1">
-                              <Clock className="h-3 w-3 mr-1" />
-                              In {apt.date}
-                            </Badge>
-                          )}
-                          {apt.location && (
-                            <Badge variant="outline" className="text-sm">
-                              📍 {apt.location}
-                            </Badge>
-                          )}
-                      </div>
-                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                          <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-line">{apt.rawText}</p>
-                      </div>
-                    </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            ) : (viewTranslated ? translatedParsedSections.appointments : parsedSections.appointments) ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
-                    {viewTranslated ? translatedParsedSections.appointments : parsedSections.appointments}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardContent className="pt-6">
-                  <p className="text-muted-foreground">No appointment information available</p>
-                </CardContent>
-              </Card>
-            )}
+            <Card>
+              <CardContent className="pt-6">
+                <AppointmentsSection 
+                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Diet & Activity Tab */}
           <TabsContent value="diet-activity" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.dietActivityGuidelines}</h2>
 
-            {(viewTranslated ? translatedParsedSections.dietActivity : parsedSections.dietActivity) ? (
-              <Card className="hover:shadow-md transition-shadow">
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 mt-1">
-                      <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                        <Utensils className="h-6 w-6 text-orange-600" />
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">Your Diet & Activity Plan</h3>
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
-                          {viewTranslated ? translatedParsedSections.dietActivity : parsedSections.dietActivity}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Diet Guidelines */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading flex items-center gap-2">
-                    <Utensils className="h-5 w-5" />
-                    {t.dietRecommendations}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-medium text-green-700 mb-2 flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" />
-                      {t.foodsToInclude}
-                    </h4>
-                    <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• {t.foodIncludeFreshFruits}</li>
-                      <li>• {t.foodIncludeWholeGrains}</li>
-                      <li>• {t.foodIncludeLeanProteins}</li>
-                      <li>• {t.foodIncludeLowFatDairy}</li>
-                      <li>• {t.foodIncludeNutsSeeds}</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium text-red-700 mb-2 flex items-center gap-2">
-                      <X className="h-4 w-4" />
-                      {t.foodsToLimit}
-                    </h4>
-                    <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• {t.foodLimitHighSodium}</li>
-                      <li>• {t.foodLimitFriedFast}</li>
-                      <li>• {t.foodLimitSugaryDrinks}</li>
-                      <li>• {t.foodLimitAlcohol}</li>
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Activity Guidelines */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading flex items-center gap-2">
-                    <Heart className="h-5 w-5" />
-                    {t.activityGuidelines}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-medium text-green-700 mb-2 flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" />
-                      {t.recommendedActivities}
-                    </h4>
-                    <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• {t.activityRecommendedWalking}</li>
-                      <li>• {t.activityRecommendedStretching}</li>
-                      <li>• {t.activityRecommendedSwimming}</li>
-                      <li>• {t.activityRecommendedChores}</li>
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium text-red-700 mb-2 flex items-center gap-2">
-                      <X className="h-4 w-4" />
-                      {t.activitiesToAvoid}
-                    </h4>
-                    <ul className="text-sm space-y-1 text-muted-foreground ml-6">
-                      <li>• {t.activityAvoidHeavyLifting}</li>
-                      <li>• {t.activityAvoidIntenseExercise}</li>
-                      <li>• {t.activityAvoidDriving}</li>
-                      <li>• {t.activityAvoidContactSports}</li>
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            )}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <SimplifiedDischargeInstructions 
+                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Warning Signs Tab */}
           <TabsContent value="warnings" className="space-y-6">
             <h2 className="font-heading text-2xl">{t.whenToSeekHelp}</h2>
 
-            {(viewTranslated ? translatedParsedSections.warningsSigns : parsedSections.warningsSigns) ? (
-              <Card className="hover:shadow-md transition-shadow border-red-200">
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 mt-1">
-                      <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
-                        <AlertTriangle className="h-6 w-6 text-red-600" />
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-heading text-xl font-semibold text-gray-900 mb-4">When to Call for Help</h3>
-                      <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                        <div className="prose prose-sm max-w-none whitespace-pre-line text-gray-900">
-                          {viewTranslated ? translatedParsedSections.warningsSigns : parsedSections.warningsSigns}
-                        </div>
-                      </div>
-                      <div className="mt-4 flex gap-3">
-                        <Badge className="bg-red-600 text-white hover:bg-red-700">
-                          <Phone className="h-3 w-3 mr-1" />
-                          Call 911 for emergencies
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-            <Card className="border-red-200 bg-red-50">
-              <CardHeader>
-                <CardTitle className="font-heading text-red-800 flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  {t.call911}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-red-700">
-                  <li className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>{t.warning911ChestPain}</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>{t.warning911Breathing}</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>{t.warning911Weakness}</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span>{t.warning911Consciousness}</span>
-                  </li>
-                </ul>
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <WarningSignsSection 
+                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                />
               </CardContent>
             </Card>
-
-            <Card className="border-orange-200 bg-orange-50">
-              <CardHeader>
-                <CardTitle className="font-heading text-orange-800 flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  {t.callDoctor}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-orange-700">
-                  <li>• {t.warningDoctorSwelling}</li>
-                  <li>• {t.warningDoctorWeightGain}</li>
-                  <li>• {t.warningDoctorCough}</li>
-                  <li>• {t.warningDoctorDizziness}</li>
-                  <li>• {t.warningDoctorFatigue}</li>
-                  <li>• {t.warningDoctorInfection}</li>
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">{t.emergencyContacts}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div>
-                    <p className="font-medium">{t.nurseHotline}</p>
-                    <p className="text-sm text-muted-foreground">{t.nonEmergency}</p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <Phone className="h-4 w-4 mr-2" />
-                    {t.callNow}
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div>
-                    <p className="font-medium">Dr. Sarah Johnson</p>
-                    <p className="text-sm text-muted-foreground">{t.cardiologyOffice}</p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <Phone className="h-4 w-4 mr-2" />
-                    (555) 123-4567
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-            </>
-            )}
           </TabsContent>
 
           {/* Chat Tab */}

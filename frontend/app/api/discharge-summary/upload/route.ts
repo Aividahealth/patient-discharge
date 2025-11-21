@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Note: Parsing is handled by the backend API
     // Frontend parsing was removed as it used a non-existent parser system
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app');
     const uploadEndpoint = `${backendUrl}/api/discharge-summary/upload`;
 
     // Prepare form data for backend

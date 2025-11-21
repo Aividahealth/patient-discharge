@@ -18,6 +18,11 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:portals": "cd .. && ts-node test/scripts/run-portal-tests.ts",
+    "test:portals:verbose": "cd .. && ts-node test/scripts/run-portal-tests.ts --verbose",
+    "test:portals:coverage": "cd .. && ts-node test/scripts/run-portal-tests.ts --coverage",
+    "test:portals:watch": "cd .. && ts-node test/scripts/run-portal-tests.ts --watch",
+    "cleanup-test-data": "cd .. && ts-node test/scripts/cleanup-test-data.ts",
     "sync-discharge-summaries": "ts-node scripts/sync-discharge-summaries.ts",
     "seed-users": "ts-node scripts/seed-users.ts",
     "seed-config": "ts-node scripts/seed-config.ts",
@@ -27,7 +32,8 @@
     "unlock-user": "ts-node scripts/unlock-user.ts",
     "change-password": "ts-node scripts/change-password.ts",
     "list-users": "ts-node scripts/list-users.ts",
-    "migrate-users": "ts-node scripts/migrate-users.ts"
+    "migrate-users": "ts-node scripts/migrate-users.ts",
+    "republish-discharge-events": "ts-node scripts/republish-discharge-events.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.10.0",

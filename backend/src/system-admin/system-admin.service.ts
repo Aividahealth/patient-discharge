@@ -4,6 +4,7 @@ import { DevConfigService } from '../config/dev-config.service';
 import { AuthService } from '../auth/auth.service';
 import { UserService } from '../auth/user.service';
 import { GcpInfrastructureService } from './gcp-infrastructure.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
 import { resolveServiceAccountPath } from '../utils/path.helper';
 import {
   TenantConfig,
@@ -24,6 +25,7 @@ export class SystemAdminService {
     private readonly authService: AuthService,
     private readonly userService: UserService,
     private readonly gcpInfrastructure: GcpInfrastructureService,
+    private readonly qualityMetricsService: QualityMetricsService,
   ) {}
 
   /**
@@ -431,6 +433,81 @@ export class SystemAdminService {
         }
       });
 
+      // Calculate quality metrics aggregations
+      const qualityMetricsData = {
+        totalWithMetrics: 0,
+        fleschKincaidSum: 0,
+        readingEaseSum: 0,
+        smogSum: 0,
+        gradeDistribution: {
+          elementary: 0,      // FK ≤ 5
+          middleSchool: 0,     // FK 6-8
+          highSchool: 0,       // FK 9-12
+          college: 0,          // FK > 12
+        },
+        targetCompliance: {
+          meetsTarget: 0,
+          needsReview: 0,
+        },
+      };
+
+      // Extract composition IDs from discharge summaries
+      const compositionIds: string[] = [];
+      summariesSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.id) {
+          compositionIds.push(data.id);
+        }
+      });
+
+      // Fetch quality metrics from separate collection
+      if (compositionIds.length > 0) {
+        const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
+
+        // Aggregate the metrics
+        qualityMetricsMap.forEach((qualityMetrics, compositionId) => {
+          if (qualityMetrics) {
+            qualityMetricsData.totalWithMetrics++;
+
+            // Sum for averages
+            const fk = qualityMetrics.fleschKincaidGradeLevel;
+            const re = qualityMetrics.fleschReadingEase;
+            const smog = qualityMetrics.smogIndex;
+
+            if (typeof fk === 'number') qualityMetricsData.fleschKincaidSum += fk;
+            if (typeof re === 'number') qualityMetricsData.readingEaseSum += re;
+            if (typeof smog === 'number') qualityMetricsData.smogSum += smog;
+
+            // Grade distribution buckets
+            if (typeof fk === 'number') {
+              if (fk <= 5) {
+                qualityMetricsData.gradeDistribution.elementary++;
+              } else if (fk <= 8) {
+                qualityMetricsData.gradeDistribution.middleSchool++;
+              } else if (fk <= 12) {
+                qualityMetricsData.gradeDistribution.highSchool++;
+              } else {
+                qualityMetricsData.gradeDistribution.college++;
+              }
+            }
+
+            // Target compliance: FK ≤ 9, Reading Ease ≥ 60, SMOG ≤ 9, avg sentence ≤ 20
+            const avgSentence = qualityMetrics.avgSentenceLength;
+            const meetsTarget =
+              fk <= 9 &&
+              re >= 60 &&
+              smog <= 9 &&
+              (!avgSentence || avgSentence <= 20);
+
+            if (meetsTarget) {
+              qualityMetricsData.targetCompliance.meetsTarget++;
+            } else {
+              qualityMetricsData.targetCompliance.needsReview++;
+            }
+          }
+        });
+      }
+
       // Get users count by role
       const usersSnapshot = await this.getFirestore()
         .collection('users')
@@ -451,23 +528,20 @@ export class SystemAdminService {
         }
       });
 
-      // Get expert feedback stats
+      // Get expert feedback stats (filtered by tenantId)
       const feedbackSnapshot = await this.getFirestore()
         .collection('expert_feedback')
+        .where('tenantId', '==', tenantId)
         .get();
 
       let totalFeedback = 0;
       let totalRating = 0;
 
-      // Filter feedback by tenantId from related discharge summaries
-      const summaryIds = summariesSnapshot.docs.map(doc => doc.id);
       feedbackSnapshot.forEach(doc => {
         const data = doc.data();
-        if (summaryIds.includes(data.dischargeSummaryId)) {
-          totalFeedback++;
-          if (data.rating) {
-            totalRating += data.rating;
-          }
+        totalFeedback++;
+        if (data.overallRating) {
+          totalRating += data.overallRating;
         }
       });
 
@@ -486,6 +560,14 @@ export class SystemAdminService {
           total: totalFeedback,
           averageRating: totalFeedback > 0 ? totalRating / totalFeedback : 0,
         },
+        qualityMetrics: qualityMetricsData.totalWithMetrics > 0 ? {
+          totalWithMetrics: qualityMetricsData.totalWithMetrics,
+          averageFleschKincaid: qualityMetricsData.fleschKincaidSum / qualityMetricsData.totalWithMetrics,
+          averageReadingEase: qualityMetricsData.readingEaseSum / qualityMetricsData.totalWithMetrics,
+          averageSmog: qualityMetricsData.smogSum / qualityMetricsData.totalWithMetrics,
+          gradeDistribution: qualityMetricsData.gradeDistribution,
+          targetCompliance: qualityMetricsData.targetCompliance,
+        } : undefined,
       };
     } catch (error) {
       this.logger.error(`Error getting metrics for tenant ${tenantId}: ${error.message}`);
