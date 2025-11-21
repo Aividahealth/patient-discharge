@@ -747,6 +747,7 @@ export default function AdminDashboard() {
 
             {/* Readability Metrics */}
             {metrics?.qualityMetrics && (
+              <TooltipProvider>
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-heading font-semibold mb-2">Readability Metrics</h2>
