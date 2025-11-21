@@ -536,6 +536,9 @@ IMPORTANT: This content has been simplified using artificial intelligence for be
           </style>
         </head>
         <body>
+          <div style="background-color: #fef3c7; border: 2px solid #f59e0b; padding: 10px; margin-bottom: 20px; text-align: center; font-weight: bold; font-size: 1.1em;">
+            ⚠️ AI GENERATED CONTENT ⚠️
+          </div>
           <h1>DISCHARGE INSTRUCTIONS</h1>
           <div class="patient-info">
             <strong>Patient:</strong> ${patientData.name}<br>
@@ -708,7 +711,7 @@ EMERGENCY CONTACTS:
 
     await exportToPDF({
       header: {
-        title: 'DISCHARGE INSTRUCTIONS',
+        title: '⚠️ AI GENERATED CONTENT ⚠️\n\nDISCHARGE INSTRUCTIONS',
         patientName: patientData.name,
         fields: [
           { label: 'Discharge Date', value: 'March 15, 2024' },
