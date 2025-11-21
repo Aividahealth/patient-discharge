@@ -574,10 +574,11 @@ export class DischargeUploadService {
           exportTimestamp: new Date().toISOString(),
           status: 'success',
           // Include preferredLanguage to help downstream services
-          // (simtran will also verify via FHIR Patient if needed)
-          ...(request.preferredLanguage ? { preferredLanguage: request.preferredLanguage } : {}),
+          // Default to Spanish if not provided (for manual uploads)
+          preferredLanguage: request.preferredLanguage || 'es',
         };
 
+        this.logger.log(`📤 Publishing Pub/Sub event for composition: ${compositionId} with preferredLanguage: ${event.preferredLanguage}`);
         await this.pubSubService.publishEncounterExportEvent(event);
         this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}`);
         // Log backend_publish_to_topic completion

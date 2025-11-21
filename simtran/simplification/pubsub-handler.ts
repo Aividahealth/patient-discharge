@@ -225,38 +225,66 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
     });
 
     // Step 2a: Get patient's preferred language
-    logger.debug('Step 2a: Fetching patient preferred language');
+    // Priority: 1) From event (passed from backend), 2) From FHIR Patient resource, 3) Default to Spanish
+    logger.debug('Step 2a: Getting patient preferred language');
     let preferredLanguage: string | undefined;
-    try {
-      if (event.patientId) {
-        const patientResponse = await fetch(
-          `${process.env.FHIR_API_BASE_URL || process.env.BACKEND_API_URL}/google/fhir/Patient/${event.patientId}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Tenant-ID': tenantId,
-            },
-          }
-        );
-        if (patientResponse.ok) {
-          const patient = await patientResponse.json() as any;
-          // Extract preferred language from patient.communication array
-          // FHIR format: communication: [{ language: { coding: [{ code: "en" }] }, preferred: true }]
-          const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
-          if (preferredComm?.language?.coding?.[0]?.code) {
-            preferredLanguage = preferredComm.language.coding[0].code;
-            logger.info('Patient preferred language found', { preferredLanguage, patientId: event.patientId });
-          } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
-            // Fallback to first communication language if no preferred
-            preferredLanguage = patient.communication[0].language.coding[0].code;
-            logger.info('Using first patient communication language', { preferredLanguage, patientId: event.patientId });
+    
+    // First, check if preferred language is provided in the event (from backend upload)
+    if (event.preferredLanguage) {
+      preferredLanguage = event.preferredLanguage;
+      logger.info('Using preferred language from event', { 
+        preferredLanguage, 
+        patientId: event.patientId,
+        compositionId: event.googleCompositionId,
+      });
+    } else {
+      // Fallback: Fetch from FHIR Patient resource if not in event
+      try {
+        if (event.patientId) {
+          const patientResponse = await fetch(
+            `${process.env.FHIR_API_BASE_URL || process.env.BACKEND_API_URL}/google/fhir/Patient/${event.patientId}`,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Tenant-ID': tenantId,
+              },
+            }
+          );
+          if (patientResponse.ok) {
+            const patient = await patientResponse.json() as any;
+            // Extract preferred language from patient.communication array
+            // FHIR format: communication: [{ language: { coding: [{ code: "en" }] }, preferred: true }]
+            const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
+            if (preferredComm?.language?.coding?.[0]?.code) {
+              preferredLanguage = preferredComm.language.coding[0].code;
+              logger.info('Patient preferred language found from FHIR', { 
+                preferredLanguage, 
+                patientId: event.patientId 
+              });
+            } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+              // Fallback to first communication language if no preferred
+              preferredLanguage = patient.communication[0].language.coding[0].code;
+              logger.info('Using first patient communication language from FHIR', { 
+                preferredLanguage, 
+                patientId: event.patientId 
+              });
+            }
           }
         }
+      } catch (error) {
+        logger.warning('Failed to fetch patient preferred language from FHIR, will use default', {
+          error: (error as Error).message,
+          patientId: event.patientId,
+        });
       }
-    } catch (error) {
-      logger.warning('Failed to fetch patient preferred language, will use tenant default', {
-        error: (error as Error).message,
+    }
+    
+    // Default to Spanish if no preferred language found
+    if (!preferredLanguage) {
+      preferredLanguage = 'es';
+      logger.info('No preferred language found, defaulting to Spanish', {
         patientId: event.patientId,
+        compositionId: event.googleCompositionId,
       });
     }
 

@@ -306,7 +306,7 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
               name: patientFormData.attendingPhysician?.name || '',
               id: patientFormData.attendingPhysician?.id || `physician-${Date.now()}`
             },
-            preferredLanguage: patientFormData.preferredLanguage || undefined,
+            preferredLanguage: patientFormData.preferredLanguage || 'es', // Default to Spanish
             avatar: undefined // Optional field
           };
 
