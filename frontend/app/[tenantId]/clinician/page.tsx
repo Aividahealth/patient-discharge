@@ -121,6 +121,13 @@ export default function ClinicianDashboard() {
     specialty?: string;
     attendingPhysician?: string;
     compositionId?: string;
+    qualityMetrics?: {
+      fleschKincaidGradeLevel?: number;
+      fleschReadingEase?: number;
+      smogIndex?: number;
+      compressionRatio?: number;
+      avgSentenceLength?: number;
+    };
     [key: string]: any;
   }>>([])
 
@@ -640,6 +647,7 @@ export default function ClinicianDashboard() {
       specialty: queuePatient.unit,
       attendingPhysician: queuePatient.attendingPhysician?.name,
       compositionId: queuePatient.compositionId,
+      qualityMetrics: queuePatient.qualityMetrics, // Preserve quality metrics from queue patient
       // Add parsed data for structured rendering
       originalSummaryParsed: parsedSummaryData,
       originalInstructionsParsed: parsedInstructionsData,
@@ -703,6 +711,7 @@ export default function ClinicianDashboard() {
         specialty: p.unit,
         attendingPhysician: p.attendingPhysician?.name,
         compositionId: p.compositionId,
+        qualityMetrics: p.qualityMetrics, // Include quality metrics from API
       }));
 
       setPatients(transformedPatients);
@@ -778,7 +787,8 @@ export default function ClinicianDashboard() {
             name: queuePatient.attendingPhysician || '',
             id: `physician-${queuePatient.id}`
           },
-          avatar: null
+          avatar: null,
+          qualityMetrics: queuePatient.qualityMetrics, // Preserve quality metrics from patients list
         };
       }
 
