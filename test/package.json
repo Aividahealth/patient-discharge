@@ -13,6 +13,8 @@
     "test:watch": "ts-node scripts/run-portal-tests.ts --watch",
     "test:cleanup": "ts-node scripts/run-portal-tests.ts --cleanup",
     "test:no-cleanup": "ts-node scripts/run-portal-tests.ts --no-cleanup",
+    "test:rerun-timeouts": "ts-node ui-tests/scripts/rerun-timeout-tests.ts",
+    "test:tracker-summary": "ts-node -e \"import('./ui-tests/utils/test-tracker').then(m => { m.testTracker.load(); m.testTracker.printSummary(); })\"",
     "cleanup": "ts-node scripts/cleanup-test-data.ts"
   },
   "dependencies": {

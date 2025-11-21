@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { testTracker } from './ui-tests/utils/test-tracker';
 
 /**
  * Playwright configuration for UI-based portal integration tests
@@ -10,7 +11,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1, // Run one test at a time
-  reporter: 'html',
+  reporter: [
+    ['html'],
+    ['./ui-tests/reporters/test-tracker-reporter.ts'], // Custom reporter for tracking timeouts
+  ],
   timeout: 600000, // 10 minutes default timeout for all tests
   // Use ts-node for TypeScript support
   use: {
@@ -26,13 +30,6 @@ export default defineConfig({
       use: { 
         ...devices['Desktop Chrome'],
       },
-    },
-  ],
-
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
     },
   ],
 
