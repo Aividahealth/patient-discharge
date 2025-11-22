@@ -113,8 +113,9 @@ export class ExpertService {
         avgSentenceLength: data.qualityMetrics.simplification?.avgSentenceLength,
       } : undefined;
 
-      // Fetch patient's preferred language from FHIR (only for translation reviews or if needed)
+      // Fetch patient's preferred language from FHIR (for translation reviews or language tab)
       let preferredLanguage: string | undefined;
+      // Always fetch for translation reviews, or if we're on the language tab (query.type === 'translation')
       if (query.type === 'translation' && data.patientId && this.googleService) {
         try {
           const patient = await this.googleService.fhirRead('Patient', data.patientId, ctx);
@@ -128,10 +129,18 @@ export class ExpertService {
               // Fallback to first communication language if no preferred
               preferredLanguage = patient.communication[0].language.coding[0].code;
             }
+            // If no language found in communication, default to 'en' (English)
+            if (!preferredLanguage) {
+              preferredLanguage = 'en';
+            }
+          } else {
+            // No communication array, default to English
+            preferredLanguage = 'en';
           }
         } catch (error) {
-          // Log but don't fail - language is optional
+          // Log but don't fail - language is optional, default to English
           this.logger.warn(`Failed to fetch preferred language for patient ${data.patientId}: ${error.message}`);
+          preferredLanguage = 'en'; // Default to English on error
         }
       }
 
