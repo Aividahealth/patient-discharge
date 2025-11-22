@@ -583,7 +583,8 @@ export class DischargeUploadService {
         };
 
         await this.pubSubService.publishEncounterExportEvent(event);
-        this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}`);
+        this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}, patientId: ${patientId}, tenantId: ${ctx.tenantId}`);
+        this.logger.debug(`Event payload: ${JSON.stringify(event)}`);
         // Log backend_publish_to_topic completion
         logPipelineEvent({
           tenantId: ctx.tenantId,

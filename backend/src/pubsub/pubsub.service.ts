@@ -184,8 +184,9 @@ export class PubSubService {
       });
 
       this.logger.log(
-        `📤 Published encounter export event: ${event.cernerEncounterId} to topic: ${topicName} (Message ID: ${messageId}) ${JSON.stringify(event)}`,
+        `📤 Published encounter export event: compositionId=${event.googleCompositionId}, cernerEncounterId=${event.cernerEncounterId || '(empty)'} to topic: ${topicName} (Message ID: ${messageId})`,
       );
+      this.logger.debug(`Event details: ${JSON.stringify(event)}`);
     } catch (error) {
       this.logger.error(
         `Failed to publish encounter export event for ${event.cernerEncounterId}: ${error.message}`,
