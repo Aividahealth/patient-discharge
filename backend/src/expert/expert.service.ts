@@ -113,10 +113,16 @@ export class ExpertService {
         avgSentenceLength: data.qualityMetrics.simplification?.avgSentenceLength,
       } : undefined;
 
-      // Fetch patient's preferred language from FHIR
-      // Always fetch when we have patientId and googleService, especially for translation reviews
+      // Fetch patient's preferred language
+      // Priority: 1) Firestore (fastest), 2) FHIR Patient resource, 3) Default to 'en'
       let preferredLanguage: string | undefined;
-      if (data.patientId && this.googleService) {
+      
+      // First, check if preferred language is stored in Firestore
+      if (data.preferredLanguage) {
+        preferredLanguage = data.preferredLanguage;
+        this.logger.debug(`Found preferred language in Firestore for ${doc.id}: ${preferredLanguage}`);
+      } else if (data.patientId && this.googleService) {
+        // Fallback to FHIR Patient resource if not in Firestore
         try {
           const patient = await this.googleService.fhirRead('Patient', data.patientId, ctx);
           if (patient && patient.communication) {
@@ -133,18 +139,21 @@ export class ExpertService {
             if (!preferredLanguage) {
               preferredLanguage = 'en';
             }
+            this.logger.debug(`Fetched preferred language from FHIR for patient ${data.patientId}: ${preferredLanguage}`);
           } else {
             // No communication array, default to English
             preferredLanguage = 'en';
           }
         } catch (error) {
           // Log but don't fail - language is optional, default to English
-          this.logger.warn(`Failed to fetch preferred language for patient ${data.patientId}: ${error.message}`);
+          this.logger.warn(`Failed to fetch preferred language from FHIR for patient ${data.patientId}: ${error.message}`);
           preferredLanguage = 'en'; // Default to English on error
         }
-      } else if (!data.patientId) {
-        // No patientId available, default to English
-        this.logger.warn(`No patientId found for summary ${doc.id}, defaulting language to 'en'`);
+      } else {
+        // No patientId available or no googleService, default to English
+        if (!data.patientId) {
+          this.logger.warn(`No patientId found for summary ${doc.id}, defaulting language to 'en'`);
+        }
         preferredLanguage = 'en';
       }
 

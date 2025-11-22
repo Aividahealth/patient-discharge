@@ -98,6 +98,7 @@ export interface DischargeSummaryMetadata {
   simplifiedAt?: Date; // When simplified version was created
   translatedAt?: Date; // When translation was created
   qualityMetrics?: QualityMetrics; // Quality metrics for simplified version
+  preferredLanguage?: string; // Patient's preferred language (ISO 639-1 code)
   metadata?: {
     // Additional metadata
     facility?: string;

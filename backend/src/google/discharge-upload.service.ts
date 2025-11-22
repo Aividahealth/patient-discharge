@@ -537,6 +537,7 @@ export class DischargeUploadService {
             files: {
               raw: `Binary/${dischargeSummaryBinaryId}`,
             },
+            preferredLanguage: request.preferredLanguage, // Store preferred language in Firestore
             metadata: {
               attendingPhysician: request.attendingPhysician?.name || 'Unknown',
             },
@@ -544,6 +545,9 @@ export class DischargeUploadService {
           ctx.tenantId,
         );
         this.logger.log(`✅ Created discharge summary metadata in Firestore: ${compositionId}`);
+        if (request.preferredLanguage) {
+          this.logger.log(`🗣️ Stored preferred language in Firestore: ${request.preferredLanguage}`);
+        }
       } catch (firestoreError) {
         // Log error but don't fail the upload - quality metrics will still be created
         this.logger.error(`❌ Failed to write discharge summary metadata to Firestore: ${firestoreError.message}`);
