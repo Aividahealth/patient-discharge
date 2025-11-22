@@ -21,6 +21,7 @@ import { useTenant } from "@/contexts/tenant-context"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
 import { SimplifiedDischargeContent } from "@/components/simplified-discharge-renderer"
+import { QualityMetricsCard } from "@/components/quality-metrics-card"
 
 // Star Rating Component
 const StarRating = ({ value, onChange, label, required = false }: {
@@ -82,6 +83,7 @@ export default function ExpertReviewPage() {
   const [simplifiedInstructions, setSimplifiedInstructions] = useState<string>("")
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
+  const [qualityMetrics, setQualityMetrics] = useState<{ fleschKincaidGradeLevel?: number; fleschReadingEase?: number; smogIndex?: number; compressionRatio?: number; avgSentenceLength?: number } | null>(null)
 
   // Form state
   const [reviewerName, setReviewerName] = useState("")
@@ -172,6 +174,7 @@ export default function ExpertReviewPage() {
       
       if (details) {
         setPatientName(details.patientId || patientName)
+        setQualityMetrics(details.qualityMetrics || null)
       }
     } catch (error) {
       console.error('Failed to load content:', error)
@@ -327,6 +330,13 @@ export default function ExpertReviewPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* Quality Metrics - Show at top for expert review */}
+        {qualityMetrics && (
+          <div className="mb-6">
+            <QualityMetricsCard metrics={qualityMetrics} />
+          </div>
+        )}
+
         {/* Side-by-side content */}
         <div className="grid lg:grid-cols-2 gap-6 mb-8">
           {/* Left side - always shows simplified (English) */}

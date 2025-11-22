@@ -1474,11 +1474,6 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                   </CardHeader>
                 </Card>
 
-                {/* Quality Metrics */}
-                {currentPatient?.qualityMetrics && (
-                  <QualityMetricsCard metrics={currentPatient.qualityMetrics} />
-                )}
-
                 {/* Side-by-Side Editor */}
                 <div className="grid lg:grid-cols-2 gap-6 mb-6">
                   {/* Original Document */}
