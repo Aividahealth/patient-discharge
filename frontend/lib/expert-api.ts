@@ -144,7 +144,7 @@ export async function getReviewList(params?: {
 
   // Use the expert/list endpoint which fetches preferred language
   const response = await fetch(
-    `${API_BASE_URL}/api/expert/list?${queryParams.toString()}`,
+    `${API_BASE_URL}/expert/list?${queryParams.toString()}`,
     { headers }
   );
 
