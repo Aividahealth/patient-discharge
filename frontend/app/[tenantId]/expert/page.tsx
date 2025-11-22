@@ -153,9 +153,38 @@ export default function ExpertPortalPage() {
       
       // Check if deletion was successful
       if (result.success) {
-        await loadSummaries()
+        // Store the IDs to filter out after reload (in case backend still returns deleted patient)
+        const deletedPatientId = patientToDelete.id
+        const deletedCompositionId = patientToDelete.compositionId
+        
+        // Optimistically remove the patient from the UI immediately
+        // This provides instant feedback while the backend processes the deletion
+        setMedicalSummaries(prev => prev.filter(s => 
+          s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+        ))
+        setLanguageSummaries(prev => prev.filter(s => 
+          s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+        ))
+        
+        // Close dialog and clear selection
         setDeleteDialogOpen(false)
         setPatientToDelete(null)
+        
+        // Reload summaries to ensure consistency with backend
+        // Filter out the deleted patient in case backend still returns it (caching/timing)
+        try {
+          await loadSummaries()
+          // After reload, ensure deleted patient is still filtered out
+          setMedicalSummaries(prev => prev.filter(s => 
+            s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+          ))
+          setLanguageSummaries(prev => prev.filter(s => 
+            s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+          ))
+        } catch (reloadError) {
+          console.error('[ExpertPortal] Failed to reload summaries after delete:', reloadError)
+          // Keep the optimistic update even if reload fails
+        }
       } else if (result.retryable && retryCount < 2) {
         // Partial deletion - automatically retry once
         console.log('[ExpertPortal] Partial deletion detected, retrying...', result)

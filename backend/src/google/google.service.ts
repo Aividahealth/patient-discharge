@@ -1,16 +1,21 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { getGoogleAccessToken } from './auth';
 import { AxiosInstance } from 'axios';
 import { createFhirAxiosClient } from './fhirClient.js';
 import { DevConfigService } from '../config/dev-config.service';
 import { TenantContext } from '../tenant/tenant-context';
+import { FirestoreService } from '../discharge-summaries/firestore.service';
 
 @Injectable()
 export class GoogleService {
   private clientPromise: Promise<AxiosInstance> | null = null;
   private allowedTypes: Set<string> | null = null;
+  private readonly logger = new Logger(GoogleService.name);
 
-  constructor(private readonly configService: DevConfigService) {}
+  constructor(
+    private readonly configService: DevConfigService,
+    private readonly firestoreService?: FirestoreService,
+  ) {}
 
   async getAccessToken() {
     const token = await getGoogleAccessToken(['https://www.googleapis.com/auth/cloud-platform']);
@@ -403,6 +408,45 @@ export class GoogleService {
         });
         console.error(`❌ Failed to delete Patient ${patientId}:`, errorMsg);
         throw error;
+      }
+
+      // Step 7: Delete Firestore discharge_summaries document
+      // This is critical - the expert portal queries Firestore, so if we don't delete this,
+      // the patient will still appear in the list even though all FHIR resources are deleted
+      if (this.firestoreService) {
+        try {
+          // Delete all composition documents (in case there are multiple compositions for this patient)
+          for (const compId of Array.from(compositionIds)) {
+            try {
+              await this.firestoreService.delete(compId, ctx.tenantId);
+              this.logger.log(`✅ Deleted Firestore discharge_summaries document: ${compId}`);
+            } catch (firestoreError: any) {
+              // If document doesn't exist, that's okay - it might not have been created yet
+              if (firestoreError.status === 404 || firestoreError.message?.includes('not found')) {
+                this.logger.debug(`Firestore document ${compId} not found (may not exist), continuing...`);
+              } else {
+                const errorMsg = firestoreError.message || 'Unknown error';
+                errors.push({
+                  resourceType: 'Firestore',
+                  id: compId,
+                  error: `Failed to delete Firestore document: ${errorMsg}`,
+                });
+                this.logger.warn(`❌ Failed to delete Firestore document ${compId}: ${errorMsg}`);
+                // Don't throw - continue even if Firestore deletion fails
+              }
+            }
+          }
+        } catch (error: any) {
+          // Log but don't fail the entire operation if Firestore deletion fails
+          this.logger.error(`❌ Error during Firestore deletion: ${error.message}`);
+          errors.push({
+            resourceType: 'Firestore',
+            id: compositionId,
+            error: error.message,
+          });
+        }
+      } else {
+        this.logger.warn('FirestoreService not available - skipping Firestore document deletion');
       }
 
       return { success: true, deleted, errors };
