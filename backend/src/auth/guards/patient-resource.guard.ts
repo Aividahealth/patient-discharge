@@ -40,9 +40,19 @@ export class PatientResourceGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
+    const auth = request.auth;
     const user = request.user;
 
-    // User should be set by AuthGuard
+    // Allow service-to-service authentication to bypass patient resource checks
+    // Service accounts are authenticated via Google OIDC and are trusted
+    if (auth && auth.type === 'service') {
+      this.logger.debug(
+        `PatientResourceGuard: Service account ${auth.email} granted access (service-to-service authentication)`,
+      );
+      return true;
+    }
+
+    // User should be set by AuthGuard (for user type authentication)
     if (!user) {
       this.logger.warn('PatientResourceGuard: No user found in request. Did AuthGuard run?');
       throw new ForbiddenException('Authentication required');
