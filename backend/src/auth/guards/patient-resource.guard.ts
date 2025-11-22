@@ -5,6 +5,8 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import { GoogleService } from '../../google/google.service';
+import { DevConfigService } from '../../config/dev-config.service';
 
 /**
  * Guard to enforce patient-level resource access control
@@ -31,7 +33,12 @@ import {
 export class PatientResourceGuard implements CanActivate {
   private readonly logger = new Logger(PatientResourceGuard.name);
 
-  canActivate(context: ExecutionContext): boolean {
+  constructor(
+    private readonly googleService: GoogleService,
+    private readonly configService: DevConfigService,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
@@ -51,7 +58,40 @@ export class PatientResourceGuard implements CanActivate {
     }
 
     // Extract patientId from route parameters or query parameters
-    const patientIdParam = request.params?.patientId || request.query?.patientId;
+    let patientIdParam = request.params?.patientId || request.query?.patientId;
+
+    // If no patientId but we have compositionId/id, fetch it from the Composition
+    if (!patientIdParam) {
+      const compositionId = request.params?.id || request.params?.compositionId || request.query?.compositionId;
+      
+      if (compositionId) {
+        try {
+          // Get tenant context from request (set by TenantGuard)
+          const tenantId = request.headers['x-tenant-id'] as string;
+          if (!tenantId) {
+            this.logger.warn('PatientResourceGuard: No tenant ID in headers, cannot fetch composition');
+            throw new ForbiddenException('Tenant ID required');
+          }
+
+          // Create tenant context
+          const ctx = {
+            tenantId,
+            timestamp: new Date(),
+          };
+
+          // Fetch composition to get patientId
+          const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
+          if (composition?.subject?.reference) {
+            // Extract patientId from "Patient/{patientId}" format
+            patientIdParam = composition.subject.reference.replace('Patient/', '');
+            this.logger.debug(`PatientResourceGuard: Extracted patientId ${patientIdParam} from Composition ${compositionId}`);
+          }
+        } catch (error) {
+          this.logger.error(`PatientResourceGuard: Failed to fetch Composition ${compositionId}: ${error.message}`);
+          throw new ForbiddenException('Failed to verify composition access');
+        }
+      }
+    }
 
     if (!patientIdParam) {
       // If no patientId in request, allow (this guard only applies to patient-specific endpoints)

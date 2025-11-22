@@ -373,8 +373,11 @@ export class GoogleController {
 
   /**
    * Get Composition binaries with text conversion
+   * Patients can access their own composition binaries; clinicians/experts can access any
    */
   @Get('fhir/Composition/:id/binaries')
+  @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
+  @UseGuards(RolesGuard, TenantGuard, PatientResourceGuard)
   async getCompositionBinaries(
     @Param('id') id: string,
     @TenantContext() ctx: TenantContextType,

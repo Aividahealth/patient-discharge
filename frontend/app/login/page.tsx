@@ -52,9 +52,17 @@ export default function LoginPage() {
       const portal = authData.user.role === 'tenant_admin' ? 'admin' : authData.user.role
       
       // For patients, redirect to patient portal with their linkedPatientId if available
+      console.log('[Login] User data:', {
+        role: authData.user.role,
+        linkedPatientId: authData.user.linkedPatientId,
+        userId: authData.user.id
+      })
+      
       if (authData.user.role === 'patient' && authData.user.linkedPatientId) {
+        console.log('[Login] Redirecting patient to portal with linkedPatientId:', authData.user.linkedPatientId)
         router.push(`/${tenantId}/${portal}?patientId=${authData.user.linkedPatientId}`)
       } else {
+        console.log('[Login] Redirecting to portal without patientId:', { role: authData.user.role, hasLinkedPatientId: !!authData.user.linkedPatientId })
         router.push(`/${tenantId}/${portal}`)
       }
     } catch (error) {
