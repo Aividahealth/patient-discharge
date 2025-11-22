@@ -26,6 +26,16 @@ import { parseDischargeDocument } from "@/lib/parsers/parser-registry"
 import { getDischargeQueue, getPatientDetails, getTranslatedContent, type DischargeQueuePatient } from "@/lib/discharge-summaries"
 import { SUPPORTED_LANGUAGES } from "@/lib/constants/languages"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Upload,
   FileText,
   Edit3,
@@ -57,6 +67,7 @@ export default function ClinicianDashboard() {
   const [isLoadingQueue, setIsLoadingQueue] = useState(true)
   const [isLoadingPatient, setIsLoadingPatient] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [showPublishConfirmDialog, setShowPublishConfirmDialog] = useState(false)
   
   // Section approvals with audit trail (timestamp and clinician info)
   const [sectionApprovals, setSectionApprovals] = useState<{
@@ -1044,19 +1055,27 @@ export default function ClinicianDashboard() {
     })
   }
 
-  const handlePublish = async () => {
-    if (!currentPatient || !currentPatient.compositionId || !token || !tenantId || !user) {
-      console.error('[ClinicianPortal] Missing required data for publish')
-      return
-    }
-
-    // Validate all sections are approved
+  const handlePublishClick = () => {
+    // Validate all sections are approved first
     if (!sectionApprovals.medications.approved || 
         !sectionApprovals.appointments.approved || 
         !sectionApprovals.dietActivity.approved) {
       alert('Please approve all required sections before publishing.')
       return
     }
+
+    // Show confirmation dialog with reminder
+    setShowPublishConfirmDialog(true)
+  }
+
+  const handlePublish = async () => {
+    if (!currentPatient || !currentPatient.compositionId || !token || !tenantId || !user) {
+      console.error('[ClinicianPortal] Missing required data for publish')
+      return
+    }
+
+    // Close the dialog
+    setShowPublishConfirmDialog(false)
 
     setIsPublishing(true)
 
@@ -1858,7 +1877,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                   <div className="flex items-center gap-2">
                     <Button
                       disabled={!Object.values(approvalStatus).every(Boolean) || isPublishing}
-                      onClick={handlePublish}
+                      onClick={handlePublishClick}
                       className="bg-green-600 hover:bg-green-700"
                     >
                       <Send className="h-4 w-4 mr-2" />
@@ -1866,6 +1885,42 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                     </Button>
                   </div>
                 </div>
+
+                {/* Publish Confirmation Dialog */}
+                <AlertDialog open={showPublishConfirmDialog} onOpenChange={setShowPublishConfirmDialog}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5 text-orange-500" />
+                        Reminder: Generate PDF or Print Handout
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-3 pt-2">
+                        <p>
+                          Before publishing to the patient, please make sure you have:
+                        </p>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>Generated a PDF copy of the discharge summary, or</li>
+                          <li>Printed a handout for your records</li>
+                        </ul>
+                        <p className="font-medium text-foreground pt-2">
+                          Once published, you won't be able to go back to generate PDF or print handout for this patient.
+                        </p>
+                        <p className="text-sm text-muted-foreground pt-1">
+                          Do you want to proceed with publishing?
+                        </p>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handlePublish}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Yes, Publish to Patient
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
 
                 {/* Status Alert */}
                 {!Object.values(approvalStatus).every(Boolean) && (
