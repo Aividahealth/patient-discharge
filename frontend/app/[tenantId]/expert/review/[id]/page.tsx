@@ -22,6 +22,7 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
 import { SimplifiedDischargeContent } from "@/components/simplified-discharge-renderer"
 import { QualityMetricsCard } from "@/components/quality-metrics-card"
+import { getLanguageName } from "@/lib/constants/languages"
 
 // Star Rating Component
 const StarRating = ({ value, onChange, label, required = false }: {
@@ -84,6 +85,7 @@ export default function ExpertReviewPage() {
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
   const [qualityMetrics, setQualityMetrics] = useState<{ fleschKincaidGradeLevel?: number; fleschReadingEase?: number; smogIndex?: number; compressionRatio?: number; avgSentenceLength?: number } | null>(null)
+  const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
 
   // Form state
   const [reviewerName, setReviewerName] = useState("")
@@ -175,6 +177,17 @@ export default function ExpertReviewPage() {
       if (details) {
         setPatientName(details.patientId || patientName)
         setQualityMetrics(details.qualityMetrics || null)
+        
+        // Set preferred language from patient details
+        if (details.preferredLanguage) {
+          setPreferredLanguage(details.preferredLanguage)
+          // Set language state to preferred language for translation reviews
+          if (reviewType === 'translation') {
+            setLanguage(details.preferredLanguage)
+          }
+        } else {
+          setPreferredLanguage(null)
+        }
       }
     } catch (error) {
       console.error('Failed to load content:', error)
@@ -374,12 +387,14 @@ export default function ExpertReviewPage() {
           <Card className="flex flex-col">
             <CardHeader>
               <CardTitle>
-                {reviewType === 'simplification' ? 'Original (Raw)' : `Translated (${language.toUpperCase()})`}
+                {reviewType === 'simplification' 
+                  ? 'Original (Raw)' 
+                  : `Translated (${preferredLanguage ? getLanguageName(preferredLanguage) : getLanguageName(language)})`}
               </CardTitle>
               <CardDescription>
                 {reviewType === 'simplification'
                   ? 'Original medical documentation as written by clinical team'
-                  : `Translation of simplified version to ${language.toUpperCase()}`
+                  : `Translation of simplified version to ${preferredLanguage ? getLanguageName(preferredLanguage) : getLanguageName(language)}`
                 }
               </CardDescription>
               {reviewType === 'translation' && (
@@ -407,7 +422,7 @@ export default function ExpertReviewPage() {
                   translatedContent?.content?.content ? (
                     <MarkdownRenderer content={translatedContent.content.content} className="text-sm leading-relaxed" />
                   ) : (
-                    <p className="text-sm text-muted-foreground">Translated version not available for {language.toUpperCase()}</p>
+                    <p className="text-sm text-muted-foreground">Translated version not available for {preferredLanguage ? getLanguageName(preferredLanguage) : getLanguageName(language)}</p>
                   )
                 )}
               </div>
