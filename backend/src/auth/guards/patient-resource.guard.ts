@@ -61,34 +61,45 @@ export class PatientResourceGuard implements CanActivate {
     let patientIdParam = request.params?.patientId || request.query?.patientId;
 
     // If no patientId but we have compositionId/id, fetch it from the Composition
+    // Also handle direct Patient resource access (resourceType = "Patient")
     if (!patientIdParam) {
-      const compositionId = request.params?.id || request.params?.compositionId || request.query?.compositionId;
+      const resourceType = request.params?.resourceType;
+      const resourceId = request.params?.id;
       
-      if (compositionId) {
-        try {
-          // Get tenant context from request (set by TenantGuard)
-          const tenantId = request.headers['x-tenant-id'] as string;
-          if (!tenantId) {
-            this.logger.warn('PatientResourceGuard: No tenant ID in headers, cannot fetch composition');
-            throw new ForbiddenException('Tenant ID required');
-          }
+      // If accessing Patient resource directly, use the id as patientId
+      if (resourceType === 'Patient' && resourceId) {
+        patientIdParam = resourceId;
+        this.logger.debug(`PatientResourceGuard: Using Patient resource id as patientId: ${patientIdParam}`);
+      } else {
+        // Otherwise, check for compositionId
+        const compositionId = request.params?.id || request.params?.compositionId || request.query?.compositionId;
+        
+        if (compositionId) {
+          try {
+            // Get tenant context from request (set by TenantGuard)
+            const tenantId = request.headers['x-tenant-id'] as string;
+            if (!tenantId) {
+              this.logger.warn('PatientResourceGuard: No tenant ID in headers, cannot fetch composition');
+              throw new ForbiddenException('Tenant ID required');
+            }
 
-          // Create tenant context
-          const ctx = {
-            tenantId,
-            timestamp: new Date(),
-          };
+            // Create tenant context
+            const ctx = {
+              tenantId,
+              timestamp: new Date(),
+            };
 
-          // Fetch composition to get patientId
-          const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
-          if (composition?.subject?.reference) {
-            // Extract patientId from "Patient/{patientId}" format
-            patientIdParam = composition.subject.reference.replace('Patient/', '');
-            this.logger.debug(`PatientResourceGuard: Extracted patientId ${patientIdParam} from Composition ${compositionId}`);
+            // Fetch composition to get patientId
+            const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
+            if (composition?.subject?.reference) {
+              // Extract patientId from "Patient/{patientId}" format
+              patientIdParam = composition.subject.reference.replace('Patient/', '');
+              this.logger.debug(`PatientResourceGuard: Extracted patientId ${patientIdParam} from Composition ${compositionId}`);
+            }
+          } catch (error) {
+            this.logger.error(`PatientResourceGuard: Failed to fetch Composition ${compositionId}: ${error.message}`);
+            throw new ForbiddenException('Failed to verify composition access');
           }
-        } catch (error) {
-          this.logger.error(`PatientResourceGuard: Failed to fetch Composition ${compositionId}: ${error.message}`);
-          throw new ForbiddenException('Failed to verify composition access');
         }
       }
     }

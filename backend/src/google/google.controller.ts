@@ -31,7 +31,13 @@ export class GoogleController {
     return this.googleService.fhirCreate(resourceType, body, ctx);
   }
 
+  /**
+   * Generic FHIR resource read endpoint
+   * For Patient resources, patients can only access their own data
+   */
   @Get('fhir/:resourceType/:id')
+  @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
+  @UseGuards(RolesGuard, TenantGuard, PatientResourceGuard)
   fhirRead(@Param('resourceType') resourceType: string, @Param('id') id: string, @TenantContext() ctx: TenantContextType) {
     return this.googleService.fhirRead(resourceType, id, ctx);
   }
@@ -403,9 +409,11 @@ export class GoogleController {
 
   /**
    * Get Composition simplified binaries (filtered by discharge-summary-simplified and discharge-instructions-simplified tags)
-   * Accessible by authenticated clinicians, experts, tenant admins, and system admins
+   * Patients can access their own composition simplified binaries; clinicians/experts can access any
    */
   @Get('fhir/Composition/:id/simplified')
+  @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
+  @UseGuards(RolesGuard, TenantGuard, PatientResourceGuard)
   async getCompositionSimplifiedBinaries(
     @Param('id') id: string,
     @TenantContext() ctx: TenantContextType,

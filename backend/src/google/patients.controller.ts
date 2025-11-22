@@ -4,12 +4,12 @@ import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
 import { CurrentUser } from '../auth/user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
-import { RolesGuard, TenantGuard } from '../auth/guards';
+import { RolesGuard, TenantGuard, PatientResourceGuard } from '../auth/guards';
 
-// Patients endpoints require clinician, expert, tenant_admin, or system_admin role
+// Patients endpoints allow patient, clinician, expert, tenant_admin, or system_admin role
 @Controller('api/patients')
 @UseGuards(RolesGuard, TenantGuard)
-@Roles('clinician', 'expert', 'tenant_admin', 'system_admin')
+@Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
 export class PatientsController {
   private readonly logger = new Logger(PatientsController.name);
 
@@ -18,6 +18,7 @@ export class PatientsController {
   /**
    * GET /api/patients/discharge-queue
    * Retrieves list of patients ready for discharge review
+   * Patients can only see their own discharge queue item
    */
   @Get('discharge-queue')
   async getDischargeQueue(
@@ -26,7 +27,9 @@ export class PatientsController {
   ) {
     try {
       this.logger.log(`📋 Retrieving discharge queue for user: ${user?.username} in tenant: ${ctx.tenantId}`);
-      const result = await this.dischargeUploadService.getDischargeQueue(ctx);
+      // For patients, filter by their linkedPatientId
+      const patientIdFilter = user?.role === 'patient' ? user?.linkedPatientId : undefined;
+      const result = await this.dischargeUploadService.getDischargeQueue(ctx, patientIdFilter);
       return result;
     } catch (error) {
       if (error instanceof HttpException) {

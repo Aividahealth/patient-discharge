@@ -645,8 +645,9 @@ export class DischargeUploadService {
 
   /**
    * Get discharge queue - list of patients ready for discharge review
+   * @param patientIdFilter - Optional patient ID to filter results (for patient role users)
    */
-  async getDischargeQueue(ctx: TenantContext): Promise<{
+  async getDischargeQueue(ctx: TenantContext, patientIdFilter?: string): Promise<{
     patients: Array<{
       id: string;
       mrn: string;
@@ -741,6 +742,12 @@ export class DischargeUploadService {
           }
 
           const patientId = patientRef.replace('Patient/', '');
+          
+          // Filter by patientId if provided (for patient role users)
+          if (patientIdFilter && patientId !== patientIdFilter) {
+            continue; // Skip this patient if it doesn't match the filter
+          }
+          
           const encounterId = encounterRef.replace('Encounter/', '');
 
           // Fetch Patient resource
