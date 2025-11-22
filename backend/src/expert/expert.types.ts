@@ -83,6 +83,7 @@ export interface ReviewSummary {
   avgRating?: number;
   latestReviewDate?: Date;
   qualityMetrics?: ReviewQualityMetrics;
+  language?: string; // Patient's preferred language (for translation reviews)
 }
 
 export interface ReviewListQuery {

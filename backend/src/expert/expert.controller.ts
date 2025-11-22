@@ -38,7 +38,7 @@ export class ExpertController {
     @TenantContext() ctx: TenantContextType,
   ) {
     this.logger.log(`Getting review list with filters: ${JSON.stringify(query)} for tenant: ${ctx.tenantId}`);
-    return this.expertService.getReviewList(query, ctx.tenantId);
+    return this.expertService.getReviewList(query, ctx);
   }
 
   /**

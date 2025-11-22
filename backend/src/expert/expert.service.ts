@@ -64,7 +64,7 @@ export class ExpertService {
   /**
    * Get list of discharge summaries for expert review
    */
-  async getReviewList(query: ReviewListQuery, tenantId: string): Promise<ReviewListResponse> {
+  async getReviewList(query: ReviewListQuery, ctx: TenantContext): Promise<ReviewListResponse> {
     const firestore = this.getFirestore();
     const limit = query.limit || 20;
     const offset = query.offset || 0;
@@ -72,7 +72,7 @@ export class ExpertService {
     // Get discharge summaries for this tenant only
     let summariesQuery = firestore
       .collection(this.summariesCollection)
-      .where('tenantId', '==', tenantId)
+      .where('tenantId', '==', ctx.tenantId)
       .orderBy('updatedAt', 'desc') as any;
 
     // Get summaries
@@ -86,7 +86,7 @@ export class ExpertService {
       // Get feedback count and average rating for this summary (filtered by tenantId)
       const feedbackSnapshot = await firestore
         .collection(this.feedbackCollection)
-        .where('tenantId', '==', tenantId)
+        .where('tenantId', '==', ctx.tenantId)
         .where('dischargeSummaryId', '==', doc.id)
         .get();
 
@@ -113,6 +113,28 @@ export class ExpertService {
         avgSentenceLength: data.qualityMetrics.simplification?.avgSentenceLength,
       } : undefined;
 
+      // Fetch patient's preferred language from FHIR (only for translation reviews or if needed)
+      let preferredLanguage: string | undefined;
+      if (query.type === 'translation' && data.patientId && this.googleService) {
+        try {
+          const patient = await this.googleService.fhirRead('Patient', data.patientId, ctx);
+          if (patient && patient.communication) {
+            // Extract preferred language from patient.communication array
+            // FHIR format: communication: [{ language: { coding: [{ code: "es" }] }, preferred: true }]
+            const preferredComm = patient.communication.find((c: any) => c.preferred === true);
+            if (preferredComm?.language?.coding?.[0]?.code) {
+              preferredLanguage = preferredComm.language.coding[0].code;
+            } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+              // Fallback to first communication language if no preferred
+              preferredLanguage = patient.communication[0].language.coding[0].code;
+            }
+          }
+        } catch (error) {
+          // Log but don't fail - language is optional
+          this.logger.warn(`Failed to fetch preferred language for patient ${data.patientId}: ${error.message}`);
+        }
+      }
+
       const summary: ReviewSummary = {
         id: doc.id,
         patientName: data.patientName,
@@ -123,6 +145,7 @@ export class ExpertService {
         avgRating: avgRating ? Math.round(avgRating * 10) / 10 : undefined,
         latestReviewDate,
         qualityMetrics,
+        language: preferredLanguage, // Include preferred language for translation reviews
       };
 
       // Apply filters
