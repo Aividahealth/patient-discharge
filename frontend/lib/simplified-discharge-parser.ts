@@ -128,12 +128,6 @@ export function parseDischargeInstructions(content: string): ParsedDischargeInst
       'Medicamentos',
       'Su Medicamento',
     ];
-    // Pashto
-    const medicationsHeadersPs = [
-      'ستاسو درمل',
-      'درمل',
-    ];
-
     const appointmentsHeaders = [
       'Upcoming Appointments',
       'Appointments',
@@ -185,22 +179,22 @@ export function parseDischargeInstructions(content: string): ParsedDischargeInst
       'Señal de Advertencia',
       'Síntomas de Advertencia',
     ];
-    // Pashto
+    // Pashto (using Unicode escape sequences for webpack compatibility)
     const medicationsHeadersPs = [
-      'ستاسو درمل',
-      'درمل',
+      '\u0633\u062a\u0627\u0633\u0648\u0020\u062f\u0631\u0645\u0644', // ستاسو درمل
+      '\u062f\u0631\u0645\u0644', // درمل
     ];
     const appointmentsHeadersPs = [
-      'راتلونکي ناستې',
-      'ناستې',
+      '\u0631\u0627\u062a\u0644\u0648\u0646\u06a9\u064a\u0020\u0646\u0627\u0633\u062a\u06d0', // راتلونکي ناستې
+      '\u0646\u0627\u0633\u062a\u06d0', // ناستې
     ];
     const dietActivityHeadersPs = [
-      'خوراک او فعالیت',
-      'خوراک او فعالیتونه',
+      '\u062e\u0648\u0631\u0627\u06a9\u0020\u0627\u0648\u0020\u0641\u0639\u0627\u0644\u06cc\u062a', // خوراک او فعالیت
+      '\u062e\u0648\u0631\u0627\u06a9\u0020\u0627\u0648\u0020\u0641\u0639\u0627\u0644\u06cc\u062a\u0648\u0646\u0647', // خوراک او فعالیتونه
     ];
     const warningSignsHeadersPs = [
-      'د خطر نښې',
-      'د خطر نښانې',
+      '\u062f\u0020\u062e\u0637\u0631\u0020\u0646\u069a\u06d0', // د خطر نښې
+      '\u062f\u0020\u062e\u0637\u0631\u0020\u0646\u069a\u0627\u0646\u06d0', // د خطر نښانې
     ];
 
     // Combine all language variants

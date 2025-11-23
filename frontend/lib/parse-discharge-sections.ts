@@ -66,16 +66,16 @@ export function parseDischargeIntoSections(content: string): DischargeSections {
       'alimentación y actividad': 'dietActivity',
       'señales de advertencia': 'warningsSigns',
       'señal de advertencia': 'warningsSigns',
-      // Pashto
-      'ستاسو درمل': 'medications',
-      'درمل': 'medications',
-      'راتلونکي ناستې': 'appointments',
-      'ناستې': 'appointments',
-      'خوراک او فعالیت': 'dietActivity',
-      'خوراک او فعالیتونه': 'dietActivity',
-      'د خطر نښې': 'warningsSigns',
-      'د خطر نښانې': 'warningsSigns',
-      'لنډیز': 'overview',
+      // Pashto (using Unicode escape sequences for webpack compatibility)
+      '\u0633\u062a\u0627\u0633\u0648\u0020\u062f\u0631\u0645\u0644': 'medications', // ستاسو درمل
+      '\u062f\u0631\u0645\u0644': 'medications', // درمل
+      '\u0631\u0627\u062a\u0644\u0648\u0646\u06a9\u064a\u0020\u0646\u0627\u0633\u062a\u06d0': 'appointments', // راتلونکي ناستې
+      '\u0646\u0627\u0633\u062a\u06d0': 'appointments', // ناستې
+      '\u062e\u0648\u0631\u0627\u06a9\u0020\u0627\u0648\u0020\u0641\u0639\u0627\u0644\u06cc\u062a': 'dietActivity', // خوراک او فعالیت
+      '\u062e\u0648\u0631\u0627\u06a9\u0020\u0627\u0648\u0020\u0641\u0639\u0627\u0644\u06cc\u062a\u0648\u0646\u0647': 'dietActivity', // خوراک او فعالیتونه
+      '\u062f\u0020\u062e\u0637\u0631\u0020\u0646\u069a\u06d0': 'warningsSigns', // د خطر نښې
+      '\u062f\u0020\u062e\u0637\u0631\u0020\u0646\u069a\u0627\u0646\u06d0': 'warningsSigns', // د خطر نښانې
+      '\u0644\u0646\u0689\u06cc\u0632': 'overview', // لنډیز
     };
 
     const flushSection = () => {
