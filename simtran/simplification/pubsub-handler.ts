@@ -451,7 +451,7 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
         compositionId: event.googleCompositionId,
       });
     } else {
-      logger.warn('preferredLanguage not found - translation service will use tenant default', {
+      logger.warning('preferredLanguage not found - translation service will use tenant default', {
         patientId: event.patientId,
         compositionId: event.googleCompositionId,
         eventHadPreferredLanguage: !!event.preferredLanguage,
