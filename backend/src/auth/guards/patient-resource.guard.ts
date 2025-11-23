@@ -43,7 +43,7 @@ export class PatientResourceGuard implements CanActivate {
     const auth = request.auth;
     const user = request.user;
 
-    // Allow service-to-service authentication to bypass patient resource checks
+    // Allow service accounts to bypass patient resource checks
     // Service accounts are authenticated via Google OIDC and are trusted
     if (auth && auth.type === 'service') {
       this.logger.debug(
@@ -52,7 +52,7 @@ export class PatientResourceGuard implements CanActivate {
       return true;
     }
 
-    // User should be set by AuthGuard (for user type authentication)
+    // User should be set by AuthGuard
     if (!user) {
       this.logger.warn('PatientResourceGuard: No user found in request. Did AuthGuard run?');
       throw new ForbiddenException('Authentication required');

@@ -79,7 +79,7 @@ export class ExpertController {
         );
       }
 
-      const feedback = await this.expertService.submitFeedback(dto, ctx.tenantId);
+      const feedback = await this.expertService.submitFeedback(dto, ctx.tenantId, ctx);
       return {
         success: true,
         id: feedback.id,

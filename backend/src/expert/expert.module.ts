@@ -5,9 +5,10 @@ import { ConfigModule } from '../config/config.module';
 import { GoogleModule } from '../google/google.module';
 import { QualityMetricsModule } from '../quality-metrics/quality-metrics.module';
 import { DischargeSummariesModule } from '../discharge-summaries/discharge-summaries.module';
-
+import { CernerModule } from '../cerner/cerner.module';
 @Module({
-  imports: [ConfigModule, GoogleModule, QualityMetricsModule, DischargeSummariesModule],
+  imports: [ConfigModule, GoogleModule, QualityMetricsModule, DischargeSummariesModule, CernerModule],
+
   controllers: [ExpertController],
   providers: [ExpertService],
   exports: [ExpertService],

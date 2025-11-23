@@ -33,6 +33,7 @@ export interface ExpertFeedback {
   // Metadata
   createdAt: Date;
   updatedAt?: Date;
+  cernerDocumentReferenceId?: string; // Cerner DocumentReference ID if created
 }
 
 export interface SubmitFeedbackDto {

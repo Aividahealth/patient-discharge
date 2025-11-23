@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Firestore } from '@google-cloud/firestore';
 import * as fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { DevConfigService } from '../config/dev-config.service';
 import { GoogleService } from '../google/google.service';
 import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
 import { FirestoreService } from '../discharge-summaries/firestore.service';
+import { CernerService } from '../cerner/cerner.service';
 import type {
   ExpertFeedback,
   SubmitFeedbackDto,
@@ -30,6 +32,7 @@ export class ExpertService {
     private googleService?: GoogleService,
     private qualityMetricsService?: QualityMetricsService,
     private firestoreService?: FirestoreService,
+    private cernerService?: CernerService,
   ) {}
 
   private getFirestore(): Firestore {
@@ -248,9 +251,32 @@ export class ExpertService {
   /**
    * Submit expert feedback
    */
-  async submitFeedback(dto: SubmitFeedbackDto, tenantId: string): Promise<ExpertFeedback> {
+  async submitFeedback(dto: SubmitFeedbackDto, tenantId: string, ctx?: TenantContext): Promise<ExpertFeedback> {
     const firestore = this.getFirestore();
     const now = new Date();
+
+    // Try to create DocumentReference in Cerner if Cerner encounter ID is found
+    let cernerDocumentReferenceId: string | undefined;
+    if (ctx) {
+      try {
+        const cernerEncounterId = await this.extractCernerEncounterId(dto.dischargeSummaryId, ctx);
+        if (cernerEncounterId) {
+          this.logger.log(`📤 Found Cerner encounter ID ${cernerEncounterId}, creating DocumentReference in Cerner`);
+          const result = await this.createCernerDocumentReference(dto, cernerEncounterId, ctx);
+          if (result.success && result.documentReferenceId) {
+            cernerDocumentReferenceId = result.documentReferenceId;
+            this.logger.log(`✅ Successfully created DocumentReference in Cerner: ${cernerDocumentReferenceId}`);
+          } else {
+            this.logger.warn(`⚠️ Failed to create DocumentReference in Cerner, continuing with feedback submission`);
+          }
+        } else {
+          this.logger.log(`ℹ️ No Cerner encounter ID found, skipping Cerner DocumentReference creation`);
+        }
+      } catch (error) {
+        // Log error but don't fail feedback submission
+        this.logger.error(`❌ Error creating Cerner DocumentReference: ${error.message}`);
+      }
+    }
 
     // Build feedback object, excluding undefined values
     const feedback: any = {
@@ -280,6 +306,9 @@ export class ExpertService {
     }
     if (dto.specificIssues) {
       feedback.specificIssues = dto.specificIssues;
+    }
+    if (cernerDocumentReferenceId) {
+      feedback.cernerDocumentReferenceId = cernerDocumentReferenceId;
     }
 
     const docRef = await firestore
@@ -658,6 +687,244 @@ export class ExpertService {
       this.logger.warn(`Composition ${compositionId} not found or error: ${error.message}`);
       return false;
     }
+  }
+
+  /**
+   * Extract Cerner encounter ID from Composition's Encounter resource
+   */
+  async extractCernerEncounterId(compositionId: string, ctx: TenantContext): Promise<string | null> {
+    try {
+      if (!this.googleService) {
+        this.logger.warn('GoogleService not available, cannot extract Cerner encounter ID');
+        return null;
+      }
+
+      // Step 1: Read Composition from Google FHIR
+      this.logger.log(`📋 Reading Composition ${compositionId} to extract encounter reference`);
+      const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
+      
+      if (!composition || composition.resourceType !== 'Composition') {
+        this.logger.warn(`Composition ${compositionId} not found or invalid`);
+        return null;
+      }
+
+      // Step 2: Extract encounter reference
+      const encounterRef = composition.encounter?.reference;
+      if (!encounterRef) {
+        this.logger.warn(`Composition ${compositionId} does not have an encounter reference`);
+        return null;
+      }
+
+      // Step 3: Parse encounter ID from reference (remove "Encounter/" prefix)
+      const encounterId = encounterRef.replace('Encounter/', '');
+      if (!encounterId) {
+        this.logger.warn(`Invalid encounter reference format: ${encounterRef}`);
+        return null;
+      }
+
+      // Step 4: Fetch Encounter from Google FHIR
+      this.logger.log(`🏥 Fetching Encounter ${encounterId} to check for Cerner encounter ID`);
+      const encounter = await this.googleService.fhirRead('Encounter', encounterId, ctx);
+      
+      if (!encounter || encounter.resourceType !== 'Encounter') {
+        this.logger.warn(`Encounter ${encounterId} not found or invalid`);
+        return null;
+      }
+
+      // Step 5: Check meta.tag for original-cerner-id
+      const tags = encounter.meta?.tag || [];
+      const cernerTag = tags.find((tag: any) => tag.system === 'original-cerner-id');
+      
+      if (cernerTag && cernerTag.code) {
+        const cernerEncounterId = cernerTag.code;
+        this.logger.log(`✅ Found Cerner encounter ID: ${cernerEncounterId}`);
+        return cernerEncounterId;
+      }
+
+      this.logger.log(`ℹ️ Encounter ${encounterId} does not have original-cerner-id tag`);
+      return null;
+    } catch (error) {
+      this.logger.error(`❌ Error extracting Cerner encounter ID: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Create DocumentReference in Cerner with expert feedback data
+   */
+  async createCernerDocumentReference(
+    dto: SubmitFeedbackDto,
+    cernerEncounterId: string,
+    ctx: TenantContext,
+  ): Promise<{ success: boolean; documentReferenceId?: string }> {
+    try {
+      if (!this.cernerService) {
+        this.logger.warn('CernerService not available, cannot create DocumentReference in Cerner');
+        return { success: false };
+      }
+
+      // Fetch Encounter from Cerner to get patient reference
+      this.logger.log(`📋 Fetching Encounter ${cernerEncounterId} from Cerner to extract patient reference`);
+      const encounter = await this.cernerService.fetchResource('Encounter', cernerEncounterId, ctx);
+      
+      if (!encounter || encounter.resourceType !== 'Encounter') {
+        this.logger.warn(`Encounter ${cernerEncounterId} not found or invalid in Cerner`);
+        return { success: false };
+      }
+
+      // Extract patient reference from encounter
+      const patientRef = encounter.subject?.reference;
+      if (!patientRef) {
+        this.logger.warn(`Encounter ${cernerEncounterId} does not have a patient reference`);
+        return { success: false };
+      }
+
+      // Extract patient display name if available
+      const patientDisplay = encounter.subject?.display || 
+        (patientRef.includes('/') ? patientRef.split('/')[1] : patientRef);
+
+      this.logger.log(`✅ Found patient reference: ${patientRef} (display: ${patientDisplay})`);
+
+      // Build DocumentReference payload based on provided structure
+      const documentReference = {
+        resourceType: 'DocumentReference',
+        identifier: [
+          {
+            system: 'https://fhir.cerner.com/ceuuid',
+            value: `CE${uuidv4().replace(/-/g, '')}`, // Generate unique identifier using UUID
+          },
+        ],
+        status: 'current',
+        docStatus: 'final',
+        type: {
+          coding: [
+            {
+              system: 'http://loinc.org',
+              code: '18842-5',
+              display: 'Consult note',
+              userSelected: false,
+            },
+          ],
+          text: dto.reviewType, // Set to "simplification" or "translation"
+        },
+        category: [
+          {
+            coding: [
+              {
+                system: 'http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category',
+                code: 'clinical-note',
+                display: 'Clinical Note',
+                userSelected: false,
+              },
+            ],
+            text: 'Clinical Note',
+          },
+          {
+            coding: [
+              {
+                system: 'http://loinc.org',
+                code: '11488-4',
+                display: 'Consult note',
+                userSelected: false,
+              },
+            ],
+          },
+        ],
+        subject: {
+          reference: patientRef, // Extracted from Cerner Encounter
+          display: patientDisplay, // Extracted from Cerner Encounter
+        },
+        date: new Date().toISOString(),
+        content: [
+          {
+            attachment: {
+              contentType: 'text/plain; charset=UTF-8',
+              title: 'Discharge Summary',
+              creation: new Date().toISOString(),
+              data: this.buildFeedbackContent(dto), // Base64 encoded feedback content
+            },
+            format: {
+              system: 'http://ihe.net/fhir/ValueSet/IHE.FormatCode.codesystem',
+              code: 'urn:ihe:iti:xds:2017:mimeTypeSufficient',
+              display: 'mimeType Sufficient',
+            },
+          },
+        ],
+        context: {
+          encounter: [
+            {
+              reference: `Encounter/${cernerEncounterId}`, // Use the extracted Cerner encounter ID
+            },
+          ],
+          period: {
+            start: new Date().toISOString(),
+            end: new Date().toISOString(),
+          },
+        },
+      };
+
+      this.logger.log(`📤 Creating DocumentReference in Cerner for encounter ${cernerEncounterId}`);
+      const result = await this.cernerService.createResource('DocumentReference', documentReference, ctx);
+      
+      // Log the full result for debugging
+      this.logger.log(`📋 Cerner createResource response: ${JSON.stringify(result)}`);
+      
+      // Extract ID from various possible response formats
+      let documentReferenceId: string | undefined;
+      
+      if (result) {
+        // Case 1: Full FHIR resource with id field
+        if (result.resourceType === 'DocumentReference' && result.id) {
+          documentReferenceId = result.id;
+        }
+        // Case 2: Minimal object with just id (from Location header extraction)
+        else if (result.id) {
+          documentReferenceId = String(result.id);
+        }
+        // Case 3: Response is just a number/string (the ID)
+        else if (typeof result === 'string' || typeof result === 'number') {
+          documentReferenceId = String(result);
+        }
+      }
+      
+      if (documentReferenceId) {
+        this.logger.log(`✅ Successfully created DocumentReference in Cerner: ${documentReferenceId}`);
+        return { success: true, documentReferenceId };
+      } else {
+        this.logger.warn(`⚠️ DocumentReference creation returned unexpected result. Could not extract ID. Result: ${JSON.stringify(result)}`);
+        return { success: false };
+      }
+    } catch (error) {
+      this.logger.error(`❌ Failed to create DocumentReference in Cerner: ${error.message}`);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Build feedback content as base64 encoded text
+   */
+  private buildFeedbackContent(dto: SubmitFeedbackDto): string {
+    const feedbackText = [
+      `Expert Feedback - ${dto.reviewType}`,
+      `Reviewer: ${dto.reviewerName}`,
+      dto.reviewerHospital ? `Hospital: ${dto.reviewerHospital}` : '',
+      `Rating: ${dto.overallRating}/5`,
+      '',
+      dto.whatWorksWell ? `What Works Well:\n${dto.whatWorksWell}` : '',
+      '',
+      dto.whatNeedsImprovement ? `What Needs Improvement:\n${dto.whatNeedsImprovement}` : '',
+      '',
+      dto.specificIssues ? `Specific Issues:\n${dto.specificIssues}` : '',
+      '',
+      `Has Hallucination: ${dto.hasHallucination ? 'Yes' : 'No'}`,
+      `Has Missing Info: ${dto.hasMissingInfo ? 'Yes' : 'No'}`,
+      dto.language ? `Language: ${dto.language}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    // Convert to base64
+    return Buffer.from(feedbackText, 'utf8').toString('base64');
   }
 
   /**
