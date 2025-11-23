@@ -34,13 +34,38 @@ export function parseDischargeIntoSections(content: string): DischargeSections {
     let currentSection: keyof DischargeSections | null = null;
     let currentContent: string[] = [];
 
+    // Language-aware section mapping
     const sectionMap: Record<string, keyof DischargeSections> = {
+      // English
       'overview': 'overview',
       'your medications': 'medications',
+      'medications': 'medications',
       'upcoming appointments': 'appointments',
+      'appointments': 'appointments',
       'diet & activity': 'dietActivity',
       'diet and activity': 'dietActivity',
       'warning signs': 'warningsSigns',
+      // French
+      'vos médicaments': 'medications',
+      'médicaments': 'medications',
+      'rendez-vous à venir': 'appointments',
+      'rendez-vous': 'appointments',
+      'régime et activité': 'dietActivity',
+      'régime et activités': 'dietActivity',
+      'alimentation et activité': 'dietActivity',
+      'signes d\'alerte': 'warningsSigns',
+      'signe d\'alerte': 'warningsSigns',
+      // Spanish
+      'sus medicamentos': 'medications',
+      'medicamentos': 'medications',
+      'próximas citas': 'appointments',
+      'citas': 'appointments',
+      'citas de seguimiento': 'appointments',
+      'dieta y actividad': 'dietActivity',
+      'dieta y actividades': 'dietActivity',
+      'alimentación y actividad': 'dietActivity',
+      'señales de advertencia': 'warningsSigns',
+      'señal de advertencia': 'warningsSigns',
     };
 
     const flushSection = () => {

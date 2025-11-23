@@ -109,26 +109,107 @@ export function parseDischargeInstructions(content: string): ParsedDischargeInst
   const result: ParsedDischargeInstructions = { raw: content };
 
   try {
+    // Language-aware section header patterns
+    // English
+    const medicationsHeaders = [
+      'Your Medications',
+      'Medications',
+      'Your Medication',
+    ];
+    // French
+    const medicationsHeadersFr = [
+      'Vos Médicaments',
+      'Médicaments',
+      'Votre Médicament',
+    ];
+    // Spanish
+    const medicationsHeadersEs = [
+      'Sus Medicamentos',
+      'Medicamentos',
+      'Su Medicamento',
+    ];
+
+    const appointmentsHeaders = [
+      'Upcoming Appointments',
+      'Appointments',
+      'Follow-up Appointments',
+    ];
+    const appointmentsHeadersFr = [
+      'Rendez-vous à Venir',
+      'Rendez-vous',
+      'Rendez-vous de Suivi',
+    ];
+    const appointmentsHeadersEs = [
+      'Próximas Citas',
+      'Citas',
+      'Citas de Seguimiento',
+    ];
+
+    const dietActivityHeaders = [
+      'Diet & Activity',
+      'Diet and Activity',
+      'Diet & Activities',
+    ];
+    const dietActivityHeadersFr = [
+      'Régime et Activité',
+      'Régime et Activités',
+      'Alimentation et Activité',
+    ];
+    const dietActivityHeadersEs = [
+      'Dieta y Actividad',
+      'Dieta y Actividades',
+      'Alimentación y Actividad',
+    ];
+
+    const warningSignsHeaders = [
+      'Warning Signs',
+      'Warning Sign',
+      'Warning Symptoms',
+    ];
+    const warningSignsHeadersFr = [
+      'Signes d\'Alerte',
+      'Signe d\'Alerte',
+      'Symptômes d\'Alerte',
+    ];
+    const warningSignsHeadersEs = [
+      'Señales de Advertencia',
+      'Señal de Advertencia',
+      'Síntomas de Advertencia',
+    ];
+
+    // Combine all language variants
+    const allMedicationsHeaders = [...medicationsHeaders, ...medicationsHeadersFr, ...medicationsHeadersEs];
+    const allAppointmentsHeaders = [...appointmentsHeaders, ...appointmentsHeadersFr, ...appointmentsHeadersEs];
+    const allDietActivityHeaders = [...dietActivityHeaders, ...dietActivityHeadersFr, ...dietActivityHeadersEs];
+    const allWarningSignsHeaders = [...warningSignsHeaders, ...warningSignsHeadersFr, ...warningSignsHeadersEs];
+
+    // Create regex patterns that match any of the headers
+    const medicationsPattern = allMedicationsHeaders.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const appointmentsPattern = allAppointmentsHeaders.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const dietActivityPattern = allDietActivityHeaders.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const warningSignsPattern = allWarningSignsHeaders.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+
     // Parse Medications section (markdown table)
-    const medicationsMatch = content.match(/##\s+Your Medications\s*\n([\s\S]*?)(?=##\s+Upcoming Appointments|##\s+Diet\s*&?\s*Activity|##\s+Warning Signs|$)/i);
+    // Capture group 1 is the content (header is not captured)
+    const medicationsMatch = content.match(new RegExp(`##\\s+(?:${medicationsPattern})\\s*\\n([\\s\\S]*?)(?=##\\s+(?:${appointmentsPattern}|${dietActivityPattern}|${warningSignsPattern})|$)`, 'i'));
     if (medicationsMatch) {
       result.medications = parseMedicationsTable(medicationsMatch[1]);
     }
 
     // Parse Appointments section (bullet list)
-    const appointmentsMatch = content.match(/##\s+Upcoming Appointments\s*\n([\s\S]*?)(?=##\s+Diet\s*&?\s*Activity|##\s+Warning Signs|$)/i);
+    const appointmentsMatch = content.match(new RegExp(`##\\s+(?:${appointmentsPattern})\\s*\\n([\\s\\S]*?)(?=##\\s+(?:${dietActivityPattern}|${warningSignsPattern})|$)`, 'i'));
     if (appointmentsMatch) {
       result.appointments = parseBulletList(appointmentsMatch[1]);
     }
 
     // Parse Diet & Activity section
-    const dietActivityMatch = content.match(/##\s+Diet\s*&?\s*Activity\s*\n([\s\S]*?)(?=##\s+Warning Signs|$)/i);
+    const dietActivityMatch = content.match(new RegExp(`##\\s+(?:${dietActivityPattern})\\s*\\n([\\s\\S]*?)(?=##\\s+${warningSignsPattern}|$)`, 'i'));
     if (dietActivityMatch) {
       result.dietActivity = parseDietActivity(dietActivityMatch[1]);
     }
 
     // Parse Warning Signs section
-    const warningSignsMatch = content.match(/##\s+Warning Signs\s*\n([\s\S]*?)$/i);
+    const warningSignsMatch = content.match(new RegExp(`##\\s+(?:${warningSignsPattern})\\s*\\n([\\s\\S]*?)$`, 'i'));
     if (warningSignsMatch) {
       result.warningSigns = parseWarningSigns(warningSignsMatch[1]);
     }
