@@ -120,6 +120,49 @@ export class FirestoreService {
   }
 
   /**
+   * Get preferred language from Firestore discharge_summaries document
+   * The document ID is the compositionId
+   */
+  async getPreferredLanguage(compositionId: string, tenantId: string): Promise<string | undefined> {
+    try {
+      const docRef = this.firestore
+        .collection(this.collection)
+        .doc(compositionId);
+      
+      const doc = await docRef.get();
+      
+      if (doc.exists) {
+        const data = doc.data();
+        const preferredLang = data?.preferredLanguage;
+        
+        if (preferredLang) {
+          logger.info('Found preferred language in Firestore', {
+            compositionId,
+            preferredLanguage: preferredLang,
+            tenantId,
+          });
+          return preferredLang;
+        }
+      }
+      
+      logger.debug('No preferred language found in Firestore', {
+        compositionId,
+        tenantId,
+        documentExists: doc.exists,
+      });
+      
+      return undefined;
+    } catch (error) {
+      logger.warning('Failed to fetch preferred language from Firestore', {
+        error: (error as Error).message,
+        compositionId,
+        tenantId,
+      });
+      return undefined;
+    }
+  }
+
+  /**
    * Extract base name from file path
    * Example: "path/to/Patient-Name.md" -> "Patient-Name"
    */
