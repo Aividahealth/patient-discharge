@@ -60,7 +60,7 @@ async function updateDemoTenantLanguages() {
         features: {
           aiGeneration: true,
           multiLanguage: true,
-          supportedLanguages: ['es', 'vi', 'fr', 'zh', 'ps'], // Spanish, Vietnamese, French, Mandarin, Pashto
+          supportedLanguages: ['es', 'hi', 'vi', 'fr', 'zh', 'ps'], // Spanish, Hindi, Vietnamese, French, Mandarin, Pashto
           fileUpload: true,
           expertPortal: true,
           clinicianPortal: true,
@@ -74,11 +74,11 @@ async function updateDemoTenantLanguages() {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      console.log(`✅ Created tenant '${tenantId}' with supported languages: es, vi, fr, zh`);
+      console.log(`✅ Created tenant '${tenantId}' with supported languages: es, hi, vi, fr, zh, ps`);
     } else {
       // Update existing tenant's supported languages
       await docRef.update({
-        'features.supportedLanguages': ['es', 'vi', 'fr', 'zh', 'ps'], // Spanish, Vietnamese, French, Mandarin, Pashto
+        'features.supportedLanguages': ['es', 'hi', 'vi', 'fr', 'zh', 'ps'], // Spanish, Hindi, Vietnamese, French, Mandarin, Pashto
         'features.multiLanguage': true,
         'config.translationEnabled': true,
         updatedAt: new Date(),
@@ -90,6 +90,7 @@ async function updateDemoTenantLanguages() {
     console.log('   Tenant: demo');
     console.log('   Supported Languages:');
     console.log('     - es (Spanish)');
+    console.log('     - hi (Hindi)');
     console.log('     - vi (Vietnamese)');
     console.log('     - fr (French)');
     console.log('     - zh (Mandarin Chinese)');
