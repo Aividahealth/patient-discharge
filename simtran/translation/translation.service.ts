@@ -130,10 +130,11 @@ export class TranslationService {
 
   /**
    * Post-process translation to ensure section headers match expected patterns
-   * This ensures consistent header translation for proper parsing
+   * This ensures consistent header translation for proper parsing and preserves formatting
    */
   private postProcessTranslation(translatedContent: string, targetLanguage: string): string {
     // Define expected header translations for each language
+    // These match the headers expected by the frontend parsers
     const headerMappings: Record<string, Array<{ patterns: string[]; replacement: string }>> = {
       fr: [
         {
@@ -185,6 +186,7 @@ export class TranslationService {
             '## résumé',
             '## vue d\'ensemble',
             '## aperçu:',
+            '## résumé:',
           ],
           replacement: '## Aperçu',
         },
@@ -238,6 +240,9 @@ export class TranslationService {
             '## resumen:',
             '## vista general',
             '## visión general',
+            '## resumen de alta',
+            '## resumen del alta',
+            '## resumen del alta:',
           ],
           replacement: '## Resumen',
         },
@@ -253,21 +258,28 @@ export class TranslationService {
     let processed = translatedContent;
     const lines = processed.split('\n');
 
-    // Process each line to normalize headers
+    // Process each line to normalize headers while preserving formatting
     const processedLines = lines.map((line) => {
+      const trimmedLine = line.trim();
+      
       // Check if this line is a section header (starts with ##)
-      if (line.trim().startsWith('##')) {
-        const lineLower = line.trim().toLowerCase();
+      if (trimmedLine.startsWith('##')) {
+        const lineLower = trimmedLine.toLowerCase();
         
         // Check against all mappings
         for (const mapping of mappings) {
           for (const pattern of mapping.patterns) {
-            if (lineLower === pattern || lineLower.startsWith(pattern + ':')) {
-              return mapping.replacement;
+            // Match exact pattern or pattern with colon
+            if (lineLower === pattern || lineLower === pattern + ':') {
+              // Preserve original indentation if any
+              const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
+              return leadingWhitespace + mapping.replacement;
             }
           }
         }
       }
+      
+      // Preserve all other lines as-is (including markdown formatting, bold headers, tables, etc.)
       return line;
     });
 
