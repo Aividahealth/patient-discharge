@@ -3,6 +3,8 @@ import { Firestore } from '@google-cloud/firestore';
 import * as fs from 'fs';
 import { DevConfigService } from '../config/dev-config.service';
 import { GoogleService } from '../google/google.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
+import { FirestoreService } from '../discharge-summaries/firestore.service';
 import type {
   ExpertFeedback,
   SubmitFeedbackDto,
@@ -26,6 +28,8 @@ export class ExpertService {
   constructor(
     private configService: DevConfigService,
     private googleService?: GoogleService,
+    private qualityMetricsService?: QualityMetricsService,
+    private firestoreService?: FirestoreService,
   ) {}
 
   private getFirestore(): Firestore {
@@ -63,127 +67,191 @@ export class ExpertService {
 
   /**
    * Get list of discharge summaries for expert review
+   * Uses the same FHIR-based logic as clinician portal to ensure consistency
    */
   async getReviewList(query: ReviewListQuery, ctx: TenantContext): Promise<ReviewListResponse> {
+    if (!this.googleService) {
+      this.logger.error('GoogleService not available - cannot query FHIR');
+      return { summaries: [], total: 0 };
+    }
+
     const firestore = this.getFirestore();
     const limit = query.limit || 20;
     const offset = query.offset || 0;
 
-    // Get discharge summaries for this tenant only
-    let summariesQuery = firestore
-      .collection(this.summariesCollection)
-      .where('tenantId', '==', ctx.tenantId)
-      .orderBy('updatedAt', 'desc') as any;
+    try {
+      this.logger.log(`📋 Retrieving expert review list for tenant: ${ctx.tenantId} with filters: ${JSON.stringify(query)}`);
 
-    // Get summaries
-    const summariesSnapshot = await summariesQuery.get();
-    const summaries: ReviewSummary[] = [];
+      // Step 1: Query FHIR Composition resources (same as clinician portal)
+      const compositionsResult = await this.googleService.fhirSearch(
+        'Composition',
+        {
+          type: 'http://loinc.org|18842-5', // Discharge summary LOINC code
+          _count: 100,
+        },
+        ctx,
+      );
 
-    // For each summary, get review stats
-    for (const doc of summariesSnapshot.docs) {
-      const data = doc.data();
-
-      // Get feedback count and average rating for this summary (filtered by tenantId)
-      const feedbackSnapshot = await firestore
-        .collection(this.feedbackCollection)
-        .where('tenantId', '==', ctx.tenantId)
-        .where('dischargeSummaryId', '==', doc.id)
-        .get();
-
-      const feedbackDocs = feedbackSnapshot.docs;
-      const reviewCount = feedbackDocs.length;
-
-      let avgRating: number | undefined;
-      let latestReviewDate: Date | undefined;
-
-      if (reviewCount > 0) {
-        const ratings = feedbackDocs.map((f) => f.data().overallRating);
-        avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-
-        const reviewDates = feedbackDocs.map((f) => f.data().reviewDate?.toDate?.() || f.data().reviewDate);
-        latestReviewDate = reviewDates.sort((a, b) => b.getTime() - a.getTime())[0];
+      if (!compositionsResult?.entry || compositionsResult.entry.length === 0) {
+        this.logger.log('No Compositions found in FHIR');
+        return { summaries: [], total: 0 };
       }
 
-      // Extract quality metrics if available
-      const qualityMetrics = data.qualityMetrics ? {
-        fleschKincaidGradeLevel: data.qualityMetrics.readability?.fleschKincaidGradeLevel,
-        fleschReadingEase: data.qualityMetrics.readability?.fleschReadingEase,
-        smogIndex: data.qualityMetrics.readability?.smogIndex,
-        compressionRatio: data.qualityMetrics.simplification?.compressionRatio,
-        avgSentenceLength: data.qualityMetrics.simplification?.avgSentenceLength,
-      } : undefined;
+      const summaries: ReviewSummary[] = [];
 
-      // Fetch patient's preferred language
-      // Priority: 1) Firestore (fastest), 2) FHIR Patient resource, 3) Default to 'en'
-      let preferredLanguage: string | undefined;
-      
-      // First, check if preferred language is stored in Firestore
-      if (data.preferredLanguage) {
-        preferredLanguage = data.preferredLanguage;
-        this.logger.debug(`Found preferred language in Firestore for ${doc.id}: ${preferredLanguage}`);
-      } else if (data.patientId && this.googleService) {
-        // Fallback to FHIR Patient resource if not in Firestore
+      // Step 2: Process each Composition
+      for (const entry of compositionsResult.entry) {
         try {
-          const patient = await this.googleService.fhirRead('Patient', data.patientId, ctx);
-          if (patient && patient.communication) {
-            // Extract preferred language from patient.communication array
-            // FHIR format: communication: [{ language: { coding: [{ code: "es" }] }, preferred: true }]
+          const composition = entry.resource;
+          const compositionId = composition.id;
+
+          // Extract Patient reference
+          const patientRef = composition.subject?.reference; // Patient/patient-id
+          if (!patientRef) {
+            this.logger.warn(`Composition ${compositionId} missing Patient reference`);
+            continue;
+          }
+
+          const patientId = patientRef.replace('Patient/', '');
+
+          // Step 3: Check Firestore for simplifiedAt/translatedAt to filter by type
+          let firestoreData: any = null;
+          try {
+            const firestoreDoc = await firestore
+              .collection(this.summariesCollection)
+              .doc(compositionId)
+              .get();
+            
+            if (firestoreDoc.exists) {
+              firestoreData = firestoreDoc.data();
+            }
+          } catch (error) {
+            this.logger.debug(`Could not fetch Firestore data for ${compositionId}: ${error.message}`);
+          }
+
+          // Step 4: Apply type filter (simplification/translation)
+          if (query.type === 'simplification') {
+            // Only include if simplifiedAt exists
+            const simplifiedAt = firestoreData?.simplifiedAt?.toDate?.() || firestoreData?.simplifiedAt;
+            if (!simplifiedAt) {
+              continue; // Skip if not simplified
+            }
+          } else if (query.type === 'translation') {
+            // Only include if translatedAt exists
+            const translatedAt = firestoreData?.translatedAt?.toDate?.() || firestoreData?.translatedAt;
+            if (!translatedAt) {
+              continue; // Skip if not translated
+            }
+          }
+
+          // Step 5: Fetch Patient resource (for name, MRN, preferred language)
+          const patient = await this.googleService.fhirRead('Patient', patientId, ctx);
+          const mrn = patient.identifier?.find(
+            (id: any) => id.type?.coding?.[0]?.code === 'MR'
+          )?.value || '';
+          const patientName = patient.name?.[0]?.text || 
+            `${patient.name?.[0]?.given?.join(' ') || ''} ${patient.name?.[0]?.family || ''}`.trim() || 'Unknown';
+
+          // Step 6: Get preferred language from FHIR Patient resource
+          let preferredLanguage: string | undefined;
+          if (firestoreData?.preferredLanguage) {
+            preferredLanguage = firestoreData.preferredLanguage;
+          } else if (patient.communication) {
             const preferredComm = patient.communication.find((c: any) => c.preferred === true);
             if (preferredComm?.language?.coding?.[0]?.code) {
               preferredLanguage = preferredComm.language.coding[0].code;
             } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
-              // Fallback to first communication language if no preferred
               preferredLanguage = patient.communication[0].language.coding[0].code;
-            }
-            // If no language found in communication, default to 'en' (English)
-            if (!preferredLanguage) {
+            } else {
               preferredLanguage = 'en';
             }
-            this.logger.debug(`Fetched preferred language from FHIR for patient ${data.patientId}: ${preferredLanguage}`);
           } else {
-            // No communication array, default to English
             preferredLanguage = 'en';
           }
+
+          // Step 7: Get review stats from Firestore expert_feedback collection
+          const feedbackSnapshot = await firestore
+            .collection(this.feedbackCollection)
+            .where('tenantId', '==', ctx.tenantId)
+            .where('dischargeSummaryId', '==', compositionId)
+            .get();
+
+          const feedbackDocs = feedbackSnapshot.docs;
+          const reviewCount = feedbackDocs.length;
+
+          let avgRating: number | undefined;
+          let latestReviewDate: Date | undefined;
+
+          if (reviewCount > 0) {
+            const ratings = feedbackDocs.map((f) => f.data().overallRating);
+            avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+
+            const reviewDates = feedbackDocs.map((f) => f.data().reviewDate?.toDate?.() || f.data().reviewDate);
+            latestReviewDate = reviewDates.sort((a, b) => b.getTime() - a.getTime())[0];
+          }
+
+          // Step 8: Get quality metrics from QualityMetricsService
+          let qualityMetrics: any = undefined;
+          if (this.qualityMetricsService) {
+            try {
+              const metrics = await this.qualityMetricsService.getMetrics(compositionId);
+              if (metrics) {
+                qualityMetrics = {
+                  fleschKincaidGradeLevel: metrics.fleschKincaidGradeLevel,
+                  fleschReadingEase: metrics.fleschReadingEase,
+                  smogIndex: metrics.smogIndex,
+                  compressionRatio: metrics.compressionRatio,
+                  avgSentenceLength: metrics.avgSentenceLength,
+                };
+              }
+            } catch (error) {
+              this.logger.debug(`Could not fetch quality metrics for ${compositionId}: ${error.message}`);
+            }
+          }
+
+          // Step 9: Get simplifiedAt/translatedAt from Firestore
+          const simplifiedAt = firestoreData?.simplifiedAt?.toDate?.() || firestoreData?.simplifiedAt;
+          const translatedAt = firestoreData?.translatedAt?.toDate?.() || firestoreData?.translatedAt;
+
+          const summary: ReviewSummary = {
+            id: patientId, // Patient ID (for consistency with clinician portal)
+            compositionId: compositionId, // Composition ID (for fetching content)
+            patientName: patientName || firestoreData?.patientName,
+            mrn: mrn || firestoreData?.mrn,
+            simplifiedAt,
+            translatedAt,
+            reviewCount,
+            avgRating: avgRating ? Math.round(avgRating * 10) / 10 : undefined,
+            latestReviewDate,
+            qualityMetrics,
+            language: preferredLanguage,
+          };
+
+          // Step 10: Apply filters
+          if (query.filter === 'no_reviews' && reviewCount > 0) continue;
+          if (query.filter === 'low_rating' && (!avgRating || avgRating >= 3.5)) continue;
+
+          summaries.push(summary);
         } catch (error) {
-          // Log but don't fail - language is optional, default to English
-          this.logger.warn(`Failed to fetch preferred language from FHIR for patient ${data.patientId}: ${error.message}`);
-          preferredLanguage = 'en'; // Default to English on error
+          this.logger.error(`❌ Error processing Composition entry: ${error.message}`);
+          // Continue with next entry
+          continue;
         }
-      } else {
-        // No patientId available or no googleService, default to English
-        if (!data.patientId) {
-          this.logger.warn(`No patientId found for summary ${doc.id}, defaulting language to 'en'`);
-        }
-        preferredLanguage = 'en';
       }
 
-      const summary: ReviewSummary = {
-        id: doc.id,
-        patientName: data.patientName,
-        mrn: data.mrn,
-        simplifiedAt: data.simplifiedAt?.toDate?.() || data.simplifiedAt,
-        translatedAt: data.translatedAt?.toDate?.() || data.translatedAt,
-        reviewCount,
-        avgRating: avgRating ? Math.round(avgRating * 10) / 10 : undefined,
-        latestReviewDate,
-        qualityMetrics,
-        language: preferredLanguage, // Include preferred language for translation reviews
+      this.logger.log(`✅ Retrieved ${summaries.length} summaries from FHIR for expert review`);
+
+      // Step 11: Apply pagination
+      const paginatedSummaries = summaries.slice(offset, offset + limit);
+
+      return {
+        summaries: paginatedSummaries,
+        total: summaries.length,
       };
-
-      // Apply filters
-      if (query.filter === 'no_reviews' && reviewCount > 0) continue;
-      if (query.filter === 'low_rating' && (!avgRating || avgRating >= 3.5)) continue;
-
-      summaries.push(summary);
+    } catch (error) {
+      this.logger.error(`❌ Error retrieving expert review list: ${error.message}`);
+      throw error;
     }
-
-    // Apply pagination
-    const paginatedSummaries = summaries.slice(offset, offset + limit);
-
-    return {
-      summaries: paginatedSummaries,
-      total: summaries.length,
-    };
   }
 
   /**

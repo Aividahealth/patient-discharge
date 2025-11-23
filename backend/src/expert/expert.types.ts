@@ -74,7 +74,8 @@ export interface ReviewQualityMetrics {
 }
 
 export interface ReviewSummary {
-  id: string;
+  id: string; // Patient ID (for consistency with clinician portal)
+  compositionId: string; // Composition ID (for fetching content)
   patientName?: string;
   mrn?: string;
   simplifiedAt?: Date;

@@ -161,11 +161,11 @@ export async function getReviewList(params?: {
   const data = await response.json();
 
   // Transform expert/list response to ReviewListResponse
-  // The backend already returns the correct format with language field
+  // Backend now returns id (patientId) and compositionId separately (same as clinician portal)
   return {
     summaries: data.summaries?.map((summary: any) => ({
-      id: summary.id,
-      compositionId: summary.id, // compositionId is the same as id in expert service
+      id: summary.id, // Patient ID (from backend)
+      compositionId: summary.compositionId || summary.id, // Composition ID (fallback to id for backward compatibility)
       mrn: summary.mrn || '',
       patientName: summary.patientName || 'Unknown',
       room: undefined,
