@@ -143,10 +143,6 @@ export function parseDischargeInstructions(content: string): ParsedDischargeInst
       'Citas',
       'Citas de Seguimiento',
     ];
-    const appointmentsHeadersPs = [
-      'راتلونکي ناستې',
-      'ناستې',
-    ];
 
     const dietActivityHeaders = [
       'Diet & Activity',
