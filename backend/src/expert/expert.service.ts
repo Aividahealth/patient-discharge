@@ -114,7 +114,9 @@ export class ExpertService {
 
           const patientId = patientRef.replace('Patient/', '');
 
-          // Step 3: Check Firestore for simplifiedAt/translatedAt to filter by type
+          // Step 3: Check Firestore for simplifiedAt/translatedAt (for metadata, not filtering)
+          // Note: We don't filter by simplifiedAt/translatedAt to ensure both portals show the same list
+          // The type parameter is used for UI organization, not data filtering
           let firestoreData: any = null;
           try {
             const firestoreDoc = await firestore
@@ -129,20 +131,9 @@ export class ExpertService {
             this.logger.debug(`Could not fetch Firestore data for ${compositionId}: ${error.message}`);
           }
 
-          // Step 4: Apply type filter (simplification/translation)
-          if (query.type === 'simplification') {
-            // Only include if simplifiedAt exists
-            const simplifiedAt = firestoreData?.simplifiedAt?.toDate?.() || firestoreData?.simplifiedAt;
-            if (!simplifiedAt) {
-              continue; // Skip if not simplified
-            }
-          } else if (query.type === 'translation') {
-            // Only include if translatedAt exists
-            const translatedAt = firestoreData?.translatedAt?.toDate?.() || firestoreData?.translatedAt;
-            if (!translatedAt) {
-              continue; // Skip if not translated
-            }
-          }
+          // Step 4: Note - We removed the type filter to match clinician portal behavior
+          // Both portals now show all compositions from FHIR
+          // The type parameter is still passed but not used for filtering
 
           // Step 5: Fetch Patient resource (for name, MRN, preferred language)
           const patient = await this.googleService.fhirRead('Patient', patientId, ctx);
