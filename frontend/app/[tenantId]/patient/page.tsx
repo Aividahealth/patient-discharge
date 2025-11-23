@@ -296,14 +296,12 @@ export default function PatientDashboard() {
         // Set preferred language from patient details
         if (details.preferredLanguage) {
           setPreferredLanguage(details.preferredLanguage)
-          // Default to translated version for non-English patients
-          setViewTranslated(details.preferredLanguage !== 'en')
         } else {
           setPreferredLanguage(null)
           setViewTranslated(false)
         }
 
-        // Set discharge summary and instructions
+        // Set discharge summary and instructions (English version)
         const summaryText = details.simplifiedSummary?.text || details.rawSummary?.text || ""
         const instructionsText = details.simplifiedInstructions?.text || details.rawInstructions?.text || ""
         
@@ -330,40 +328,62 @@ export default function PatientDashboard() {
 
         // Fetch translated content if preferred language is set and not English
         if (details.preferredLanguage && details.preferredLanguage !== 'en') {
-          const translated = await getTranslatedContent(
-            compositionId,
-            details.preferredLanguage,
-            token,
-            tenant.id
-          )
+          try {
+            const translated = await getTranslatedContent(
+              compositionId,
+              details.preferredLanguage,
+              token,
+              tenant.id
+            )
 
-          if (translated?.content) {
-            // Parse the combined translated content
-            const parts = translated.content.content.split('\n\n---\n\n')
-            const translatedSummaryText = parts[0] || ""
-            const translatedInstructionsText = parts[1] || ""
-            
-            setTranslatedSummary(translatedSummaryText)
-            setTranslatedInstructions(translatedInstructionsText)
-            
-            // Parse translated instructions into structured sections
-            console.log('[Patient Portal] Parsing translated instructions into sections...')
-            const translatedSections = parseDischargeIntoSections(translatedInstructionsText)
-            setTranslatedParsedSections(translatedSections)
-            
-            // Extract structured medications and appointments from translated content
-            if (translatedSections.medications) {
-              const translatedMeds = extractMedications(translatedSections.medications)
-              setTranslatedStructuredMedications(translatedMeds)
-              console.log('[Patient Portal] Extracted translated medications:', translatedMeds.length)
+            if (translated?.content) {
+              // Parse the combined translated content
+              const parts = translated.content.content.split('\n\n---\n\n')
+              const translatedSummaryText = parts[0] || ""
+              const translatedInstructionsText = parts[1] || ""
+              
+              setTranslatedSummary(translatedSummaryText)
+              setTranslatedInstructions(translatedInstructionsText)
+              
+              // Parse translated instructions into structured sections
+              console.log('[Patient Portal] Parsing translated instructions into sections...')
+              const translatedSections = parseDischargeIntoSections(translatedInstructionsText)
+              setTranslatedParsedSections(translatedSections)
+              
+              // Extract structured medications and appointments from translated content
+              if (translatedSections.medications) {
+                const translatedMeds = extractMedications(translatedSections.medications)
+                setTranslatedStructuredMedications(translatedMeds)
+                console.log('[Patient Portal] Extracted translated medications:', translatedMeds.length)
+              }
+              
+              if (translatedSections.appointments) {
+                const translatedAppts = extractAppointments(translatedSections.appointments)
+                setTranslatedStructuredAppointments(translatedAppts)
+                console.log('[Patient Portal] Extracted translated appointments:', translatedAppts.length)
+              }
+              
+              // Only set viewTranslated to true AFTER successfully fetching translated content
+              // This ensures the French content is displayed by default when available
+              if (translatedSummaryText && translatedInstructionsText) {
+                setViewTranslated(true)
+                console.log('[Patient Portal] Translated content loaded, defaulting to translated view')
+              } else {
+                console.warn('[Patient Portal] Translated content is empty, staying with English')
+                setViewTranslated(false)
+              }
+            } else {
+              console.warn('[Patient Portal] No translated content found, staying with English')
+              setViewTranslated(false)
             }
-            
-            if (translatedSections.appointments) {
-              const translatedAppts = extractAppointments(translatedSections.appointments)
-              setTranslatedStructuredAppointments(translatedAppts)
-              console.log('[Patient Portal] Extracted translated appointments:', translatedAppts.length)
-            }
+          } catch (error) {
+            console.error('[Patient Portal] Failed to fetch translated content:', error)
+            // If translation fetch fails, stay with English
+            setViewTranslated(false)
           }
+        } else {
+          // English is preferred language, don't show translated
+          setViewTranslated(false)
         }
 
         console.log('[Patient Portal] Data loaded, setting loading to false')
