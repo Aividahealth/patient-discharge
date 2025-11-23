@@ -247,6 +247,50 @@ export class TranslationService {
           replacement: '## Resumen',
         },
       ],
+      ps: [
+        {
+          patterns: [
+            '## ستاسو درمل',
+            '## درمل',
+            '## ستاسو درمل:',
+            '## درمل:',
+          ],
+          replacement: '## ستاسو درمل',
+        },
+        {
+          patterns: [
+            '## راتلونکي ناستې',
+            '## ناستې',
+            '## راتلونکي ناستې:',
+            '## ناستې:',
+          ],
+          replacement: '## راتلونکي ناستې',
+        },
+        {
+          patterns: [
+            '## خوراک او فعالیت',
+            '## خوراک او فعالیتونه',
+            '## خوراک او فعالیت:',
+          ],
+          replacement: '## خوراک او فعالیت',
+        },
+        {
+          patterns: [
+            '## د خطر نښې',
+            '## د خطر نښې:',
+            '## د خطر نښانې',
+          ],
+          replacement: '## د خطر نښې',
+        },
+        {
+          patterns: [
+            '## لنډیز',
+            '## لنډیز:',
+            '## کتنه',
+          ],
+          replacement: '## لنډیز',
+        },
+      ],
     };
 
     const mappings = headerMappings[targetLanguage];
@@ -264,13 +308,21 @@ export class TranslationService {
       
       // Check if this line is a section header (starts with ##)
       if (trimmedLine.startsWith('##')) {
-        const lineLower = trimmedLine.toLowerCase();
+        // For RTL languages (like Pashto), don't convert to lowercase
+        // For LTR languages, convert to lowercase for matching
+        const isRTL = targetLanguage === 'ps' || targetLanguage === 'ar' || targetLanguage === 'he' || targetLanguage === 'ur';
+        const lineForMatching = isRTL ? trimmedLine : trimmedLine.toLowerCase();
         
         // Check against all mappings
         for (const mapping of mappings) {
           for (const pattern of mapping.patterns) {
+            // For RTL languages, match exactly (case-sensitive)
+            // For LTR languages, match case-insensitively
+            const patternForMatching = isRTL ? pattern : pattern.toLowerCase();
+            const matchPattern = isRTL ? pattern : pattern.toLowerCase();
+            
             // Match exact pattern or pattern with colon
-            if (lineLower === pattern || lineLower === pattern + ':') {
+            if (lineForMatching === matchPattern || lineForMatching === matchPattern + ':') {
               // Preserve original indentation if any
               const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
               return leadingWhitespace + mapping.replacement;

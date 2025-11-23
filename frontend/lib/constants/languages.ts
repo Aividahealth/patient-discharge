@@ -35,6 +35,11 @@ export const SUPPORTED_LANGUAGES: Record<string, LanguageConfig> = {
     name: 'French',
     nativeName: 'Français',
   },
+  ps: {
+    code: 'ps',
+    name: 'Pashto',
+    nativeName: 'پښتو',
+  },
 }
 
 export type SupportedLanguageCode = keyof typeof SUPPORTED_LANGUAGES

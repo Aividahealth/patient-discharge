@@ -66,6 +66,16 @@ export function parseDischargeIntoSections(content: string): DischargeSections {
       'alimentación y actividad': 'dietActivity',
       'señales de advertencia': 'warningsSigns',
       'señal de advertencia': 'warningsSigns',
+      // Pashto
+      'ستاسو درمل': 'medications',
+      'درمل': 'medications',
+      'راتلونکي ناستې': 'appointments',
+      'ناستې': 'appointments',
+      'خوراک او فعالیت': 'dietActivity',
+      'خوراک او فعالیتونه': 'dietActivity',
+      'د خطر نښې': 'warningsSigns',
+      'د خطر نښانې': 'warningsSigns',
+      'لنډیز': 'overview',
     };
 
     const flushSection = () => {

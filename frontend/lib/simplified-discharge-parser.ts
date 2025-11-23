@@ -128,6 +128,11 @@ export function parseDischargeInstructions(content: string): ParsedDischargeInst
       'Medicamentos',
       'Su Medicamento',
     ];
+    // Pashto
+    const medicationsHeadersPs = [
+      'ستاسو درمل',
+      'درمل',
+    ];
 
     const appointmentsHeaders = [
       'Upcoming Appointments',
@@ -143,6 +148,10 @@ export function parseDischargeInstructions(content: string): ParsedDischargeInst
       'Próximas Citas',
       'Citas',
       'Citas de Seguimiento',
+    ];
+    const appointmentsHeadersPs = [
+      'راتلونکي ناستې',
+      'ناستې',
     ];
 
     const dietActivityHeaders = [
@@ -176,12 +185,29 @@ export function parseDischargeInstructions(content: string): ParsedDischargeInst
       'Señal de Advertencia',
       'Síntomas de Advertencia',
     ];
+    // Pashto
+    const medicationsHeadersPs = [
+      'ستاسو درمل',
+      'درمل',
+    ];
+    const appointmentsHeadersPs = [
+      'راتلونکي ناستې',
+      'ناستې',
+    ];
+    const dietActivityHeadersPs = [
+      'خوراک او فعالیت',
+      'خوراک او فعالیتونه',
+    ];
+    const warningSignsHeadersPs = [
+      'د خطر نښې',
+      'د خطر نښانې',
+    ];
 
     // Combine all language variants
-    const allMedicationsHeaders = [...medicationsHeaders, ...medicationsHeadersFr, ...medicationsHeadersEs];
-    const allAppointmentsHeaders = [...appointmentsHeaders, ...appointmentsHeadersFr, ...appointmentsHeadersEs];
-    const allDietActivityHeaders = [...dietActivityHeaders, ...dietActivityHeadersFr, ...dietActivityHeadersEs];
-    const allWarningSignsHeaders = [...warningSignsHeaders, ...warningSignsHeadersFr, ...warningSignsHeadersEs];
+    const allMedicationsHeaders = [...medicationsHeaders, ...medicationsHeadersFr, ...medicationsHeadersEs, ...medicationsHeadersPs];
+    const allAppointmentsHeaders = [...appointmentsHeaders, ...appointmentsHeadersFr, ...appointmentsHeadersEs, ...appointmentsHeadersPs];
+    const allDietActivityHeaders = [...dietActivityHeaders, ...dietActivityHeadersFr, ...dietActivityHeadersEs, ...dietActivityHeadersPs];
+    const allWarningSignsHeaders = [...warningSignsHeaders, ...warningSignsHeadersFr, ...warningSignsHeadersEs, ...warningSignsHeadersPs];
 
     // Create regex patterns that match any of the headers
     const medicationsPattern = allMedicationsHeaders.map(h => h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
