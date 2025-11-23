@@ -279,6 +279,11 @@ export class GoogleService {
                     if (binaryMatch && binaryMatch[1]) {
                       binaryIds.add(binaryMatch[1]);
                     }
+                    // Also check for DocumentReference references
+                    const docRefMatch = ref.match(/^DocumentReference\/([^\/]+)$/);
+                    if (docRefMatch && docRefMatch[1] && !documentReferenceIds.includes(docRefMatch[1])) {
+                      documentReferenceIds.push(docRefMatch[1]);
+                    }
                   }
                 }
               }
@@ -294,6 +299,122 @@ export class GoogleService {
           }
           // Continue with other Compositions even if one fails
         }
+      }
+
+      // Step 1c: Find ALL Compositions that reference the Encounters we found
+      // This ensures we catch all Compositions, even if they don't directly reference the patient
+      for (const encounterId of Array.from(encounterIds)) {
+        try {
+          const encounterCompositionSearch = await client.get('/Composition', {
+            params: { encounter: `Encounter/${encounterId}`, _count: 100 },
+          });
+
+          if (encounterCompositionSearch.data?.entry) {
+            for (const entry of encounterCompositionSearch.data.entry) {
+              const comp = entry.resource;
+              if (comp?.id) {
+                compositionIds.add(comp.id);
+                console.log(`📋 Found additional Composition ${comp.id} via Encounter ${encounterId}`);
+              }
+            }
+          }
+        } catch (error: any) {
+          console.error(`❌ Error searching for Compositions by Encounter ${encounterId}:`, error.message);
+          // Continue even if search fails
+        }
+      }
+
+      // Step 1d: Search for ALL Compositions of discharge summary type and check if they reference our Binaries
+      // This catches Compositions that might reference our Binaries but weren't found by patient/encounter search
+      // We'll search by type and then check their Binary references
+      try {
+        const allCompositionSearch = await client.get('/Composition', {
+          params: { type: 'http://loinc.org|18842-5', _count: 1000 }, // Search all discharge summaries
+        });
+
+        if (allCompositionSearch.data?.entry) {
+          for (const entry of allCompositionSearch.data.entry) {
+            const comp = entry.resource;
+            if (!comp?.id || compositionIds.has(comp.id)) {
+              continue; // Skip if already found
+            }
+
+            // Check if this Composition references any of our Binaries
+            let referencesOurBinary = false;
+            if (comp.section && Array.isArray(comp.section)) {
+              for (const section of comp.section) {
+                if (section.entry && Array.isArray(section.entry)) {
+                  for (const entry of section.entry) {
+                    if (entry.reference) {
+                      const ref = entry.reference;
+                      const binaryMatch = ref.match(/^Binary\/([^\/]+)$/);
+                      if (binaryMatch && binaryMatch[1] && binaryIds.has(binaryMatch[1])) {
+                        referencesOurBinary = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+                if (referencesOurBinary) break;
+              }
+            }
+
+            // Also check if it references any of our DocumentReferences
+            if (!referencesOurBinary && comp.section && Array.isArray(comp.section)) {
+              for (const section of comp.section) {
+                if (section.entry && Array.isArray(section.entry)) {
+                  for (const entry of section.entry) {
+                    if (entry.reference) {
+                      const ref = entry.reference;
+                      const docRefMatch = ref.match(/^DocumentReference\/([^\/]+)$/);
+                      if (docRefMatch && docRefMatch[1] && documentReferenceIds.includes(docRefMatch[1])) {
+                        referencesOurBinary = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+                if (referencesOurBinary) break;
+              }
+            }
+
+            if (referencesOurBinary) {
+              compositionIds.add(comp.id);
+              console.log(`📋 Found additional Composition ${comp.id} via Binary/DocumentReference reference`);
+              
+              // Extract additional Binary IDs and Encounter IDs from this Composition
+              if (comp.encounter?.reference) {
+                const encounterMatch = comp.encounter.reference.match(/^Encounter\/([^\/]+)$/);
+                if (encounterMatch && encounterMatch[1]) {
+                  encounterIds.add(encounterMatch[1]);
+                }
+              }
+              
+              if (comp.section && Array.isArray(comp.section)) {
+                for (const section of comp.section) {
+                  if (section.entry && Array.isArray(section.entry)) {
+                    for (const entry of section.entry) {
+                      if (entry.reference) {
+                        const ref = entry.reference;
+                        const binaryMatch = ref.match(/^Binary\/([^\/]+)$/);
+                        if (binaryMatch && binaryMatch[1]) {
+                          binaryIds.add(binaryMatch[1]);
+                        }
+                        const docRefMatch = ref.match(/^DocumentReference\/([^\/]+)$/);
+                        if (docRefMatch && docRefMatch[1] && !documentReferenceIds.includes(docRefMatch[1])) {
+                          documentReferenceIds.push(docRefMatch[1]);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Error searching for all Compositions to find Binary references:`, error.message);
+        // Continue even if search fails
       }
 
       // Step 2: Delete ALL Compositions FIRST (they reference DocumentReference, Patient, and Encounter)
