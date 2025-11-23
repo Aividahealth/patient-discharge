@@ -37,6 +37,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Separator } from "@/components/ui/separator"
 
 export default function SystemAdminPortal() {
   const router = useRouter()
@@ -65,6 +66,9 @@ export default function SystemAdminPortal() {
       expertPortal: true,
       chatbot: true,
     },
+    ehrIntegration: {
+      type: 'Manual',
+    },
   })
 
   // Form states - Tenant Admin Creation
@@ -78,6 +82,8 @@ export default function SystemAdminPortal() {
   // Dialog states
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [tenantToDelete, setTenantToDelete] = useState<string | null>(null)
+  const [showMetricsDialog, setShowMetricsDialog] = useState(false)
+  const [loadingMetrics, setLoadingMetrics] = useState(false)
 
   // Verify system admin access
   useEffect(() => {
@@ -202,11 +208,16 @@ export default function SystemAdminPortal() {
     if (!api) return
 
     try {
+      setLoadingMetrics(true)
+      setError("")
       const metrics = await api.getTenantMetrics(tenantId)
       setSelectedTenantMetrics(metrics)
+      setShowMetricsDialog(true)
     } catch (err) {
       console.error('Error loading tenant metrics:', err)
       setError(err instanceof Error ? err.message : 'Failed to load tenant metrics')
+    } finally {
+      setLoadingMetrics(false)
     }
   }
 
@@ -224,7 +235,7 @@ export default function SystemAdminPortal() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-indigo-100 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <CommonHeader title="System Administration" hideTenantInfo={true} />
 
       <div className="flex-1 p-6">
@@ -232,15 +243,15 @@ export default function SystemAdminPortal() {
           {/* Header */}
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-purple-900 flex items-center gap-2">
+              <h1 className="text-3xl font-bold text-cerner-blue flex items-center gap-2">
                 <Shield className="h-8 w-8" />
                 System Administration
               </h1>
-              <p className="text-purple-700 mt-1">
+              <p className="text-gray-700 mt-1">
                 Welcome, {user?.name} • Managing {tenants.length} tenant{tenants.length !== 1 ? 's' : ''}
               </p>
             </div>
-            <Button onClick={handleLogout} variant="outline" className="border-purple-300">
+            <Button onClick={handleLogout} variant="outline" className="border-gray-200">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
@@ -406,65 +417,6 @@ export default function SystemAdminPortal() {
                   </Table>
                 </CardContent>
               </Card>
-
-              {/* Selected Tenant Metrics */}
-              {selectedTenantMetrics && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Metrics for {selectedTenantMetrics.tenantName}</CardTitle>
-                    <CardDescription>Detailed metrics breakdown</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <h3 className="font-semibold mb-2">Users by Role</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <div className="p-3 bg-blue-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Patients</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.patient}</div>
-                        </div>
-                        <div className="p-3 bg-green-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Clinicians</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.clinician}</div>
-                        </div>
-                        <div className="p-3 bg-purple-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Experts</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.expert}</div>
-                        </div>
-                        <div className="p-3 bg-orange-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Admins</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.tenant_admin}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold mb-2">Discharge Summaries by Status</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        <div className="p-3 bg-gray-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Raw Only</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.raw_only}</div>
-                        </div>
-                        <div className="p-3 bg-blue-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Simplified</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.simplified}</div>
-                        </div>
-                        <div className="p-3 bg-green-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Translated</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.translated}</div>
-                        </div>
-                        <div className="p-3 bg-yellow-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Processing</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.processing}</div>
-                        </div>
-                        <div className="p-3 bg-red-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Error</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.error}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </TabsContent>
 
             {/* Onboarding Tab */}
@@ -589,7 +541,397 @@ export default function SystemAdminPortal() {
                       </div>
                     </div>
 
-                    <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
+                    <Separator />
+
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="ehr-integration">EHR Integration *</Label>
+                        <select
+                          id="ehr-integration"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2"
+                          value={newTenant.ehrIntegration?.type || 'Manual'}
+                          onChange={(e) => {
+                            const ehrType = e.target.value as 'Manual' | 'Cerner' | 'EPIC'
+                            setNewTenant({
+                              ...newTenant,
+                              ehrIntegration: {
+                                type: ehrType,
+                                ...(ehrType === 'Cerner' ? {
+                                  cerner: {
+                                    base_url: '',
+                                    system_app: {
+                                      client_id: '',
+                                      client_secret: '',
+                                      token_url: '',
+                                      scopes: '',
+                                    },
+                                    provider_app: {
+                                      client_id: '',
+                                      client_secret: '',
+                                      authorization_url: '',
+                                      token_url: '',
+                                      redirect_uri: '',
+                                      scopes: '',
+                                    },
+                                  }
+                                } : {}),
+                              }
+                            })
+                          }}
+                          required
+                        >
+                          <option value="Manual">Manual</option>
+                          <option value="Cerner">Cerner</option>
+                          <option value="EPIC">EPIC</option>
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          Manual: Upload button shown, no EHR polling. Cerner/EPIC: No upload button, EHR polling enabled.
+                        </p>
+                      </div>
+
+                      {/* Cerner Configuration */}
+                      {newTenant.ehrIntegration?.type === 'Cerner' && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                          <Label className="text-base font-semibold">Cerner Configuration</Label>
+                          
+                          <div className="space-y-2">
+                            <Label htmlFor="cerner-base-url">Base URL *</Label>
+                            <Input
+                              id="cerner-base-url"
+                              placeholder="https://fhir.cerner.com/..."
+                              value={newTenant.ehrIntegration?.cerner?.base_url || ''}
+                              onChange={(e) => setNewTenant({
+                                ...newTenant,
+                                ehrIntegration: {
+                                  ...newTenant.ehrIntegration!,
+                                  cerner: {
+                                    ...newTenant.ehrIntegration?.cerner,
+                                    base_url: e.target.value,
+                                    system_app: newTenant.ehrIntegration?.cerner?.system_app || {
+                                      client_id: '',
+                                      client_secret: '',
+                                      token_url: '',
+                                      scopes: '',
+                                    },
+                                    provider_app: newTenant.ehrIntegration?.cerner?.provider_app || {
+                                      client_id: '',
+                                      client_secret: '',
+                                      authorization_url: '',
+                                      token_url: '',
+                                      redirect_uri: '',
+                                      scopes: '',
+                                    },
+                                  }
+                                }
+                              })}
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-semibold">System App (for background polling)</Label>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-client-id">Client ID *</Label>
+                                  <Input
+                                    id="cerner-system-client-id"
+                                    placeholder="System app client ID"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.client_id || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: e.target.value,
+                                            client_secret: newTenant.ehrIntegration?.cerner?.system_app?.client_secret || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.system_app?.token_url || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.system_app?.scopes || '',
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-client-secret">Client Secret *</Label>
+                                  <Input
+                                    id="cerner-system-client-secret"
+                                    type="password"
+                                    placeholder="System app client secret"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.client_secret || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.system_app?.client_id || '',
+                                            client_secret: e.target.value,
+                                            token_url: newTenant.ehrIntegration?.cerner?.system_app?.token_url || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.system_app?.scopes || '',
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-token-url">Token URL *</Label>
+                                  <Input
+                                    id="cerner-system-token-url"
+                                    placeholder="https://authorization.cerner.com/token"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.token_url || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.system_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.system_app?.client_secret || '',
+                                            token_url: e.target.value,
+                                            scopes: newTenant.ehrIntegration?.cerner?.system_app?.scopes || '',
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-system-scopes">Scopes *</Label>
+                                  <Input
+                                    id="cerner-system-scopes"
+                                    placeholder="system/Patient.read system/Observation.read"
+                                    value={newTenant.ehrIntegration?.cerner?.system_app?.scopes || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.system_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.system_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.system_app?.client_secret || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.system_app?.token_url || '',
+                                            scopes: e.target.value,
+                                          },
+                                          provider_app: newTenant.ehrIntegration?.cerner?.provider_app,
+                                        }
+                                      }
+                                    })}
+                                    required
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="text-sm font-semibold">Provider App (for user authentication)</Label>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-client-id">Client ID</Label>
+                                  <Input
+                                    id="cerner-provider-client-id"
+                                    placeholder="Provider app client ID"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.client_id || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: e.target.value,
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-client-secret">Client Secret</Label>
+                                  <Input
+                                    id="cerner-provider-client-secret"
+                                    type="password"
+                                    placeholder="Provider app client secret"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: e.target.value,
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-auth-url">Authorization URL</Label>
+                                  <Input
+                                    id="cerner-provider-auth-url"
+                                    placeholder="https://authorization.cerner.com/authorize"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: e.target.value,
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-token-url">Token URL</Label>
+                                  <Input
+                                    id="cerner-provider-token-url"
+                                    placeholder="https://authorization.cerner.com/token"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.token_url || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: e.target.value,
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-redirect-uri">Redirect URI</Label>
+                                  <Input
+                                    id="cerner-provider-redirect-uri"
+                                    placeholder="https://your-app.com/callback"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: e.target.value,
+                                            scopes: newTenant.ehrIntegration?.cerner?.provider_app?.scopes || '',
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="cerner-provider-scopes">Scopes</Label>
+                                  <Input
+                                    id="cerner-provider-scopes"
+                                    placeholder="user/Patient.read user/Observation.read"
+                                    value={newTenant.ehrIntegration?.cerner?.provider_app?.scopes || ''}
+                                    onChange={(e) => setNewTenant({
+                                      ...newTenant,
+                                      ehrIntegration: {
+                                        ...newTenant.ehrIntegration!,
+                                        cerner: {
+                                          ...newTenant.ehrIntegration?.cerner,
+                                          base_url: newTenant.ehrIntegration?.cerner?.base_url || '',
+                                          system_app: newTenant.ehrIntegration?.cerner?.system_app,
+                                          provider_app: {
+                                            ...newTenant.ehrIntegration?.cerner?.provider_app,
+                                            client_id: newTenant.ehrIntegration?.cerner?.provider_app?.client_id || '',
+                                            client_secret: newTenant.ehrIntegration?.cerner?.provider_app?.client_secret || '',
+                                            authorization_url: newTenant.ehrIntegration?.cerner?.provider_app?.authorization_url || '',
+                                            token_url: newTenant.ehrIntegration?.cerner?.provider_app?.token_url || '',
+                                            redirect_uri: newTenant.ehrIntegration?.cerner?.provider_app?.redirect_uri || '',
+                                            scopes: e.target.value,
+                                          },
+                                        }
+                                      }
+                                    })}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* EPIC Configuration - Placeholder for future */}
+                      {newTenant.ehrIntegration?.type === 'EPIC' && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                          <Label className="text-base font-semibold">EPIC Configuration</Label>
+                          <p className="text-sm text-muted-foreground">EPIC integration configuration coming soon.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <Button type="submit" className="w-full bg-cerner-blue hover:bg-hover-blue text-white">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Tenant
                     </Button>
@@ -663,7 +1005,7 @@ export default function SystemAdminPortal() {
                       </p>
                     </div>
 
-                    <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700">
+                    <Button type="submit" className="w-full bg-cerner-blue hover:bg-hover-blue text-white">
                       <UserPlus className="h-4 w-4 mr-2" />
                       Create Tenant Admin
                     </Button>
@@ -674,6 +1016,98 @@ export default function SystemAdminPortal() {
           </Tabs>
         </div>
       </div>
+
+      {/* Tenant Metrics Dialog */}
+      <Dialog open={showMetricsDialog} onOpenChange={setShowMetricsDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Metrics for {selectedTenantMetrics?.tenantName || 'Tenant'}</DialogTitle>
+            <DialogDescription>Detailed metrics breakdown</DialogDescription>
+          </DialogHeader>
+          {loadingMetrics ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">Loading metrics...</p>
+            </div>
+          ) : selectedTenantMetrics ? (
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-semibold mb-3">Users by Role</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-4 bg-blue-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Patients</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.patient}</div>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Clinicians</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.clinician}</div>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Experts</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.expert}</div>
+                  </div>
+                  <div className="p-4 bg-orange-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Admins</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.tenant_admin}</div>
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                  <div className="text-sm text-muted-foreground">Total Users</div>
+                  <div className="text-xl font-bold">{selectedTenantMetrics.users.total}</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Discharge Summaries by Status</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div className="p-4 bg-gray-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Raw Only</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.raw_only}</div>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Simplified</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.simplified}</div>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Translated</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.translated}</div>
+                  </div>
+                  <div className="p-4 bg-yellow-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Processing</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.processing}</div>
+                  </div>
+                  <div className="p-4 bg-red-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Error</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.error}</div>
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                  <div className="text-sm text-muted-foreground">Total Summaries</div>
+                  <div className="text-xl font-bold">{selectedTenantMetrics.dischargeSummaries.total}</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Expert Feedback</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-purple-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Total Reviews</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.expertFeedback.total}</div>
+                  </div>
+                  <div className="p-4 bg-indigo-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Average Rating</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.expertFeedback.averageRating.toFixed(1)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMetricsDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

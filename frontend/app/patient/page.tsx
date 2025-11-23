@@ -308,6 +308,9 @@ IMPORTANT: This content has been simplified using artificial intelligence for be
           </style>
         </head>
         <body>
+          <div style="background-color: #fef3c7; border: 2px solid #f59e0b; padding: 10px; margin-bottom: 20px; text-align: center; font-weight: bold; font-size: 1.1em;">
+            ⚠️ AI GENERATED CONTENT ⚠️
+          </div>
           <h1>DISCHARGE INSTRUCTIONS</h1>
           <div class="patient-info">
             <strong>Patient:</strong> ${patientData.name}<br>
@@ -492,22 +495,28 @@ IMPORTANT: This content has been simplified using artificial intelligence for be
       const pageHeight = pdf.internal.pageSize.getHeight()
       const margin = 20
       const maxWidth = pageWidth - (margin * 2)
-      
-      // Add title
-      pdf.setFontSize(18)
+
+      // Add AI Generated warning at the top
+      pdf.setFontSize(14)
       pdf.setFont("helvetica", "bold")
-      pdf.text("DISCHARGE INSTRUCTIONS", margin, 30)
+      pdf.setTextColor(245, 158, 11) // Orange color
+      pdf.text("⚠️ AI GENERATED CONTENT ⚠️", pageWidth / 2, 20, { align: "center" })
+
+      // Add title
+      pdf.setTextColor(0, 0, 0) // Reset to black
+      pdf.setFontSize(18)
+      pdf.text("DISCHARGE INSTRUCTIONS", margin, 35)
       
       // Add patient info
       pdf.setFontSize(12)
       pdf.setFont("helvetica", "normal")
-      pdf.text(`${patientData.name}`, margin, 45)
-      pdf.text(`Discharge Date: March 15, 2024`, margin, 55)
-      pdf.text(`Attending Physician: Dr. Sarah Johnson, MD`, margin, 65)
-      
+      pdf.text(`${patientData.name}`, margin, 50)
+      pdf.text(`Discharge Date: March 15, 2024`, margin, 60)
+      pdf.text(`Attending Physician: Dr. Sarah Johnson, MD`, margin, 70)
+
       // Add content with word wrapping
       const lines = pdf.splitTextToSize(content, maxWidth)
-      let yPosition = 80
+      let yPosition = 85
       
       pdf.setFontSize(10)
       for (let i = 0; i < lines.length; i++) {

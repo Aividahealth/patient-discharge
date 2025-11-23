@@ -33,9 +33,12 @@ export class ExpertController {
    * Get list of discharge summaries for review
    */
   @Get('list')
-  async getReviewList(@Query() query: ReviewListQuery) {
-    this.logger.log(`Getting review list with filters: ${JSON.stringify(query)}`);
-    return this.expertService.getReviewList(query);
+  async getReviewList(
+    @Query() query: ReviewListQuery,
+    @TenantContext() ctx: TenantContextType,
+  ) {
+    this.logger.log(`Getting review list with filters: ${JSON.stringify(query)} for tenant: ${ctx.tenantId}`);
+    return this.expertService.getReviewList(query, ctx);
   }
 
   /**
@@ -76,7 +79,7 @@ export class ExpertController {
         );
       }
 
-      const feedback = await this.expertService.submitFeedback(dto);
+      const feedback = await this.expertService.submitFeedback(dto, ctx.tenantId);
       return {
         success: true,
         id: feedback.id,
@@ -103,10 +106,13 @@ export class ExpertController {
    * Requires authentication
    */
   @Get('feedback/:id')
-  async getFeedbackById(@Param('id') id: string) {
+  async getFeedbackById(
+    @Param('id') id: string,
+    @TenantContext() ctx: TenantContextType,
+  ) {
     try {
-      this.logger.log(`Getting feedback by ID: ${id}`);
-      const feedback = await this.expertService.getFeedbackById(id);
+      this.logger.log(`Getting feedback by ID: ${id} for tenant: ${ctx.tenantId}`);
+      const feedback = await this.expertService.getFeedbackById(id, ctx.tenantId);
       
       if (!feedback) {
         throw new HttpException(
@@ -143,9 +149,10 @@ export class ExpertController {
   async updateFeedback(
     @Param('id') id: string,
     @Body() dto: UpdateFeedbackDto,
+    @TenantContext() ctx: TenantContextType,
   ) {
     try {
-      this.logger.log(`Updating feedback: ${id}`);
+      this.logger.log(`Updating feedback: ${id} for tenant: ${ctx.tenantId}`);
 
       // Validate the feedback data (only validate provided fields for updates)
       const validationError = this.expertService.validateUpdateFeedback(dto);
@@ -159,7 +166,7 @@ export class ExpertController {
         );
       }
 
-      const feedback = await this.expertService.updateFeedback(id, dto);
+      const feedback = await this.expertService.updateFeedback(id, dto, ctx.tenantId);
       
       if (!feedback) {
         throw new HttpException(
@@ -219,10 +226,9 @@ export class ExpertController {
         offset: offset ? parseInt(offset, 10) : 0,
         sortBy: (sortBy || 'reviewDate') as 'reviewDate' | 'rating' | 'createdAt',
         sortOrder: (sortOrder || 'desc') as 'asc' | 'desc',
-        tenantId: ctx?.tenantId,
       };
 
-      return await this.expertService.getFeedbackForSummary(summaryId, options);
+      return await this.expertService.getFeedbackForSummary(summaryId, ctx.tenantId, options);
     } catch (error) {
       this.logger.error(`Failed to get feedback for summary ${summaryId}:`, error);
       throw new HttpException(

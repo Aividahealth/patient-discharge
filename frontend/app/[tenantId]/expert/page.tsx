@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2, LogOut } from "lucide-react"
+import { Loader2, ClipboardCheck, Star, Stethoscope, Languages, Trash2, BarChart, LogOut } from "lucide-react"
 import { getReviewList, getFeedbackStats, ReviewSummary, ReviewType } from "@/lib/expert-api"
+import { QualityMetricsCard } from "@/components/quality-metrics-card"
 import { useTenant } from "@/contexts/tenant-context"
 import { getLanguageName } from "@/lib/constants/languages"
 import { ErrorBoundary } from "@/components/error-boundary"
@@ -152,9 +153,38 @@ export default function ExpertPortalPage() {
       
       // Check if deletion was successful
       if (result.success) {
-        await loadSummaries()
+        // Store the IDs to filter out after reload (in case backend still returns deleted patient)
+        const deletedPatientId = patientToDelete.id
+        const deletedCompositionId = patientToDelete.compositionId
+        
+        // Optimistically remove the patient from the UI immediately
+        // This provides instant feedback while the backend processes the deletion
+        setMedicalSummaries(prev => prev.filter(s => 
+          s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+        ))
+        setLanguageSummaries(prev => prev.filter(s => 
+          s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+        ))
+        
+        // Close dialog and clear selection
         setDeleteDialogOpen(false)
         setPatientToDelete(null)
+        
+        // Reload summaries to ensure consistency with backend
+        // Filter out the deleted patient in case backend still returns it (caching/timing)
+        try {
+          await loadSummaries()
+          // After reload, ensure deleted patient is still filtered out
+          setMedicalSummaries(prev => prev.filter(s => 
+            s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+          ))
+          setLanguageSummaries(prev => prev.filter(s => 
+            s.id !== deletedPatientId && s.compositionId !== deletedCompositionId
+          ))
+        } catch (reloadError) {
+          console.error('[ExpertPortal] Failed to reload summaries after delete:', reloadError)
+          // Keep the optimistic update even if reload fails
+        }
       } else if (result.retryable && retryCount < 2) {
         // Partial deletion - automatically retry once
         console.log('[ExpertPortal] Partial deletion detected, retrying...', result)
@@ -386,6 +416,17 @@ export default function ExpertPortalPage() {
                       }
                       return ColumnRenderers.rating(summary.reviewCount || 0, summary.avgRating)
                     }
+                  },
+                  {
+                    key: 'qualityMetrics',
+                    header: 'Quality Metrics',
+                    render: (summary: ReviewSummary) => (
+                      summary.qualityMetrics ? (
+                        <QualityMetricsCard metrics={summary.qualityMetrics} compact />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No metrics</span>
+                      )
+                    )
                   },
                   {
                     key: 'status',

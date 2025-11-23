@@ -1,6 +1,6 @@
 import type { AuditLogQuery, AuditLogListResponse } from '@/types/audit-logs';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app');
 
 /**
  * Get audit logs for a tenant

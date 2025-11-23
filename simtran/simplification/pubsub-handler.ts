@@ -5,8 +5,10 @@ import { SimplificationService } from './simplification.service';
 import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
 import { PubSubPublisherService } from './pubsub-publisher.service';
+import { QualityMetricsService } from './quality-metrics.service';
 import { createLogger } from './common/utils/logger';
 import { logPipelineEvent } from './common/utils/pipeline-logger';
+import { calculateQualityMetrics } from './common/utils/quality-metrics';
 
 const logger = createLogger('PubSubHandler');
 
@@ -16,6 +18,7 @@ let simplificationService: SimplificationService;
 let backendClient: BackendClientService;
 let storageService: StorageService;
 let pubsubPublisher: PubSubPublisherService;
+let qualityMetricsService: QualityMetricsService;
 
 /**
  * Initialize services lazily (on first invocation)
@@ -37,6 +40,9 @@ function initializeServices(): void {
   }
   if (!pubsubPublisher) {
     pubsubPublisher = new PubSubPublisherService();
+  }
+  if (!qualityMetricsService) {
+    qualityMetricsService = new QualityMetricsService();
   }
 }
 
@@ -219,38 +225,66 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
     });
 
     // Step 2a: Get patient's preferred language
-    logger.debug('Step 2a: Fetching patient preferred language');
+    // Priority: 1) From event (passed from backend), 2) From FHIR Patient resource, 3) Default to Spanish
+    logger.debug('Step 2a: Getting patient preferred language');
     let preferredLanguage: string | undefined;
-    try {
-      if (event.patientId) {
-        const patientResponse = await fetch(
-          `${process.env.FHIR_API_BASE_URL || process.env.BACKEND_API_URL}/google/fhir/Patient/${event.patientId}`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Tenant-ID': tenantId,
-            },
-          }
-        );
-        if (patientResponse.ok) {
-          const patient = await patientResponse.json() as any;
-          // Extract preferred language from patient.communication array
-          // FHIR format: communication: [{ language: { coding: [{ code: "en" }] }, preferred: true }]
-          const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
-          if (preferredComm?.language?.coding?.[0]?.code) {
-            preferredLanguage = preferredComm.language.coding[0].code;
-            logger.info('Patient preferred language found', { preferredLanguage, patientId: event.patientId });
-          } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
-            // Fallback to first communication language if no preferred
-            preferredLanguage = patient.communication[0].language.coding[0].code;
-            logger.info('Using first patient communication language', { preferredLanguage, patientId: event.patientId });
+    
+    // First, check if preferred language is provided in the event (from backend upload)
+    if (event.preferredLanguage) {
+      preferredLanguage = event.preferredLanguage;
+      logger.info('Using preferred language from event', { 
+        preferredLanguage, 
+        patientId: event.patientId,
+        compositionId: event.googleCompositionId,
+      });
+    } else {
+      // Fallback: Fetch from FHIR Patient resource if not in event
+      try {
+        if (event.patientId) {
+          const patientResponse = await fetch(
+            `${process.env.FHIR_API_BASE_URL || process.env.BACKEND_API_URL}/google/fhir/Patient/${event.patientId}`,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Tenant-ID': tenantId,
+              },
+            }
+          );
+          if (patientResponse.ok) {
+            const patient = await patientResponse.json() as any;
+            // Extract preferred language from patient.communication array
+            // FHIR format: communication: [{ language: { coding: [{ code: "en" }] }, preferred: true }]
+            const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
+            if (preferredComm?.language?.coding?.[0]?.code) {
+              preferredLanguage = preferredComm.language.coding[0].code;
+              logger.info('Patient preferred language found from FHIR', { 
+                preferredLanguage, 
+                patientId: event.patientId 
+              });
+            } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+              // Fallback to first communication language if no preferred
+              preferredLanguage = patient.communication[0].language.coding[0].code;
+              logger.info('Using first patient communication language from FHIR', { 
+                preferredLanguage, 
+                patientId: event.patientId 
+              });
+            }
           }
         }
+      } catch (error) {
+        logger.warning('Failed to fetch patient preferred language from FHIR, will use default', {
+          error: (error as Error).message,
+          patientId: event.patientId,
+        });
       }
-    } catch (error) {
-      logger.warning('Failed to fetch patient preferred language, will use tenant default', {
-        error: (error as Error).message,
+    }
+    
+    // Default to Spanish if no preferred language found
+    if (!preferredLanguage) {
+      preferredLanguage = 'es';
+      logger.info('No preferred language found, defaulting to Spanish', {
         patientId: event.patientId,
+        compositionId: event.googleCompositionId,
       });
     }
 
@@ -286,6 +320,30 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
       dischargeSummarySimplified: !!simplifiedResults.dischargeSummary,
       dischargeInstructionsSimplified: !!simplifiedResults.dischargeInstructions,
     });
+
+    // Step 4a: Calculate and store quality metrics
+    logger.debug('Step 4a: Calculating and storing quality metrics');
+    if (simplifiedResults.dischargeSummary?.content && simplifiedResults.dischargeSummary?.originalContent) {
+      const qualityMetrics = calculateQualityMetrics(
+        simplifiedResults.dischargeSummary.originalContent,
+        simplifiedResults.dischargeSummary.content
+      );
+
+      // Store quality metrics in Firestore
+      await qualityMetricsService.storeMetrics(
+        event.googleCompositionId,
+        tenantId,
+        qualityMetrics
+      );
+
+      logger.info('Quality metrics calculated and stored', {
+        compositionId: event.googleCompositionId,
+        fleschKincaidGrade: qualityMetrics.readability.fleschKincaidGradeLevel,
+        fleschReadingEase: qualityMetrics.readability.fleschReadingEase,
+        smogIndex: qualityMetrics.readability.smogIndex,
+        compressionRatio: qualityMetrics.simplification.compressionRatio,
+      });
+    }
 
     // Log pipeline event for metrics/dashboard
     const totalTokens = (simplifiedResults.dischargeSummary?.tokensUsed || 0) +
@@ -412,12 +470,12 @@ async function simplifyBinaries(
   dischargeSummaries: Array<{ id: string; text: string }>,
   dischargeInstructions: Array<{ id: string; text: string }>
 ): Promise<{
-  dischargeSummary?: { content: string; tokensUsed: number };
-  dischargeInstructions?: { content: string; tokensUsed: number };
+  dischargeSummary?: { content: string; tokensUsed: number; originalContent: string };
+  dischargeInstructions?: { content: string; tokensUsed: number; originalContent: string };
 }> {
   const results: {
-    dischargeSummary?: { content: string; tokensUsed: number };
-    dischargeInstructions?: { content: string; tokensUsed: number };
+    dischargeSummary?: { content: string; tokensUsed: number; originalContent: string };
+    dischargeInstructions?: { content: string; tokensUsed: number; originalContent: string };
   } = {};
 
   // Simplify discharge summary (if available)
@@ -444,6 +502,7 @@ async function simplifyBinaries(
     results.dischargeSummary = {
       content: simplificationResult.simplifiedContent,
       tokensUsed: simplificationResult.tokensUsed || 0,
+      originalContent: summary.text,
     };
 
     logger.info('Discharge summary simplified', {
@@ -477,6 +536,7 @@ async function simplifyBinaries(
     results.dischargeInstructions = {
       content: simplificationResult.simplifiedContent,
       tokensUsed: simplificationResult.tokensUsed || 0,
+      originalContent: instruction.text,
     };
 
     logger.info('Discharge instructions simplified', {
@@ -490,4 +550,4 @@ async function simplifyBinaries(
 }
 
 // Export services for testing
-export { fhirApiService, simplificationService, backendClient, storageService, pubsubPublisher };
+export { fhirApiService, simplificationService, backendClient, storageService, pubsubPublisher, qualityMetricsService };

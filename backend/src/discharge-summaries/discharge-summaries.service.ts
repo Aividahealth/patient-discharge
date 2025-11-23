@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GcsService } from './gcs.service';
 import { FirestoreService } from './firestore.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
 import {
   DischargeSummaryMetadata,
   DischargeSummaryResponse,
@@ -19,6 +20,7 @@ export class DischargeSummariesService {
   constructor(
     private gcsService: GcsService,
     private firestoreService: FirestoreService,
+    private qualityMetricsService: QualityMetricsService,
   ) {}
 
   /**
@@ -26,15 +28,53 @@ export class DischargeSummariesService {
    */
   async list(
     query: DischargeSummaryListQuery,
+    tenantId: string,
   ): Promise<DischargeSummaryListResponse> {
-    return this.firestoreService.list(query);
+    const response = await this.firestoreService.list(query, tenantId);
+
+    // Skip quality metrics fetch if no items
+    if (!response.items || response.items.length === 0) {
+      return response;
+    }
+
+    try {
+      // Fetch quality metrics for all discharge summaries
+      const compositionIds = response.items.map(item => item.id);
+      const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
+
+      // Merge quality metrics into discharge summary metadata
+      const itemsWithMetrics = response.items.map(item => {
+        const metrics = qualityMetricsMap.get(item.id);
+        return {
+          ...item,
+          qualityMetrics: (metrics as any) || item.qualityMetrics,
+        };
+      });
+
+      return {
+        ...response,
+        items: itemsWithMetrics,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to fetch quality metrics: ${error.message}`);
+      // Return response without quality metrics if fetching fails
+      return response;
+    }
   }
 
   /**
    * Get discharge summary by ID (metadata only)
    */
-  async getById(id: string): Promise<DischargeSummaryMetadata> {
-    return this.firestoreService.getById(id);
+  async getById(id: string, tenantId: string): Promise<DischargeSummaryMetadata> {
+    const metadata = await this.firestoreService.getById(id, tenantId);
+
+    // Fetch quality metrics for this discharge summary
+    const qualityMetrics = await this.qualityMetricsService.getMetrics(id);
+
+    return {
+      ...metadata,
+      qualityMetrics: (qualityMetrics as any) || metadata.qualityMetrics,
+    };
   }
 
   /**
@@ -42,9 +82,10 @@ export class DischargeSummariesService {
    */
   async getWithContent(
     query: DischargeSummaryContentQuery,
+    tenantId: string,
   ): Promise<DischargeSummaryResponse> {
     // Get metadata from Firestore
-    const metadata = await this.firestoreService.getById(query.id);
+    const metadata = await this.firestoreService.getById(query.id, tenantId);
 
     // Determine which file to fetch
     let fileName: string | undefined;
@@ -83,7 +124,7 @@ export class DischargeSummariesService {
   /**
    * Get statistics
    */
-  async getStats(): Promise<{
+  async getStats(tenantId: string): Promise<{
     firestore: {
       total: number;
       byStatus: { [key: string]: number };
@@ -95,7 +136,7 @@ export class DischargeSummariesService {
     };
   }> {
     const [firestoreStats, gcsStats] = await Promise.all([
-      this.firestoreService.getStats(),
+      this.firestoreService.getStats(tenantId),
       this.gcsService.getBucketStats(),
     ]);
 
@@ -109,7 +150,7 @@ export class DischargeSummariesService {
    * Sync all GCS files to Firestore
    * This should be run initially to populate Firestore from existing GCS files
    */
-  async syncFromGcs(): Promise<SyncResult> {
+  async syncFromGcs(tenantId: string): Promise<SyncResult> {
     const result: SyncResult = {
       success: true,
       synced: 0,
@@ -128,7 +169,7 @@ export class DischargeSummariesService {
       for (const rawFile of rawFiles) {
         try {
           // Check if already exists in Firestore
-          const existing = await this.firestoreService.findByFilePath(rawFile);
+          const existing = await this.firestoreService.findByFilePath(rawFile, tenantId);
 
           if (existing) {
             this.logger.debug(`Skipping existing file: ${rawFile}`);
@@ -157,6 +198,7 @@ export class DischargeSummariesService {
 
           // Create Firestore document
           await this.firestoreService.create({
+            tenantId,
             patientName: fileInfo.patientName,
             status,
             files: {
@@ -167,7 +209,7 @@ export class DischargeSummariesService {
             metadata: {
               diagnosis: fileInfo.description ? [fileInfo.description] : [],
             },
-          });
+          }, tenantId);
 
           result.synced++;
           this.logger.log(`Synced: ${rawFile}`);
@@ -198,6 +240,7 @@ export class DischargeSummariesService {
   async syncSingleFile(
     bucketName: string,
     fileName: string,
+    tenantId: string,
   ): Promise<DischargeSummaryMetadata> {
     this.logger.log(`Syncing single file: ${bucketName}/${fileName}`);
 
@@ -214,7 +257,7 @@ export class DischargeSummariesService {
     }
 
     // Find or create Firestore document
-    let existing = await this.firestoreService.findByFilePath(fileName);
+    let existing = await this.firestoreService.findByFilePath(fileName, tenantId);
 
     if (version === DischargeSummaryVersion.RAW) {
       // New raw file - create new document
@@ -223,6 +266,7 @@ export class DischargeSummariesService {
 
       if (!existing) {
         existing = await this.firestoreService.create({
+          tenantId,
           patientName: fileInfo.patientName,
           status: DischargeSummaryStatus.RAW_ONLY,
           files: {
@@ -233,12 +277,12 @@ export class DischargeSummariesService {
           metadata: {
             diagnosis: fileInfo.description ? [fileInfo.description] : [],
           },
-        });
+        }, tenantId);
       }
     } else if (version === DischargeSummaryVersion.SIMPLIFIED) {
       // Simplified file - find base raw file and update
       const baseFileName = fileName.replace(/-simplified\.md$/, '.md');
-      existing = await this.firestoreService.findByFilePath(baseFileName);
+      existing = await this.firestoreService.findByFilePath(baseFileName, tenantId);
 
       if (existing) {
         existing = await this.firestoreService.update(existing.id, {
@@ -248,12 +292,12 @@ export class DischargeSummariesService {
           },
           status: DischargeSummaryStatus.SIMPLIFIED,
           simplifiedAt: new Date(),
-        });
+        }, tenantId);
       }
     } else if (version === DischargeSummaryVersion.TRANSLATED) {
       // Translated file - find base file and update
       const baseFileName = fileName.replace(/-simplified-[a-z]{2}\.md$/, '.md');
-      existing = await this.firestoreService.findByFilePath(baseFileName);
+      existing = await this.firestoreService.findByFilePath(baseFileName, tenantId);
 
       if (existing) {
         // Extract language code
@@ -272,7 +316,7 @@ export class DischargeSummariesService {
           },
           status: DischargeSummaryStatus.TRANSLATED,
           translatedAt: new Date(),
-        });
+        }, tenantId);
       }
     }
 
@@ -282,10 +326,10 @@ export class DischargeSummariesService {
   /**
    * Delete discharge summary and associated files from GCS and Firestore
    */
-  async delete(id: string): Promise<{ success: boolean; message: string }> {
+  async delete(id: string, tenantId: string): Promise<{ success: boolean; message: string }> {
     try {
       // Get metadata to find files
-      const metadata = await this.firestoreService.getById(id);
+      const metadata = await this.firestoreService.getById(id, tenantId);
 
       // Delete files from GCS
       const filesToDelete: string[] = [];
@@ -323,8 +367,8 @@ export class DischargeSummariesService {
       }
 
       // Delete from Firestore
-      await this.firestoreService.delete(id);
-      this.logger.log(`Deleted discharge summary: ${id}`);
+      await this.firestoreService.delete(id, tenantId);
+      this.logger.log(`Deleted discharge summary: ${id} for tenant: ${tenantId}`);
 
       return {
         success: true,

@@ -10,7 +10,37 @@ export type TenantConfig = {
     dataset: string;
     fhir_store: string;
   };
-  cerner: {
+
+  // NEW: Vendor-agnostic EHR configuration
+  ehr?: {
+    vendor: 'cerner' | 'epic' | 'allscripts' | 'meditech';  // Which EHR vendor to use
+    base_url: string;
+    patients?: string[];  // Optional patient list for export
+
+    // Vendor-specific configuration (structure varies by vendor)
+    system_app?: {
+      client_id: string;
+      client_secret?: string;      // For Cerner (Basic Auth)
+      private_key_path?: string;   // For EPIC (JWT assertion)
+      key_id?: string;              // For EPIC (public key ID)
+      token_url: string;
+      scopes: string;
+    };
+
+    provider_app?: {
+      client_id: string;
+      client_secret?: string;
+      private_key_path?: string;
+      key_id?: string;
+      authorization_url: string;
+      token_url: string;
+      redirect_uri: string;
+      scopes: string;
+    };
+  };
+
+  // DEPRECATED: Keep for backward compatibility with existing Cerner configs
+  cerner?: {
     base_url: string;
     // List of patients to process for document export
     patients?: string[];
@@ -35,6 +65,7 @@ export type TenantConfig = {
       scopes: string;
     };
   };
+
   pubsub?: {
     topic_name: string;
     service_account_path: string;
@@ -123,32 +154,78 @@ export class DevConfigService {
       }
 
       const data = doc.data();
-      if (!data || !data.config) {
-        this.tenantConfigCache.set(tenantId, null);
-        return null;
-      }
-
-      // Extract the TenantConfig structure from Firestore data
-      // The config.tenantConfig field contains the actual google, cerner, pubsub structure
-      const firestoreConfig = data.config as any;
+      const ehrIntegration = data?.ehrIntegration;
       
-      if (!firestoreConfig.tenantConfig) {
-        this.logger.warn(`Tenant config structure not found in Firestore for: ${tenantId}`);
-        this.tenantConfigCache.set(tenantId, null);
-        return null;
-      }
+      // Get Google config from infrastructure or legacy config
+      const googleConfigFromInfrastructure = data?.infrastructure?.google;
+      const googleConfigFromLegacy = data?.config?.tenantConfig?.google;
       
-      // Build TenantConfig from Firestore data
+      // Build base TenantConfig
       const tenantConfig: TenantConfig = {
-        google: firestoreConfig.tenantConfig.google || {
+        google: googleConfigFromInfrastructure || googleConfigFromLegacy || {
           dataset: '',
           fhir_store: '',
         },
-        cerner: firestoreConfig.tenantConfig.cerner || {
-          base_url: '',
-        },
-        pubsub: firestoreConfig.tenantConfig.pubsub,
+        pubsub: data?.config?.tenantConfig?.pubsub,
       };
+      
+      // Handle EHR Integration
+      if (ehrIntegration) {
+        const ehrType = ehrIntegration.type;
+        
+        if (ehrType === 'Manual') {
+          // Manual tenant - explicitly set no Cerner config to prevent YAML fallback
+          this.logger.debug(`Tenant ${tenantId} is configured as Manual - no EHR integration`);
+          tenantConfig.cerner = undefined;
+          tenantConfig.ehr = undefined;
+        } else if (ehrType === 'Cerner' && ehrIntegration.cerner) {
+          // Cerner tenant - include Cerner config
+          tenantConfig.cerner = {
+            base_url: ehrIntegration.cerner.base_url || '',
+            system_app: ehrIntegration.cerner.system_app,
+            provider_app: ehrIntegration.cerner.provider_app,
+            patients: ehrIntegration.cerner.patients,
+          };
+          
+          // Also populate new 'ehr' structure for vendor-agnostic access
+          tenantConfig.ehr = {
+            vendor: 'cerner',
+            base_url: ehrIntegration.cerner.base_url || '',
+            patients: ehrIntegration.cerner.patients,
+            system_app: ehrIntegration.cerner.system_app,
+            provider_app: ehrIntegration.cerner.provider_app,
+          };
+          
+          this.logger.debug(`Loaded Cerner config from ehrIntegration for tenant: ${tenantId}`);
+        } else if (ehrType === 'EPIC' && ehrIntegration.epic) {
+          // EPIC tenant - populate new 'ehr' structure
+          tenantConfig.ehr = {
+            vendor: 'epic',
+            base_url: ehrIntegration.epic.base_url || '',
+            // EPIC config can be extended here
+          };
+          this.logger.debug(`Loaded EPIC config from ehrIntegration for tenant: ${tenantId}`);
+        } else {
+          // Unknown or incomplete EHR integration type
+          this.logger.warn(`EHR integration type '${ehrType}' found but config incomplete for tenant: ${tenantId}`);
+          tenantConfig.cerner = undefined;
+          tenantConfig.ehr = undefined;
+        }
+      } else {
+        // No ehrIntegration found - check legacy config
+        const legacyCernerConfig = data?.config?.tenantConfig?.cerner;
+        if (legacyCernerConfig) {
+          this.logger.debug(`Using legacy Cerner config for tenant: ${tenantId}`);
+          tenantConfig.cerner = legacyCernerConfig;
+        } else {
+          // No EHR config at all - treat as Manual
+          this.logger.debug(`No EHR integration found for tenant: ${tenantId} - treating as Manual`);
+          tenantConfig.cerner = undefined;
+          tenantConfig.ehr = undefined;
+        }
+      }
+      
+      this.logger.debug(`Loaded tenant config from Firestore for: ${tenantId} (EHR type: ${ehrIntegration?.type || 'none'})`);
 
       // Cache the result
       this.tenantConfigCache.set(tenantId, tenantConfig);
@@ -270,13 +347,13 @@ export class DevConfigService {
     return tenantConfig?.cerner || null;
   }
 
-  async getTenantCernerSystemConfig(tenantId: string): Promise<TenantConfig['cerner']['system_app'] | null> {
+  async getTenantCernerSystemConfig(tenantId: string): Promise<TenantConfig['cerner'] extends { system_app?: infer T } ? T : any | null> {
     const cernerConfig = await this.getTenantCernerConfig(tenantId);
     if (!cernerConfig) return null;
     
     // Return system_app config if available, otherwise fall back to legacy config
     if (cernerConfig.system_app) {
-      return cernerConfig.system_app;
+      return cernerConfig.system_app as any;
     }
     
     // Legacy fallback
@@ -286,15 +363,15 @@ export class DevConfigService {
         client_secret: cernerConfig.client_secret,
         token_url: cernerConfig.token_url,
         scopes: cernerConfig.scopes,
-      };
+      } as any;
     }
     
     return null;
   }
 
-  async getTenantCernerProviderConfig(tenantId: string): Promise<TenantConfig['cerner']['provider_app'] | null> {
+  async getTenantCernerProviderConfig(tenantId: string): Promise<TenantConfig['cerner'] extends { provider_app?: infer T } ? T : any | null> {
     const cernerConfig = await this.getTenantCernerConfig(tenantId);
-    return cernerConfig?.provider_app || null;
+    return (cernerConfig?.provider_app as any) || null;
   }
 
   async getTenantCernerPatients(tenantId: string): Promise<string[]> {
@@ -340,5 +417,83 @@ export class DevConfigService {
 
   isLoaded(): boolean {
     return true; // Always loaded since it's loaded in constructor
+  }
+
+  /**
+   * Get EHR vendor for a tenant
+   * Returns vendor from new 'ehr' config, or 'cerner' if using legacy config
+   */
+  async getTenantEHRVendor(tenantId: string): Promise<string | null> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
+
+    // Try new ehr config first
+    if (tenantConfig?.ehr?.vendor) {
+      return tenantConfig.ehr.vendor;
+    }
+
+    // Fall back to legacy cerner config
+    if (tenantConfig?.cerner) {
+      return 'cerner';
+    }
+
+    return null;
+  }
+
+  /**
+   * Get EHR configuration for a tenant
+   * Supports both new 'ehr' config and legacy 'cerner' config
+   */
+  async getTenantEHRConfig(tenantId: string): Promise<TenantConfig['ehr'] | null> {
+    const tenantConfig = await this.getTenantConfig(tenantId);
+
+    // Try new ehr config first
+    if (tenantConfig?.ehr) {
+      return tenantConfig.ehr;
+    }
+
+    // Fall back to legacy cerner config and convert to new format
+    if (tenantConfig?.cerner) {
+      this.logger.debug(`Converting legacy Cerner config to EHR config for tenant: ${tenantId}`);
+      return {
+        vendor: 'cerner',
+        base_url: tenantConfig.cerner.base_url,
+        patients: tenantConfig.cerner.patients,
+        system_app: tenantConfig.cerner.system_app || (
+          tenantConfig.cerner.client_id ? {
+            client_id: tenantConfig.cerner.client_id,
+            client_secret: tenantConfig.cerner.client_secret,
+            token_url: tenantConfig.cerner.token_url!,
+            scopes: tenantConfig.cerner.scopes!,
+          } : undefined
+        ),
+        provider_app: tenantConfig.cerner.provider_app,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get EHR system app configuration (for backend/server authentication)
+   */
+  async getTenantEHRSystemConfig(tenantId: string): Promise<TenantConfig['ehr'] extends { system_app?: infer T } ? T : any | null> {
+    const ehrConfig = await this.getTenantEHRConfig(tenantId);
+    return (ehrConfig?.system_app as any) || null;
+  }
+
+  /**
+   * Get EHR provider app configuration (for user authentication)
+   */
+  async getTenantEHRProviderConfig(tenantId: string): Promise<TenantConfig['ehr'] extends { provider_app?: infer T } ? T : any | null> {
+    const ehrConfig = await this.getTenantEHRConfig(tenantId);
+    return (ehrConfig?.provider_app as any) || null;
+  }
+
+  /**
+   * Get list of patients configured for a tenant's EHR
+   */
+  async getTenantEHRPatients(tenantId: string): Promise<string[]> {
+    const ehrConfig = await this.getTenantEHRConfig(tenantId);
+    return ehrConfig?.patients || [];
   }
 }

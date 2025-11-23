@@ -55,7 +55,7 @@ export class FirestoreService {
   /**
    * Get discharge summary metadata by ID
    */
-  async getById(id: string): Promise<DischargeSummaryMetadata> {
+  async getById(id: string, tenantId: string): Promise<DischargeSummaryMetadata> {
     const doc = await this.getFirestore()
       .collection(this.collectionName)
       .doc(id)
@@ -65,7 +65,14 @@ export class FirestoreService {
       throw new NotFoundException(`Discharge summary not found: ${id}`);
     }
 
-    return this.documentToMetadata(id, doc.data());
+    const data = doc.data();
+    
+    // Validate tenantId
+    if (data?.tenantId !== tenantId) {
+      throw new NotFoundException(`Discharge summary not found: ${id}`);
+    }
+
+    return this.documentToMetadata(id, data);
   }
 
   /**
@@ -73,10 +80,14 @@ export class FirestoreService {
    */
   async list(
     query: DischargeSummaryListQuery,
+    tenantId: string,
   ): Promise<DischargeSummaryListResponse> {
     let firestoreQuery = this.getFirestore().collection(
       this.collectionName,
     ) as any;
+
+    // Always filter by tenantId first (required for multi-tenant isolation)
+    firestoreQuery = firestoreQuery.where('tenantId', '==', tenantId);
 
     // Apply filters
     if (query.patientId) {
@@ -147,12 +158,14 @@ export class FirestoreService {
    */
   async create(
     metadata: Omit<DischargeSummaryMetadata, 'id' | 'createdAt' | 'updatedAt'>,
+    tenantId: string,
   ): Promise<DischargeSummaryMetadata> {
     const now = new Date();
     const docRef = this.getFirestore().collection(this.collectionName).doc();
 
     const data = {
       ...metadata,
+      tenantId, // Ensure tenantId is set
       createdAt: now,
       updatedAt: now,
     };
@@ -162,9 +175,45 @@ export class FirestoreService {
 
     await docRef.set(cleanData);
 
-    this.logger.log(`Created discharge summary: ${docRef.id}`);
+    this.logger.log(`Created discharge summary: ${docRef.id} for tenant: ${tenantId}`);
 
     return this.documentToMetadata(docRef.id, data);
+  }
+
+  /**
+   * Create new discharge summary metadata with specific ID (compositionId)
+   */
+  async createWithId(
+    id: string,
+    metadata: Omit<DischargeSummaryMetadata, 'id' | 'createdAt' | 'updatedAt'>,
+    tenantId: string,
+  ): Promise<DischargeSummaryMetadata> {
+    const now = new Date();
+    const docRef = this.getFirestore().collection(this.collectionName).doc(id);
+
+    // Check if document already exists
+    const existing = await docRef.get();
+    if (existing.exists) {
+      this.logger.log(`Discharge summary already exists: ${id}, updating instead`);
+      return this.update(id, metadata, tenantId);
+    }
+
+    const data = {
+      ...metadata,
+      id, // Include the ID in the data
+      tenantId, // Ensure tenantId is set
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // Remove undefined values (Firestore doesn't accept them)
+    const cleanData = this.removeUndefined(data);
+
+    await docRef.set(cleanData);
+
+    this.logger.log(`Created discharge summary: ${id} for tenant: ${tenantId}`);
+
+    return this.documentToMetadata(id, data);
   }
 
   /**
@@ -173,13 +222,21 @@ export class FirestoreService {
   async update(
     id: string,
     updates: Partial<
-      Omit<DischargeSummaryMetadata, 'id' | 'createdAt' | 'updatedAt'>
+      Omit<DischargeSummaryMetadata, 'id' | 'createdAt' | 'updatedAt' | 'tenantId'>
     >,
+    tenantId: string,
   ): Promise<DischargeSummaryMetadata> {
     const docRef = this.getFirestore().collection(this.collectionName).doc(id);
 
     const doc = await docRef.get();
     if (!doc.exists) {
+      throw new NotFoundException(`Discharge summary not found: ${id}`);
+    }
+
+    const data = doc.data();
+    
+    // Validate tenantId
+    if (data?.tenantId !== tenantId) {
       throw new NotFoundException(`Discharge summary not found: ${id}`);
     }
 
@@ -193,7 +250,7 @@ export class FirestoreService {
 
     await docRef.update(cleanData);
 
-    this.logger.log(`Updated discharge summary: ${id}`);
+    this.logger.log(`Updated discharge summary: ${id} for tenant: ${tenantId}`);
 
     const updatedDoc = await docRef.get();
     return this.documentToMetadata(id, updatedDoc.data());
@@ -202,7 +259,7 @@ export class FirestoreService {
   /**
    * Delete discharge summary metadata
    */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, tenantId: string): Promise<void> {
     const docRef = this.getFirestore().collection(this.collectionName).doc(id);
 
     const doc = await docRef.get();
@@ -210,9 +267,16 @@ export class FirestoreService {
       throw new NotFoundException(`Discharge summary not found: ${id}`);
     }
 
+    const data = doc.data();
+    
+    // Validate tenantId
+    if (data?.tenantId !== tenantId) {
+      throw new NotFoundException(`Discharge summary not found: ${id}`);
+    }
+
     await docRef.delete();
 
-    this.logger.log(`Deleted discharge summary: ${id}`);
+    this.logger.log(`Deleted discharge summary: ${id} for tenant: ${tenantId}`);
   }
 
   /**
@@ -229,10 +293,11 @@ export class FirestoreService {
   /**
    * Find discharge summary by file path
    */
-  async findByFilePath(filePath: string): Promise<DischargeSummaryMetadata | null> {
+  async findByFilePath(filePath: string, tenantId: string): Promise<DischargeSummaryMetadata | null> {
     const firestore = this.getFirestore();
     const snapshot = await firestore
       .collection(this.collectionName)
+      .where('tenantId', '==', tenantId)
       .where('files.raw', '==', filePath)
       .limit(1)
       .get();
@@ -241,6 +306,7 @@ export class FirestoreService {
       // Try simplified
       const simplifiedSnapshot = await firestore
         .collection(this.collectionName)
+        .where('tenantId', '==', tenantId)
         .where('files.simplified', '==', filePath)
         .limit(1)
         .get();
@@ -260,12 +326,13 @@ export class FirestoreService {
   /**
    * Get statistics
    */
-  async getStats(): Promise<{
+  async getStats(tenantId: string): Promise<{
     total: number;
     byStatus: { [key in DischargeSummaryStatus]?: number };
   }> {
     const snapshot = await this.getFirestore()
       .collection(this.collectionName)
+      .where('tenantId', '==', tenantId)
       .get();
 
     const byStatus: { [key in DischargeSummaryStatus]?: number } = {};
@@ -312,6 +379,7 @@ export class FirestoreService {
   ): DischargeSummaryMetadata {
     return {
       id,
+      tenantId: data.tenantId || 'default', // Default to 'default' for backward compatibility
       patientId: data.patientId,
       patientName: data.patientName,
       mrn: data.mrn,
@@ -324,6 +392,7 @@ export class FirestoreService {
       updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
       simplifiedAt: data.simplifiedAt?.toDate ? data.simplifiedAt.toDate() : data.simplifiedAt,
       translatedAt: data.translatedAt?.toDate ? data.translatedAt.toDate() : data.translatedAt,
+      qualityMetrics: data.qualityMetrics,
       metadata: data.metadata,
     };
   }
@@ -336,6 +405,7 @@ export class FirestoreService {
       DischargeSummaryMetadata,
       'id' | 'createdAt' | 'updatedAt'
     >[],
+    tenantId: string,
   ): Promise<DischargeSummaryMetadata[]> {
     const firestore = this.getFirestore();
     const batch = firestore.batch();
@@ -346,6 +416,7 @@ export class FirestoreService {
       const docRef = firestore.collection(this.collectionName).doc();
       const data = {
         ...summary,
+        tenantId, // Ensure tenantId is set
         createdAt: now,
         updatedAt: now,
       };
@@ -359,7 +430,7 @@ export class FirestoreService {
 
     await batch.commit();
 
-    this.logger.log(`Batch created ${summaries.length} discharge summaries`);
+    this.logger.log(`Batch created ${summaries.length} discharge summaries for tenant: ${tenantId}`);
 
     return results;
   }

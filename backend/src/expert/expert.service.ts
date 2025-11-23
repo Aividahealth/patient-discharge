@@ -3,6 +3,8 @@ import { Firestore } from '@google-cloud/firestore';
 import * as fs from 'fs';
 import { DevConfigService } from '../config/dev-config.service';
 import { GoogleService } from '../google/google.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
+import { FirestoreService } from '../discharge-summaries/firestore.service';
 import type {
   ExpertFeedback,
   SubmitFeedbackDto,
@@ -26,6 +28,8 @@ export class ExpertService {
   constructor(
     private configService: DevConfigService,
     private googleService?: GoogleService,
+    private qualityMetricsService?: QualityMetricsService,
+    private firestoreService?: FirestoreService,
   ) {}
 
   private getFirestore(): Firestore {
@@ -63,81 +67,194 @@ export class ExpertService {
 
   /**
    * Get list of discharge summaries for expert review
+   * Uses the same FHIR-based logic as clinician portal to ensure consistency
    */
-  async getReviewList(query: ReviewListQuery): Promise<ReviewListResponse> {
+  async getReviewList(query: ReviewListQuery, ctx: TenantContext): Promise<ReviewListResponse> {
+    if (!this.googleService) {
+      this.logger.error('GoogleService not available - cannot query FHIR');
+      return { summaries: [], total: 0 };
+    }
+
     const firestore = this.getFirestore();
     const limit = query.limit || 20;
     const offset = query.offset || 0;
 
-    // Get all discharge summaries
-    let summariesQuery = firestore
-      .collection(this.summariesCollection)
-      .orderBy('updatedAt', 'desc') as any;
+    try {
+      this.logger.log(`📋 Retrieving expert review list for tenant: ${ctx.tenantId} with filters: ${JSON.stringify(query)}`);
 
-    // Get summaries
-    const summariesSnapshot = await summariesQuery.get();
-    const summaries: ReviewSummary[] = [];
+      // Step 1: Query FHIR Composition resources (same as clinician portal)
+      const compositionsResult = await this.googleService.fhirSearch(
+        'Composition',
+        {
+          type: 'http://loinc.org|18842-5', // Discharge summary LOINC code
+          _count: 100,
+        },
+        ctx,
+      );
 
-    // For each summary, get review stats
-    for (const doc of summariesSnapshot.docs) {
-      const data = doc.data();
-
-      // Get feedback count and average rating for this summary
-      const feedbackSnapshot = await firestore
-        .collection(this.feedbackCollection)
-        .where('dischargeSummaryId', '==', doc.id)
-        .get();
-
-      const feedbackDocs = feedbackSnapshot.docs;
-      const reviewCount = feedbackDocs.length;
-
-      let avgRating: number | undefined;
-      let latestReviewDate: Date | undefined;
-
-      if (reviewCount > 0) {
-        const ratings = feedbackDocs.map((f) => f.data().overallRating);
-        avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-
-        const reviewDates = feedbackDocs.map((f) => f.data().reviewDate?.toDate?.() || f.data().reviewDate);
-        latestReviewDate = reviewDates.sort((a, b) => b.getTime() - a.getTime())[0];
+      if (!compositionsResult?.entry || compositionsResult.entry.length === 0) {
+        this.logger.log('No Compositions found in FHIR');
+        return { summaries: [], total: 0 };
       }
 
-      const summary: ReviewSummary = {
-        id: doc.id,
-        patientName: data.patientName,
-        mrn: data.mrn,
-        simplifiedAt: data.simplifiedAt?.toDate?.() || data.simplifiedAt,
-        translatedAt: data.translatedAt?.toDate?.() || data.translatedAt,
-        reviewCount,
-        avgRating: avgRating ? Math.round(avgRating * 10) / 10 : undefined,
-        latestReviewDate,
+      const summaries: ReviewSummary[] = [];
+
+      // Step 2: Process each Composition
+      for (const entry of compositionsResult.entry) {
+        try {
+          const composition = entry.resource;
+          const compositionId = composition.id;
+
+          // Extract Patient reference
+          const patientRef = composition.subject?.reference; // Patient/patient-id
+          if (!patientRef) {
+            this.logger.warn(`Composition ${compositionId} missing Patient reference`);
+            continue;
+          }
+
+          const patientId = patientRef.replace('Patient/', '');
+
+          // Step 3: Check Firestore for simplifiedAt/translatedAt (for metadata, not filtering)
+          // Note: We don't filter by simplifiedAt/translatedAt to ensure both portals show the same list
+          // The type parameter is used for UI organization, not data filtering
+          let firestoreData: any = null;
+          try {
+            const firestoreDoc = await firestore
+              .collection(this.summariesCollection)
+              .doc(compositionId)
+              .get();
+            
+            if (firestoreDoc.exists) {
+              firestoreData = firestoreDoc.data();
+            }
+          } catch (error) {
+            this.logger.debug(`Could not fetch Firestore data for ${compositionId}: ${error.message}`);
+          }
+
+          // Step 4: Note - We removed the type filter to match clinician portal behavior
+          // Both portals now show all compositions from FHIR
+          // The type parameter is still passed but not used for filtering
+
+          // Step 5: Fetch Patient resource (for name, MRN, preferred language)
+          const patient = await this.googleService.fhirRead('Patient', patientId, ctx);
+          const mrn = patient.identifier?.find(
+            (id: any) => id.type?.coding?.[0]?.code === 'MR'
+          )?.value || '';
+          const patientName = patient.name?.[0]?.text || 
+            `${patient.name?.[0]?.given?.join(' ') || ''} ${patient.name?.[0]?.family || ''}`.trim() || 'Unknown';
+
+          // Step 6: Get preferred language from FHIR Patient resource
+          let preferredLanguage: string | undefined;
+          if (firestoreData?.preferredLanguage) {
+            preferredLanguage = firestoreData.preferredLanguage;
+          } else if (patient.communication) {
+            const preferredComm = patient.communication.find((c: any) => c.preferred === true);
+            if (preferredComm?.language?.coding?.[0]?.code) {
+              preferredLanguage = preferredComm.language.coding[0].code;
+            } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+              preferredLanguage = patient.communication[0].language.coding[0].code;
+            } else {
+              preferredLanguage = 'en';
+            }
+          } else {
+            preferredLanguage = 'en';
+          }
+
+          // Step 7: Get review stats from Firestore expert_feedback collection
+          const feedbackSnapshot = await firestore
+            .collection(this.feedbackCollection)
+            .where('tenantId', '==', ctx.tenantId)
+            .where('dischargeSummaryId', '==', compositionId)
+            .get();
+
+          const feedbackDocs = feedbackSnapshot.docs;
+          const reviewCount = feedbackDocs.length;
+
+          let avgRating: number | undefined;
+          let latestReviewDate: Date | undefined;
+
+          if (reviewCount > 0) {
+            const ratings = feedbackDocs.map((f) => f.data().overallRating);
+            avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+
+            const reviewDates = feedbackDocs.map((f) => f.data().reviewDate?.toDate?.() || f.data().reviewDate);
+            latestReviewDate = reviewDates.sort((a, b) => b.getTime() - a.getTime())[0];
+          }
+
+          // Step 8: Get quality metrics from QualityMetricsService
+          let qualityMetrics: any = undefined;
+          if (this.qualityMetricsService) {
+            try {
+              const metrics = await this.qualityMetricsService.getMetrics(compositionId);
+              if (metrics) {
+                qualityMetrics = {
+                  fleschKincaidGradeLevel: metrics.fleschKincaidGradeLevel,
+                  fleschReadingEase: metrics.fleschReadingEase,
+                  smogIndex: metrics.smogIndex,
+                  compressionRatio: metrics.compressionRatio,
+                  avgSentenceLength: metrics.avgSentenceLength,
+                };
+              }
+            } catch (error) {
+              this.logger.debug(`Could not fetch quality metrics for ${compositionId}: ${error.message}`);
+            }
+          }
+
+          // Step 9: Get simplifiedAt/translatedAt from Firestore
+          const simplifiedAt = firestoreData?.simplifiedAt?.toDate?.() || firestoreData?.simplifiedAt;
+          const translatedAt = firestoreData?.translatedAt?.toDate?.() || firestoreData?.translatedAt;
+
+          const summary: ReviewSummary = {
+            id: patientId, // Patient ID (for consistency with clinician portal)
+            compositionId: compositionId, // Composition ID (for fetching content)
+            patientName: patientName || firestoreData?.patientName,
+            mrn: mrn || firestoreData?.mrn,
+            simplifiedAt,
+            translatedAt,
+            reviewCount,
+            avgRating: avgRating ? Math.round(avgRating * 10) / 10 : undefined,
+            latestReviewDate,
+            qualityMetrics,
+            language: preferredLanguage,
+          };
+
+          // Step 10: Apply filters
+          if (query.filter === 'no_reviews' && reviewCount > 0) continue;
+          if (query.filter === 'low_rating' && (!avgRating || avgRating >= 3.5)) continue;
+
+          summaries.push(summary);
+        } catch (error) {
+          this.logger.error(`❌ Error processing Composition entry: ${error.message}`);
+          // Continue with next entry
+          continue;
+        }
+      }
+
+      this.logger.log(`✅ Retrieved ${summaries.length} summaries from FHIR for expert review`);
+
+      // Step 11: Apply pagination
+      const paginatedSummaries = summaries.slice(offset, offset + limit);
+
+      return {
+        summaries: paginatedSummaries,
+        total: summaries.length,
       };
-
-      // Apply filters
-      if (query.filter === 'no_reviews' && reviewCount > 0) continue;
-      if (query.filter === 'low_rating' && (!avgRating || avgRating >= 3.5)) continue;
-
-      summaries.push(summary);
+    } catch (error) {
+      this.logger.error(`❌ Error retrieving expert review list: ${error.message}`);
+      throw error;
     }
-
-    // Apply pagination
-    const paginatedSummaries = summaries.slice(offset, offset + limit);
-
-    return {
-      summaries: paginatedSummaries,
-      total: summaries.length,
-    };
   }
 
   /**
    * Submit expert feedback
    */
-  async submitFeedback(dto: SubmitFeedbackDto): Promise<ExpertFeedback> {
+  async submitFeedback(dto: SubmitFeedbackDto, tenantId: string): Promise<ExpertFeedback> {
     const firestore = this.getFirestore();
     const now = new Date();
 
     // Build feedback object, excluding undefined values
     const feedback: any = {
+      tenantId, // Store tenantId for multi-tenant isolation
       dischargeSummaryId: dto.dischargeSummaryId,
       reviewType: dto.reviewType,
       reviewerName: dto.reviewerName,
@@ -170,7 +287,7 @@ export class ExpertService {
       .add(feedback);
 
     this.logger.log(
-      `Expert feedback submitted: ${docRef.id} for summary ${dto.dischargeSummaryId}`,
+      `Expert feedback submitted: ${docRef.id} for summary ${dto.dischargeSummaryId} for tenant: ${tenantId}`,
     );
 
     return {
@@ -184,6 +301,7 @@ export class ExpertService {
    */
   async getFeedbackForSummary(
     summaryId: string,
+    tenantId: string,
     options: {
       reviewType?: 'simplification' | 'translation';
       includeStats?: boolean;
@@ -192,7 +310,6 @@ export class ExpertService {
       offset?: number;
       sortBy?: 'reviewDate' | 'rating' | 'createdAt';
       sortOrder?: 'asc' | 'desc';
-      tenantId?: string;
     } = {},
   ): Promise<FeedbackResponse> {
     const {
@@ -203,20 +320,15 @@ export class ExpertService {
       offset = 0,
       sortBy = 'reviewDate',
       sortOrder = 'desc',
-      tenantId,
     } = options;
 
     const firestore = this.getFirestore();
 
-    // Build base query
+    // Build base query - always filter by tenantId (required for multi-tenant isolation)
     let query = firestore
       .collection(this.feedbackCollection)
+      .where('tenantId', '==', tenantId)
       .where('dischargeSummaryId', '==', summaryId) as any;
-
-    // Filter by tenant if provided
-    if (tenantId) {
-      query = query.where('tenantId', '==', tenantId);
-    }
 
     // Filter by review type if provided
     if (reviewType) {
@@ -551,7 +663,7 @@ export class ExpertService {
   /**
    * Get feedback by ID
    */
-  async getFeedbackById(id: string): Promise<ExpertFeedback | null> {
+  async getFeedbackById(id: string, tenantId: string): Promise<ExpertFeedback | null> {
     const firestore = this.getFirestore();
     const docRef = firestore.collection(this.feedbackCollection).doc(id);
     const doc = await docRef.get();
@@ -561,6 +673,12 @@ export class ExpertService {
     }
 
     const data = doc.data();
+    
+    // Validate tenantId
+    if (data?.tenantId !== tenantId) {
+      return null;
+    }
+
     return {
       id: doc.id,
       ...data,
@@ -573,12 +691,19 @@ export class ExpertService {
   /**
    * Update existing feedback
    */
-  async updateFeedback(id: string, dto: UpdateFeedbackDto): Promise<ExpertFeedback | null> {
+  async updateFeedback(id: string, dto: UpdateFeedbackDto, tenantId: string): Promise<ExpertFeedback | null> {
     const firestore = this.getFirestore();
     const docRef = firestore.collection(this.feedbackCollection).doc(id);
     const doc = await docRef.get();
 
     if (!doc.exists) {
+      return null;
+    }
+
+    const docData = doc.data();
+    
+    // Validate tenantId
+    if (docData?.tenantId !== tenantId) {
       return null;
     }
 
@@ -601,17 +726,17 @@ export class ExpertService {
 
     await docRef.update(updateData);
 
-    this.logger.log(`Expert feedback updated: ${id}`);
+    this.logger.log(`Expert feedback updated: ${id} for tenant: ${tenantId}`);
 
     // Return updated feedback
     const updatedDoc = await docRef.get();
-    const data = updatedDoc.data();
+    const updatedData = updatedDoc.data();
     return {
       id: updatedDoc.id,
-      ...data,
-      reviewDate: data?.reviewDate?.toDate?.() || data?.reviewDate,
-      createdAt: data?.createdAt?.toDate?.() || data?.createdAt,
-      updatedAt: data?.updatedAt?.toDate?.() || data?.updatedAt,
+      ...updatedData,
+      reviewDate: updatedData?.reviewDate?.toDate?.() || updatedData?.reviewDate,
+      createdAt: updatedData?.createdAt?.toDate?.() || updatedData?.createdAt,
+      updatedAt: updatedData?.updatedAt?.toDate?.() || updatedData?.updatedAt,
     } as ExpertFeedback;
   }
 }

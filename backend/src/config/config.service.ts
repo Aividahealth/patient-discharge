@@ -29,6 +29,30 @@ export interface TenantConfigResponse {
     translationEnabled: boolean;
     defaultLanguage: string;
   };
+  ehrIntegration?: {
+    type: 'Manual' | 'Cerner' | 'EPIC';
+    cerner?: {
+      base_url: string;
+      system_app?: {
+        client_id: string;
+        client_secret: string;
+        token_url: string;
+        scopes: string;
+      };
+      provider_app?: {
+        client_id: string;
+        client_secret: string;
+        authorization_url: string;
+        token_url: string;
+        redirect_uri: string;
+        scopes: string;
+      };
+      patients?: string[];
+    };
+    epic?: {
+      base_url?: string;
+    };
+  };
 }
 
 @Injectable()
@@ -94,6 +118,49 @@ export class ConfigService {
         return null;
       }
 
+      // Sanitize ehrIntegration to ensure it's properly structured and serializable
+      let ehrIntegration = data.ehrIntegration;
+      if (ehrIntegration) {
+        // Ensure ehrIntegration has a valid structure
+        // Remove any non-serializable fields (like Date objects, functions, etc.)
+        ehrIntegration = {
+          type: ehrIntegration.type || 'Manual',
+          ...(ehrIntegration.cerner && {
+            cerner: {
+              base_url: ehrIntegration.cerner.base_url || '',
+              ...(ehrIntegration.cerner.system_app && {
+                system_app: {
+                  client_id: ehrIntegration.cerner.system_app.client_id || '',
+                  client_secret: ehrIntegration.cerner.system_app.client_secret || '',
+                  token_url: ehrIntegration.cerner.system_app.token_url || '',
+                  scopes: ehrIntegration.cerner.system_app.scopes || '',
+                },
+              }),
+              ...(ehrIntegration.cerner.provider_app && {
+                provider_app: {
+                  client_id: ehrIntegration.cerner.provider_app.client_id || '',
+                  client_secret: ehrIntegration.cerner.provider_app.client_secret || '',
+                  authorization_url: ehrIntegration.cerner.provider_app.authorization_url || '',
+                  token_url: ehrIntegration.cerner.provider_app.token_url || '',
+                  redirect_uri: ehrIntegration.cerner.provider_app.redirect_uri || '',
+                  scopes: ehrIntegration.cerner.provider_app.scopes || '',
+                },
+              }),
+              ...(ehrIntegration.cerner.patients && {
+                patients: Array.isArray(ehrIntegration.cerner.patients) 
+                  ? ehrIntegration.cerner.patients 
+                  : [],
+              }),
+            },
+          }),
+          ...(ehrIntegration.epic && {
+            epic: {
+              base_url: ehrIntegration.epic.base_url || '',
+            },
+          }),
+        };
+      }
+
       // Return only the public-facing config (exclude sensitive fields from config object)
       const response: TenantConfigResponse = {
         id: data.id || tenantId,
@@ -121,6 +188,7 @@ export class ConfigService {
           translationEnabled: data.config?.translationEnabled ?? true,
           defaultLanguage: data.config?.defaultLanguage || 'en',
         },
+        ehrIntegration: ehrIntegration || undefined,
       };
 
       return response;
@@ -174,6 +242,7 @@ export class ConfigService {
         translationEnabled: true,
         defaultLanguage: 'en',
       },
+      ehrIntegration: yamlConfig.cerner ? { type: 'Cerner' as const, cerner: yamlConfig.cerner } : { type: 'Manual' as const },
     };
   }
 }

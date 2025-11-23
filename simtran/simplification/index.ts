@@ -5,6 +5,7 @@ import { SimplificationService } from './simplification.service';
 import { FirestoreService } from './firestore.service';
 import { getConfig } from './common/utils/config';
 import { createLogger } from './common/utils/logger';
+import { calculateQualityMetrics, meetsSimplificationTarget } from './common/utils/quality-metrics';
 
 const logger = createLogger('CloudFunction');
 
@@ -164,14 +165,29 @@ async function processFile(bucketName: string, fileName: string): Promise<Simpli
       tokensUsed: simplificationResult.tokensUsed,
     });
 
-    // Step 4: Generate output filename
+    // Step 4: Calculate quality metrics
+    logger.debug('Step 4: Calculating quality metrics');
+    const qualityMetrics = calculateQualityMetrics(content, simplificationResult.simplifiedContent);
+    const targetCheck = meetsSimplificationTarget(qualityMetrics);
+
+    logger.info('Quality metrics calculated', {
+      fileName,
+      fleschKincaidGrade: qualityMetrics.readability.fleschKincaidGradeLevel,
+      fleschReadingEase: qualityMetrics.readability.fleschReadingEase,
+      smogIndex: qualityMetrics.readability.smogIndex,
+      compressionRatio: qualityMetrics.simplification.compressionRatio,
+      meetsTarget: targetCheck.meetsTarget,
+      targetCheckReasons: targetCheck.reasons,
+    });
+
+    // Step 5: Generate output filename
     const outputFileName = gcsService.generateOutputFileName(fileName);
 
-    logger.debug('Step 4: Writing simplified content to GCS', {
+    logger.debug('Step 5: Writing simplified content to GCS', {
       outputFileName,
     });
 
-    // Step 5: Write simplified content to output bucket
+    // Step 6: Write simplified content to output bucket
     const config = getConfig();
     await gcsService.writeFile(
       config.outputBucket,
@@ -179,9 +195,9 @@ async function processFile(bucketName: string, fileName: string): Promise<Simpli
       simplificationResult.simplifiedContent
     );
 
-    // Step 6: Update Firestore metadata
-    logger.debug('Step 6: Updating Firestore metadata');
-    await firestoreService.upsertDischargeSummary(fileName, outputFileName);
+    // Step 7: Update Firestore metadata with quality metrics
+    logger.debug('Step 7: Updating Firestore metadata with quality metrics');
+    await firestoreService.upsertDischargeSummary(fileName, outputFileName, qualityMetrics);
     logger.info('Firestore metadata updated', { fileName, outputFileName });
 
     const simplifiedSize = Buffer.byteLength(simplificationResult.simplifiedContent, 'utf-8');

@@ -21,11 +21,19 @@ const getApiBaseUrl = () => {
     return 'http://localhost:3000';
   }
   
-  // Production fallback: Use your Google Cloud backend URL
-  return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app';
+  // Production fallback: Use dev backend URL (should be overridden by NEXT_PUBLIC_API_URL)
+  return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
 };
 
 const API_BASE_URL = getApiBaseUrl();
+
+export interface QualityMetrics {
+  fleschKincaidGradeLevel?: number;
+  fleschReadingEase?: number;
+  smogIndex?: number;
+  compressionRatio?: number;
+  avgSentenceLength?: number;
+}
 
 export interface DischargeSummaryMetadata {
   id: string;
@@ -45,6 +53,7 @@ export interface DischargeSummaryMetadata {
   updatedAt: Date;
   simplifiedAt?: Date;
   translatedAt?: Date;
+  qualityMetrics?: QualityMetrics;
   metadata?: {
     facility?: string;
     department?: string;
@@ -291,6 +300,13 @@ export interface DischargeQueuePatient {
     id: string;
   };
   avatar: string | null;
+  qualityMetrics?: {
+    fleschKincaidGradeLevel?: number;
+    fleschReadingEase?: number;
+    smogIndex?: number;
+    compressionRatio?: number;
+    avgSentenceLength?: number;
+  };
 }
 
 export interface DischargeQueueResponse {
@@ -310,7 +326,14 @@ export async function getDischargeQueue(
   token: string,
   tenantId: string
 ): Promise<DischargeQueueResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/patients/discharge-queue`, {
+  const url = `${API_BASE_URL}/api/patients/discharge-queue`;
+  console.log('[getDischargeQueue] Making request to:', url, {
+    tenantId,
+    hasToken: !!token,
+    tokenPreview: token ? `${token.substring(0, 20)}...` : null
+  });
+
+  const response = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -319,11 +342,29 @@ export async function getDischargeQueue(
     },
   });
 
+  console.log('[getDischargeQueue] Response received:', {
+    status: response.status,
+    statusText: response.statusText,
+    ok: response.ok,
+    headers: Object.fromEntries(response.headers.entries())
+  });
+
   if (!response.ok) {
-    throw new Error(`Failed to fetch discharge queue: ${response.statusText}`);
+    const errorText = await response.text().catch(() => 'Could not read error response');
+    console.error('[getDischargeQueue] Error response:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorText
+    });
+    throw new Error(`Failed to fetch discharge queue: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('[getDischargeQueue] Response data:', {
+    patientCount: data.patients?.length || 0,
+    meta: data.meta
+  });
+  return data;
 }
 
 /**
@@ -332,6 +373,7 @@ export async function getDischargeQueue(
 export interface PatientDetailsResponse {
   patientId: string;
   compositionId: string;
+  preferredLanguage?: string; // Patient's preferred language from FHIR
   rawSummary?: {
     text: string;
     parsedData?: any;
@@ -346,6 +388,7 @@ export interface PatientDetailsResponse {
   simplifiedInstructions?: {
     text: string;
   };
+  qualityMetrics?: QualityMetrics;
 }
 
 /**
@@ -462,6 +505,37 @@ export async function getPatientDetails(
 
   const compositionData = await binariesResponse.json();
 
+  // Fetch patient preferred language from FHIR
+  let preferredLanguage: string | undefined;
+  try {
+    const patientResponse = await fetch(
+      `${apiUrl}/google/fhir/Patient/${patientId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      }
+    );
+    if (patientResponse.ok) {
+      const patient = await patientResponse.json() as any;
+      // Extract preferred language from patient.communication array
+      // FHIR format: communication: [{ language: { coding: [{ code: "es" }] }, preferred: true }]
+      const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
+      if (preferredComm?.language?.coding?.[0]?.code) {
+        preferredLanguage = preferredComm.language.coding[0].code;
+      } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+        // Fallback to first communication language if no preferred
+        preferredLanguage = patient.communication[0].language.coding[0].code;
+      }
+    }
+  } catch (error) {
+    // Ignore errors fetching patient preferred language
+    console.warn('Failed to fetch patient preferred language:', error);
+  }
+
   // Find raw and simplified content
   const rawSummary = compositionData.dischargeSummaries?.find((summary: any) =>
     !summary.tags?.some((tag: any) => tag.code === 'simplified-content')
@@ -507,9 +581,38 @@ export async function getPatientDetails(
     console.warn('Failed to fetch AI-simplified content:', error);
   }
 
+  // Fetch quality metrics from discharge queue API
+  let qualityMetrics: QualityMetrics | undefined = undefined;
+  try {
+    const queueResponse = await fetch(
+      `${apiUrl}/api/patients/discharge-queue`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      }
+    );
+
+    if (queueResponse.ok) {
+      const queueData = await queueResponse.json();
+      // Find the patient with matching compositionId
+      const matchingPatient = queueData.patients?.find((p: any) => p.compositionId === compositionId);
+      if (matchingPatient?.qualityMetrics) {
+        qualityMetrics = matchingPatient.qualityMetrics;
+      }
+    }
+  } catch (error) {
+    // Ignore errors fetching quality metrics
+    console.warn('Failed to fetch quality metrics:', error);
+  }
+
   return {
     patientId,
     compositionId,
+    preferredLanguage,
     rawSummary: rawSummary ? {
       text: rawSummary.text,
       parsedData: rawSummary.parsedData
@@ -524,5 +627,6 @@ export async function getPatientDetails(
     simplifiedInstructions: (aiSimplifiedInstructions || simplifiedInstructions) ? {
       text: (aiSimplifiedInstructions || simplifiedInstructions)?.text
     } : undefined,
+    qualityMetrics,
   };
 }
