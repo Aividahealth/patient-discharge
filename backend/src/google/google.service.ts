@@ -296,25 +296,8 @@ export class GoogleService {
         }
       }
 
-      // Step 2: Delete all DocumentReferences first (they reference Binaries)
-      for (const docRefId of documentReferenceIds) {
-        try {
-          await client.delete(`/DocumentReference/${docRefId}`);
-          deleted.documentReferences.push(docRefId);
-          console.log(`✅ Deleted DocumentReference: ${docRefId}`);
-        } catch (error: any) {
-          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
-          errors.push({
-            resourceType: 'DocumentReference',
-            id: docRefId,
-            error: errorMsg,
-          });
-          console.error(`❌ Failed to delete DocumentReference ${docRefId}:`, errorMsg);
-          // Continue with other deletions even if one DocumentReference fails
-        }
-      }
-
-      // Step 3: Delete ALL Compositions for this patient (they reference Binaries)
+      // Step 2: Delete ALL Compositions FIRST (they reference DocumentReference, Patient, and Encounter)
+      // Composition must be deleted before DocumentReference, Encounter, and Patient
       for (const compId of Array.from(compositionIds)) {
         try {
           await client.delete(`/Composition/${compId}`);
@@ -344,7 +327,7 @@ export class GoogleService {
             if (error.response?.data) {
               console.error(`   Full error response:`, JSON.stringify(error.response.data, null, 2));
             }
-            // Don't continue to Patient deletion if Composition deletion fails (unless it's already gone)
+            // Don't continue to other deletions if main Composition deletion fails (unless it's already gone)
             if (compId === compositionId) {
               throw new Error(`Failed to delete Composition: ${fullError}`);
             }
@@ -352,7 +335,27 @@ export class GoogleService {
         }
       }
 
-      // Step 4: Delete all Binary resources (now that Compositions and DocumentReferences are deleted)
+      // Step 3: Delete all DocumentReferences (they reference Binary and Patient)
+      // Now safe to delete since Composition (which references DocumentReference) is deleted
+      for (const docRefId of documentReferenceIds) {
+        try {
+          await client.delete(`/DocumentReference/${docRefId}`);
+          deleted.documentReferences.push(docRefId);
+          console.log(`✅ Deleted DocumentReference: ${docRefId}`);
+        } catch (error: any) {
+          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+          errors.push({
+            resourceType: 'DocumentReference',
+            id: docRefId,
+            error: errorMsg,
+          });
+          console.error(`❌ Failed to delete DocumentReference ${docRefId}:`, errorMsg);
+          // Continue with other deletions even if one DocumentReference fails
+        }
+      }
+
+      // Step 4: Delete all Binary resources (they are referenced by DocumentReference)
+      // Now safe to delete since DocumentReference (which references Binary) is deleted
       for (const binaryId of Array.from(binaryIds)) {
         try {
           await client.delete(`/Binary/${binaryId}`);
@@ -376,7 +379,8 @@ export class GoogleService {
         }
       }
 
-      // Step 5: Delete all Encounters
+      // Step 5: Delete all Encounters (they reference Patient)
+      // Now safe to delete since Composition (which references Encounter) is deleted
       for (const encounterId of Array.from(encounterIds)) {
         try {
           await client.delete(`/Encounter/${encounterId}`);
@@ -394,7 +398,8 @@ export class GoogleService {
         }
       }
 
-      // Step 6: Delete Patient
+      // Step 6: Delete Patient LAST (it's referenced by Composition, DocumentReference, and Encounter)
+      // Now safe to delete since all resources that reference Patient are deleted
       try {
         await client.delete(`/Patient/${patientId}`);
         deleted.patient = patientId;
