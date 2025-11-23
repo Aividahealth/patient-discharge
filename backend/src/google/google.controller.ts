@@ -442,9 +442,11 @@ export class GoogleController {
 
   /**
    * Get Composition translated binaries (filtered by discharge-summary-translated and discharge-instructions-translated tags)
-   * Accessible by authenticated clinicians, experts, tenant admins, and system admins
+   * Patients can access their own composition translated binaries; clinicians/experts can access any
    */
   @Get('fhir/Composition/:id/translated')
+  @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
+  @UseGuards(RolesGuard, TenantGuard, PatientResourceGuard)
   async getCompositionTranslatedBinaries(
     @Param('id') id: string,
     @TenantContext() ctx: TenantContextType,

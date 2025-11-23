@@ -906,7 +906,7 @@ EMERGENCY CONTACTS:
                     
                     <div className="space-y-4">
                       <SimplifiedDischargeSummary 
-                        content={viewTranslated && translatedSummary ? translatedSummary : dischargeSummary} 
+                        content={viewTranslated && translatedSummary && translatedSummary.trim() ? translatedSummary : dischargeSummary} 
                       />
                     </div>
                   </div>
@@ -974,7 +974,7 @@ EMERGENCY CONTACTS:
             <Card>
               <CardContent className="pt-6">
                 <MedicationsSection 
-                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
                 />
               </CardContent>
             </Card>
@@ -993,7 +993,7 @@ EMERGENCY CONTACTS:
             <Card>
               <CardContent className="pt-6">
                 <AppointmentsSection 
-                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
                 />
               </CardContent>
             </Card>
@@ -1006,7 +1006,7 @@ EMERGENCY CONTACTS:
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
                 <SimplifiedDischargeInstructions 
-                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
                 />
               </CardContent>
             </Card>
@@ -1019,7 +1019,7 @@ EMERGENCY CONTACTS:
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
                 <WarningSignsSection 
-                  content={viewTranslated && translatedInstructions ? translatedInstructions : dischargeInstructions}
+                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
                 />
               </CardContent>
             </Card>
