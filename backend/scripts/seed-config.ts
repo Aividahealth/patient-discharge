@@ -131,7 +131,7 @@ function loadTenantConfigsFromYAML(): TenantConfigSeed[] {
           features: {
             aiGeneration: true,
             multiLanguage: true,
-            supportedLanguages: ['en', 'es', 'hi', 'vi', 'fr'],
+            supportedLanguages: ['en', 'es', 'hi', 'vi', 'fr', 'ps'],
             fileUpload: true,
             expertPortal: true,
             clinicianPortal: true,

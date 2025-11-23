@@ -60,7 +60,7 @@ async function updateDemoTenantLanguages() {
         features: {
           aiGeneration: true,
           multiLanguage: true,
-          supportedLanguages: ['es', 'vi', 'fr', 'zh'], // Spanish, Vietnamese, French, Mandarin
+          supportedLanguages: ['es', 'vi', 'fr', 'zh', 'ps'], // Spanish, Vietnamese, French, Mandarin, Pashto
           fileUpload: true,
           expertPortal: true,
           clinicianPortal: true,
@@ -78,7 +78,7 @@ async function updateDemoTenantLanguages() {
     } else {
       // Update existing tenant's supported languages
       await docRef.update({
-        'features.supportedLanguages': ['es', 'vi', 'fr', 'zh'], // Spanish, Vietnamese, French, Mandarin
+        'features.supportedLanguages': ['es', 'vi', 'fr', 'zh', 'ps'], // Spanish, Vietnamese, French, Mandarin, Pashto
         'features.multiLanguage': true,
         'config.translationEnabled': true,
         updatedAt: new Date(),
@@ -93,6 +93,7 @@ async function updateDemoTenantLanguages() {
     console.log('     - vi (Vietnamese)');
     console.log('     - fr (French)');
     console.log('     - zh (Mandarin Chinese)');
+    console.log('     - ps (Pashto)');
     console.log('   Translation Enabled: true');
     console.log('   Multi-language Enabled: true');
     
