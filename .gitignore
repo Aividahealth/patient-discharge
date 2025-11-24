@@ -107,6 +107,9 @@ temp/
 # Temporary files
 *.tmp
 
+# Utility scripts (not version controlled)
+scripts/
+
 # Google Cloud Service Account credentials
 # backend/.settings.dev/
 # backend/.settings.prod/

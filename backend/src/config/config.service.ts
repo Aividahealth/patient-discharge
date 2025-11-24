@@ -231,7 +231,7 @@ export class ConfigService {
       features: {
         aiGeneration: true,
         multiLanguage: true,
-        supportedLanguages: ['en', 'es', 'hi', 'vi', 'fr', 'ps'],
+        supportedLanguages: ['en', 'es', 'hi', 'vi', 'fr', 'ps', 'zh'],
         fileUpload: true,
         expertPortal: true,
         clinicianPortal: true,
