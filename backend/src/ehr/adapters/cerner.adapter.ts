@@ -415,10 +415,26 @@ export class CernerAdapter implements IEHRService {
   }
 
   /**
+   * Get patient IDs from tenant-based Firestore collection
+   * Collection: tenant_patients
+   * Document ID: {tenantId}
+   * Structure: { patientIds: string[], updatedAt: timestamp }
+   */
+  private async getPatientIdsFromFirestore(tenantId: string): Promise<string[]> {
+    try {
+      return await this.configService.getTenantPatientIdsFromCollection(tenantId);
+    } catch (error) {
+      this.logger.warn(`   ⚠️  Error getting patient IDs from Firestore: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
    * Discover patients automatically from Cerner using hybrid approach:
-   * 1. Search for recent Encounters (primary)
-   * 2. Search for recent DocumentReferences (secondary)
-   * 3. Include manual patient list from config (optional)
+   * 1. Get patient IDs from Firestore collection (tenant-based)
+   * 2. Search for recent Encounters for each patient (with patient filter)
+   * 3. Search for recent DocumentReferences (secondary)
+   * 4. Include manual patient list from config (optional)
    * 
    * Lookback period: 1 hour (hardcoded)
    */
@@ -437,30 +453,43 @@ export class CernerAdapter implements IEHRService {
         return await this.getManualPatientList(ctx);
       }
 
-      // Step 1: Search for recent Encounters (primary method)
-      this.logger.log('📋 Step 1: Searching for recent Encounters...');
-      try {
-        const encounters = await this.searchResource('Encounter', {
-          status: 'finished',
-          _lastUpdated: `ge${oneHourAgo}`,
-          _count: 100,
-          _sort: '-_lastUpdated',
-        }, ctx, AuthType.SYSTEM);
+      // Step 0: Get patient IDs from Firestore collection
+      this.logger.log('📋 Step 0: Getting patient IDs from Firestore collection...');
+      const firestorePatientIds = await this.getPatientIdsFromFirestore(ctx.tenantId);
+      
+      if (firestorePatientIds.length === 0) {
+        this.logger.log('   ⚠️  No patient IDs in Firestore collection, skipping Encounter search');
+      } else {
+        // Step 1: Search for recent Encounters for each patient (with patient filter)
+        this.logger.log(`📋 Step 1: Searching for recent Encounters for ${firestorePatientIds.length} patients...`);
+        let totalEncounters = 0;
+        let patientsWithEncounters = 0;
 
-        if (encounters?.entry) {
-          for (const entry of encounters.entry) {
-            const patientRef = entry.resource.subject?.reference;
-            if (patientRef?.startsWith('Patient/')) {
-              const patientId = patientRef.replace('Patient/', '');
+        for (const patientId of firestorePatientIds) {
+          try {
+            const encounters = await this.searchResource('Encounter', {
+              patient: patientId,
+              status: 'finished',
+              _lastUpdated: `ge${oneHourAgo}`,
+              _count: 100,
+              _sort: '-_lastUpdated',
+            }, ctx, AuthType.SYSTEM);
+
+            if (encounters?.entry && encounters.entry.length > 0) {
               patientIds.add(patientId);
+              totalEncounters += encounters.entry.length;
+              patientsWithEncounters++;
             }
+          } catch (error) {
+            this.logger.warn(`   ⚠️  Error searching Encounters for patient ${patientId}: ${error.message}`);
           }
-          this.logger.log(`   ✅ Found ${encounters.entry.length} encounters, extracted ${patientIds.size} unique patient IDs`);
-        } else {
-          this.logger.log('   ⚠️  No recent encounters found');
         }
-      } catch (error) {
-        this.logger.warn(`   ⚠️  Error searching for Encounters: ${error.message}`);
+
+        if (patientsWithEncounters > 0) {
+          this.logger.log(`   ✅ Found encounters for ${patientsWithEncounters}/${firestorePatientIds.length} patients (${totalEncounters} total encounters)`);
+        } else {
+          this.logger.log(`   ⚠️  No recent encounters found for any of the ${firestorePatientIds.length} patients`);
+        }
       }
 
       // Step 2: Search for recent DocumentReferences (secondary method)

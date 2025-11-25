@@ -496,4 +496,38 @@ export class DevConfigService {
     const ehrConfig = await this.getTenantEHRConfig(tenantId);
     return ehrConfig?.patients || [];
   }
+
+  /**
+   * Get patient IDs from tenant-based Firestore collection
+   * Collection: tenant_patients
+   * Document ID: {tenantId}
+   * Structure: { patientIds: string[], updatedAt: timestamp }
+   */
+  async getTenantPatientIdsFromCollection(tenantId: string): Promise<string[]> {
+    try {
+      const doc = await this.getFirestore()
+        .collection('tenant_patients')
+        .doc(tenantId)
+        .get();
+
+      if (!doc.exists) {
+        this.logger.debug(`No patient IDs found in 'tenant_patients' collection for tenant: ${tenantId}`);
+        return [];
+      }
+
+      const data = doc.data();
+      const patientIds = data?.patientIds || [];
+      
+      if (Array.isArray(patientIds) && patientIds.length > 0) {
+        const validIds = patientIds.filter((id: any) => typeof id === 'string' && id.length > 0);
+        this.logger.debug(`Found ${validIds.length} patient IDs in 'tenant_patients' collection for tenant: ${tenantId}`);
+        return validIds;
+      }
+
+      return [];
+    } catch (error) {
+      this.logger.warn(`Error getting patient IDs from 'tenant_patients' collection for tenant ${tenantId}: ${error.message}`);
+      return [];
+    }
+  }
 }

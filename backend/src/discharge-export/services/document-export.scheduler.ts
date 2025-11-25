@@ -59,6 +59,19 @@ export class DocumentExportScheduler {
     this.logger.log(`🏥 Processing documents for tenant: ${tenantId}`);
     
     try {
+      // Check if tenant has EHR integration configured (skip Manual tenants)
+      try {
+        const ehrVendor = await this.configService.getTenantEHRVendor(tenantId);
+        if (!ehrVendor) {
+          this.logger.log(`⏭️  Skipping tenant ${tenantId} - no EHR integration configured (Manual tenant)`);
+          return;
+        }
+        this.logger.log(`✅ Tenant ${tenantId} has EHR integration: ${ehrVendor}`);
+      } catch (error) {
+        // If we can't determine EHR vendor, try to proceed (might be a config issue)
+        this.logger.warn(`⚠️  Could not determine EHR vendor for tenant ${tenantId}: ${error.message}`);
+      }
+
       // Get all active provider app sessions for this tenant
       const userSessions = this.sessionService.getActiveSessions(tenantId, AuthType.PROVIDER);
       
