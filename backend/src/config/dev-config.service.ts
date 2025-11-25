@@ -546,7 +546,18 @@ export class DevConfigService {
       const patientIds = data?.patientIds || [];
       
       if (Array.isArray(patientIds) && patientIds.length > 0) {
-        const validIds = patientIds.filter((id: any) => typeof id === 'string' && id.length > 0);
+        // Convert all IDs to strings (handle both string and number IDs)
+        const validIds = patientIds
+          .map((id: any) => {
+            if (typeof id === 'string' && id.length > 0) {
+              return id;
+            } else if (typeof id === 'number') {
+              return String(id);
+            }
+            return null;
+          })
+          .filter((id: string | null): id is string => id !== null);
+        
         this.logger.debug(`Found ${validIds.length} patient IDs in 'tenant_patients' collection for tenant: ${tenantId}`);
         return validIds;
       }
