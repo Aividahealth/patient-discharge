@@ -903,8 +903,8 @@ export class DischargeSummariesExportService {
           coding: [
             {
               system: 'http://loinc.org',
-              code: '11488-4',
-              display: 'Consult note',
+              code: '18842-5',
+              display: 'Discharge Summary',
             },
           ],
         },
