@@ -105,12 +105,12 @@ export function QualityMetricsCard({ metrics, compact = false, inverted = false 
                   className={`gap-1 ${inverted ? 'border-white/30 text-white bg-white/10 hover:bg-white/20' : ''}`}
                 >
                   <BookOpen className={`h-3 w-3 ${inverted ? 'text-white' : ''}`} />
-                  Grade {metrics.fleschKincaidGradeLevel.toFixed(1)}
+                  Grade {Math.round(metrics.fleschKincaidGradeLevel)}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>
                 <div className="max-w-xs">
-                  <p className="font-semibold mb-1">Flesch-Kincaid Grade Level: {metrics.fleschKincaidGradeLevel.toFixed(1)}</p>
+                  <p className="font-semibold mb-1">Flesch-Kincaid Grade Level: {Math.round(metrics.fleschKincaidGradeLevel)}</p>
                   <p className="text-xs text-muted-foreground">
                     {fkGradeInterpretation?.text || 'Reading level'} reading level. 
                     Target: ≤9.0 (5th-9th grade). Lower is better for patient comprehension.
@@ -210,7 +210,7 @@ export function QualityMetricsCard({ metrics, compact = false, inverted = false 
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono font-bold text-foreground">
-                        {metrics.fleschKincaidGradeLevel.toFixed(1)}
+                        {Math.round(metrics.fleschKincaidGradeLevel)}
                       </span>
                       {fkGradeInterpretation && (
                         <Badge className={`${fkGradeInterpretation.color} text-white text-xs font-semibold`}>
@@ -222,7 +222,7 @@ export function QualityMetricsCard({ metrics, compact = false, inverted = false 
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="max-w-xs">
-                    <p className="font-semibold mb-1">Flesch-Kincaid Grade Level: {metrics.fleschKincaidGradeLevel.toFixed(1)}</p>
+                    <p className="font-semibold mb-1">Flesch-Kincaid Grade Level: {Math.round(metrics.fleschKincaidGradeLevel)}</p>
                     <p className="text-xs text-muted-foreground mb-2">
                       Indicates the U.S. school grade level needed to understand the text. 
                       {fkGradeInterpretation && ` This content is at ${fkGradeInterpretation.text.toLowerCase()} level.`}
