@@ -31,15 +31,20 @@ export class EncounterExportScheduler {
     this.logger.log('🕐 Starting scheduled encounter data export check...');
     
     try {
-      // Get all tenants from config.yaml
-      const tenantIds = this.configService.getAllTenantIds();
+      // Get all tenants from YAML config and Firestore
+      const tenantIds = await this.configService.getAllTenantIds();
       this.logger.log(`🏥 Found ${tenantIds.length} tenants to process: ${tenantIds.join(', ')}`);
 
       for (const tenantId of tenantIds) {
-        await this.processTenantEncounters(tenantId);
+        try {
+          await this.processTenantEncounters(tenantId);
+        } catch (error) {
+          this.logger.error(`❌ Error processing tenant ${tenantId} in scheduler loop: ${error.message}`);
+          // Continue with next tenant instead of breaking
+        }
       }
 
-      this.logger.log('✅ Encounter export cron job completed successfully');
+      this.logger.log(`✅ Encounter export cron job completed successfully (processed ${tenantIds.length} tenants)`);
     } catch (error) {
       this.logger.error(`❌ Error in encounter export cron job: ${error.message}`);
     }
@@ -202,7 +207,7 @@ export class EncounterExportScheduler {
         await this.processTenantEncounters(tenantId);
       } else {
         // Process all tenants
-        const tenantIds = this.configService.getAllTenantIds();
+        const tenantIds = await this.configService.getAllTenantIds();
         for (const tid of tenantIds) {
           await this.processTenantEncounters(tid);
         }

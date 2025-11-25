@@ -312,7 +312,7 @@ export class DocumentExportScheduler {
         await this.processTenantDocuments(tenantId);
       } else {
         // Process all tenants from config
-        const tenantIds = this.configService.getAllTenantIds();
+        const tenantIds = await this.configService.getAllTenantIds();
         this.logger.log(`🏥 Processing all ${tenantIds.length} tenants: ${tenantIds.join(', ')}`);
         
         for (const id of tenantIds) {
