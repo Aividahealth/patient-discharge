@@ -9,6 +9,7 @@ import { TenantContext } from '../../tenant/tenant-context';
 import { AuthType } from '../../cerner-auth/types/auth.types';
 import { PubSubService } from '../../pubsub/pubsub.service';
 import { DocumentExportEvent } from '../types/discharge-export.types';
+import { EHRServiceFactory } from '../../ehr/factories/ehr-service.factory';
 
 @Injectable()
 export class DocumentExportScheduler {
@@ -21,6 +22,7 @@ export class DocumentExportScheduler {
     private readonly configService: DevConfigService,
     private readonly sessionService: SessionService,
     private readonly pubSubService: PubSubService,
+    private readonly ehrFactory: EHRServiceFactory,
   ) {
     this.logger.log(`⏰ DocumentExportScheduler initializing with NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
   }
@@ -87,15 +89,25 @@ export class DocumentExportScheduler {
       requestId: `scheduler-system-${Date.now()}`,
     };
 
-    // Get the list of patients to process for this tenant
-    const patients = await this.configService.getTenantCernerPatients(tenantId);
+    // Discover patients automatically from EHR (hybrid approach)
+    let patients: string[] = [];
+    try {
+      const ehrService = await this.ehrFactory.getEHRService(ctx);
+      patients = await ehrService.discoverPatients(ctx);
+      this.logger.log(`👥 Discovered ${patients.length} patients for tenant ${tenantId}`);
+    } catch (error) {
+      this.logger.error(`❌ Error discovering patients: ${error.message}`);
+      // Fallback to manual list if discovery fails
+      this.logger.log('🔄 Falling back to manual patient list');
+      patients = await this.configService.getTenantCernerPatients(tenantId);
+    }
     
     if (patients.length === 0) {
-      this.logger.log(`📭 No patients configured for tenant ${tenantId}, skipping document processing`);
+      this.logger.log(`📭 No patients found for tenant ${tenantId}, skipping document processing`);
       return;
     }
 
-    this.logger.log(`👥 Processing documents for ${patients.length} patients in tenant ${tenantId}: ${patients.join(', ')}`);
+    this.logger.log(`👥 Processing documents for ${patients.length} patients in tenant ${tenantId}: ${patients.slice(0, 10).join(', ')}${patients.length > 10 ? '...' : ''}`);
 
     // Process each patient
     for (const patientId of patients) {
@@ -159,15 +171,25 @@ export class DocumentExportScheduler {
 
     this.logger.log(`👤 Processing documents for user: ${session.userId} in tenant: ${tenantId}`);
 
-    // Get the list of patients to process for this tenant
-    const patients = await this.configService.getTenantCernerPatients(tenantId);
+    // Discover patients automatically from EHR (hybrid approach)
+    let patients: string[] = [];
+    try {
+      const ehrService = await this.ehrFactory.getEHRService(ctx);
+      patients = await ehrService.discoverPatients(ctx);
+      this.logger.log(`👥 Discovered ${patients.length} patients for tenant ${tenantId} for user ${session.userId}`);
+    } catch (error) {
+      this.logger.error(`❌ Error discovering patients: ${error.message}`);
+      // Fallback to manual list if discovery fails
+      this.logger.log('🔄 Falling back to manual patient list');
+      patients = await this.configService.getTenantCernerPatients(tenantId);
+    }
     
     if (patients.length === 0) {
-      this.logger.log(`📭 No patients configured for tenant ${tenantId}, skipping document processing for user ${session.userId}`);
+      this.logger.log(`📭 No patients found for tenant ${tenantId}, skipping document processing for user ${session.userId}`);
       return;
     }
 
-    this.logger.log(`👥 Processing documents for ${patients.length} patients in tenant ${tenantId} for user ${session.userId}: ${patients.join(', ')}`);
+    this.logger.log(`👥 Processing documents for ${patients.length} patients in tenant ${tenantId} for user ${session.userId}: ${patients.slice(0, 10).join(', ')}${patients.length > 10 ? '...' : ''}`);
 
     // Process each patient
     for (const patientId of patients) {
