@@ -81,14 +81,23 @@ export class EncounterExportScheduler {
       // Discover patients automatically from EHR (hybrid approach)
       let patients: string[] = [];
       try {
+        this.logger.log(`🔍 Attempting to discover patients for tenant ${tenantId}...`);
         const ehrService = await this.ehrFactory.getEHRService(ctx);
+        this.logger.log(`✅ EHR service obtained for tenant ${tenantId}, starting patient discovery...`);
         patients = await ehrService.discoverPatients(ctx);
         this.logger.log(`👥 Discovered ${patients.length} patients for tenant ${tenantId}`);
       } catch (error) {
-        this.logger.error(`❌ Error discovering patients: ${error.message}`);
+        this.logger.error(`❌ Error discovering patients for tenant ${tenantId}: ${error.message}`);
+        this.logger.error(`   Error stack: ${error.stack}`);
         // Fallback to manual list if discovery fails
-        this.logger.log('🔄 Falling back to manual patient list');
-        patients = await this.configService.getTenantCernerPatients(tenantId);
+        this.logger.log(`🔄 Falling back to manual patient list for tenant ${tenantId}`);
+        try {
+          patients = await this.configService.getTenantCernerPatients(tenantId);
+          this.logger.log(`📝 Retrieved ${patients.length} patients from manual list for tenant ${tenantId}`);
+        } catch (fallbackError) {
+          this.logger.error(`❌ Failed to get manual patient list for tenant ${tenantId}: ${fallbackError.message}`);
+          patients = [];
+        }
       }
 
       if (patients.length === 0) {
