@@ -86,9 +86,21 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<unknown>)
     const outputBucket = process.env.OUTPUT_BUCKET || 'discharge-summaries-translated';
     await gcsService.writeFile(outputBucket, outputFileName, translationResult.translatedContent);
 
-    // Update Firestore with translation info
+    // Extract composition ID from filename for metrics storage
+    const compositionId = extractCompositionId(fileName);
+
+    // Update Firestore with translation info and quality metrics
     logger.info('Updating Firestore with translation', { fileName, outputFileName, targetLanguage });
     await firestoreService.updateTranslation(fileName, outputFileName, targetLanguage);
+
+    // Store translation quality metrics if we have a composition ID
+    if (compositionId && translationResult.qualityMetrics) {
+      await firestoreService.updateTranslationMetrics(
+        compositionId,
+        targetLanguage,
+        translationResult.qualityMetrics
+      );
+    }
 
     const processingTime = Date.now() - startTime;
     logger.info('Translation completed successfully', {
@@ -139,4 +151,17 @@ function generateTranslatedFileName(originalFileName: string, targetLanguage: st
   // Convert: "discharge-simplified.md" -> "discharge-simplified-es.md"
   const baseName = originalFileName.replace('-simplified.md', '');
   return `${baseName}-simplified-${targetLanguage}.md`;
+}
+
+/**
+ * Extract composition ID from filename
+ * Expected format: tenantId/patientId/compositionId/discharge-summary-simplified.md
+ */
+function extractCompositionId(fileName: string): string | null {
+  const parts = fileName.split('/');
+  // The composition ID is typically the third part in the path
+  if (parts.length >= 3) {
+    return parts[2];
+  }
+  return null;
 }

@@ -5,12 +5,47 @@ import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { BarChart, TrendingDown, BookOpen, FileText, CheckCircle, AlertCircle } from "lucide-react"
 
+export interface ReadabilityMetrics {
+  fleschKincaidGradeLevel: number
+  fleschReadingEase: number
+  smogIndex: number
+  colemanLiauIndex?: number
+  automatedReadabilityIndex?: number
+}
+
+export interface LexicalMetrics {
+  typeTokenRatio?: number
+  wordCount: number
+  sentenceCount: number
+  syllableCount?: number
+  complexWordCount?: number
+}
+
+export interface TranslationQualityMetrics {
+  translationConfidence?: number
+  detectedSourceLanguage?: string
+  targetLanguage: string
+  translatedWordCount: number
+  processingTimeMs: number
+  readability?: ReadabilityMetrics
+}
+
 export interface QualityMetrics {
+  // Simplified version metrics (legacy fields for backwards compatibility)
   fleschKincaidGradeLevel?: number
   fleschReadingEase?: number
   smogIndex?: number
   compressionRatio?: number
   avgSentenceLength?: number
+
+  // Raw discharge summary metrics (for comparison)
+  raw?: {
+    readability: ReadabilityMetrics
+    lexical: LexicalMetrics
+  }
+
+  // Translation metrics (if translated)
+  translation?: TranslationQualityMetrics
 }
 
 interface QualityMetricsCardProps {
@@ -383,6 +418,139 @@ export function QualityMetricsCard({ metrics, compact = false, inverted = false 
           </div>
         )}
 
+        {/* Raw vs Simplified Comparison */}
+        {metrics.raw?.readability && (
+          <div className="pt-3 border-t-2 border-border">
+            <h4 className="text-sm font-semibold mb-3 text-foreground">Original vs. Simplified Comparison</h4>
+            <div className="grid gap-3">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center justify-between p-2 rounded-md bg-muted/20 cursor-help">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Grade Level Change</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {Math.round(metrics.raw.readability.fleschKincaidGradeLevel)} →
+                      </span>
+                      <span className="text-sm font-mono font-bold text-foreground">
+                        {metrics.fleschKincaidGradeLevel ? Math.round(metrics.fleschKincaidGradeLevel) : 'N/A'}
+                      </span>
+                      {metrics.fleschKincaidGradeLevel && (
+                        <Badge className="bg-blue-500 text-white text-xs font-semibold">
+                          {(metrics.raw.readability.fleschKincaidGradeLevel - metrics.fleschKincaidGradeLevel).toFixed(1)} grades lower
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="max-w-xs">
+                    <p className="font-semibold mb-1">Grade Level Improvement</p>
+                    <p className="text-xs text-muted-foreground">
+                      Shows how much the reading level was reduced from the original discharge summary to the simplified version.
+                      Higher reduction indicates more effective simplification.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center justify-between p-2 rounded-md bg-muted/20 cursor-help">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Word Count Reduction</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {metrics.raw.lexical.wordCount} →
+                      </span>
+                      <span className="text-sm font-mono font-bold text-foreground">
+                        {metrics.raw.lexical.wordCount - Math.round((metrics.raw.lexical.wordCount * (metrics.compressionRatio || 0)) / 100)}
+                      </span>
+                      {metrics.compressionRatio && (
+                        <Badge className="bg-purple-500 text-white text-xs font-semibold">
+                          {metrics.compressionRatio.toFixed(0)}% reduction
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="max-w-xs">
+                    <p className="font-semibold mb-1">Word Count Improvement</p>
+                    <p className="text-xs text-muted-foreground">
+                      Shows how many words were removed while preserving key information.
+                      Concise summaries are easier for patients to understand.
+                    </p>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        )}
+
+        {/* Translation Metrics */}
+        {metrics.translation && (
+          <div className="pt-3 border-t-2 border-border">
+            <h4 className="text-sm font-semibold mb-3 text-foreground">Translation Quality</h4>
+            <div className="grid gap-3">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center justify-between p-2 rounded-md bg-muted/20 cursor-help">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">Target Language</span>
+                    </div>
+                    <Badge className="bg-indigo-500 text-white text-xs font-semibold uppercase">
+                      {metrics.translation.targetLanguage}
+                    </Badge>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">The language this discharge summary was translated to</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center justify-between p-2 rounded-md bg-muted/20 cursor-help">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">Translated Words</span>
+                    </div>
+                    <span className="text-sm font-mono font-bold text-foreground">
+                      {metrics.translation.translatedWordCount.toLocaleString()}
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Total number of words in the translated version</p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center justify-between p-2 rounded-md bg-muted/20 cursor-help">
+                    <div className="flex items-center gap-2">
+                      <BarChart className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-foreground">Processing Time</span>
+                    </div>
+                    <span className="text-sm font-mono font-bold text-foreground">
+                      {(metrics.translation.processingTimeMs / 1000).toFixed(2)}s
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Time taken to translate the discharge summary</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        )}
+
         {/* Target Information */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -397,7 +565,7 @@ export function QualityMetricsCard({ metrics, compact = false, inverted = false 
             <div className="max-w-xs">
               <p className="font-semibold mb-2">Simplification Targets</p>
               <p className="text-xs text-muted-foreground mb-1">
-                These targets ensure discharge summaries are written at a 5th-9th grade reading level, 
+                These targets ensure discharge summaries are written at a 5th-9th grade reading level,
                 making them accessible to most patients regardless of education level.
               </p>
               <p className="text-xs text-muted-foreground">

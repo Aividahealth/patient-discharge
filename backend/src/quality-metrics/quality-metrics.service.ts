@@ -3,12 +3,47 @@ import { Firestore } from '@google-cloud/firestore';
 import { DevConfigService } from '../config/dev-config.service';
 import { resolveServiceAccountPath } from '../utils/path.helper';
 
+export interface ReadabilityMetrics {
+  fleschKincaidGradeLevel: number;
+  fleschReadingEase: number;
+  smogIndex: number;
+  colemanLiauIndex?: number;
+  automatedReadabilityIndex?: number;
+}
+
+export interface LexicalMetrics {
+  typeTokenRatio?: number;
+  wordCount: number;
+  sentenceCount: number;
+  syllableCount?: number;
+  complexWordCount?: number;
+}
+
+export interface TranslationQualityMetrics {
+  translationConfidence?: number;
+  detectedSourceLanguage?: string;
+  targetLanguage: string;
+  translatedWordCount: number;
+  processingTimeMs: number;
+  readability?: ReadabilityMetrics;
+}
+
 export interface QualityMetrics {
+  // Simplified version metrics
   fleschKincaidGradeLevel: number;
   fleschReadingEase: number;
   smogIndex: number;
   compressionRatio: number;
   avgSentenceLength: number;
+
+  // Raw discharge summary metrics (for comparison)
+  raw?: {
+    readability: ReadabilityMetrics;
+    lexical: LexicalMetrics;
+  };
+
+  // Translation metrics (if translated)
+  translation?: TranslationQualityMetrics;
 }
 
 interface QualityMetricsDocument {
@@ -152,13 +187,53 @@ export class QualityMetricsService {
     }
 
     try {
-      return {
+      const metrics: QualityMetrics = {
         fleschKincaidGradeLevel: fullMetrics.readability?.fleschKincaidGradeLevel ?? 0,
         fleschReadingEase: fullMetrics.readability?.fleschReadingEase ?? 0,
         smogIndex: fullMetrics.readability?.smogIndex ?? 0,
         compressionRatio: fullMetrics.simplification?.compressionRatio ?? 0,
         avgSentenceLength: fullMetrics.simplification?.avgSentenceLength ?? 0,
       };
+
+      // Include raw metrics if available
+      if (fullMetrics.raw?.readability) {
+        metrics.raw = {
+          readability: {
+            fleschKincaidGradeLevel: fullMetrics.raw.readability.fleschKincaidGradeLevel ?? 0,
+            fleschReadingEase: fullMetrics.raw.readability.fleschReadingEase ?? 0,
+            smogIndex: fullMetrics.raw.readability.smogIndex ?? 0,
+            colemanLiauIndex: fullMetrics.raw.readability.colemanLiauIndex,
+            automatedReadabilityIndex: fullMetrics.raw.readability.automatedReadabilityIndex,
+          },
+          lexical: {
+            typeTokenRatio: fullMetrics.raw.lexical?.typeTokenRatio,
+            wordCount: fullMetrics.raw.lexical?.wordCount ?? 0,
+            sentenceCount: fullMetrics.raw.lexical?.sentenceCount ?? 0,
+            syllableCount: fullMetrics.raw.lexical?.syllableCount,
+            complexWordCount: fullMetrics.raw.lexical?.complexWordCount,
+          },
+        };
+      }
+
+      // Include translation metrics if available
+      if (fullMetrics.translation) {
+        metrics.translation = {
+          translationConfidence: fullMetrics.translation.translationConfidence,
+          detectedSourceLanguage: fullMetrics.translation.detectedSourceLanguage,
+          targetLanguage: fullMetrics.translation.targetLanguage ?? 'unknown',
+          translatedWordCount: fullMetrics.translation.translatedWordCount ?? 0,
+          processingTimeMs: fullMetrics.translation.processingTimeMs ?? 0,
+          readability: fullMetrics.translation.readability ? {
+            fleschKincaidGradeLevel: fullMetrics.translation.readability.fleschKincaidGradeLevel ?? 0,
+            fleschReadingEase: fullMetrics.translation.readability.fleschReadingEase ?? 0,
+            smogIndex: fullMetrics.translation.readability.smogIndex ?? 0,
+            colemanLiauIndex: fullMetrics.translation.readability.colemanLiauIndex,
+            automatedReadabilityIndex: fullMetrics.translation.readability.automatedReadabilityIndex,
+          } : undefined,
+        };
+      }
+
+      return metrics;
     } catch (error) {
       this.logger.error('Failed to extract quality metrics:', error);
       return null;

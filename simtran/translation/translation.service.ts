@@ -35,15 +35,29 @@ export class TranslationService {
       const result = await this.callTranslateWithRetry(request);
       const processingTime = Date.now() - startTime;
 
+      // Calculate word count for quality metrics
+      const translatedWordCount = result.translatedContent
+        .split(/\s+/)
+        .filter(word => word.length > 0).length;
+
       logger.info('Translation completed successfully', {
         fileName: request.fileName,
         targetLanguage: request.targetLanguage,
         originalLength: request.content.length,
         translatedLength: result.translatedContent.length,
+        translatedWordCount,
         processingTimeMs: processingTime,
       });
 
-      return result;
+      // Add quality metrics to the response
+      return {
+        ...result,
+        qualityMetrics: {
+          translatedWordCount,
+          processingTimeMs: processingTime,
+          detectedSourceLanguage: result.sourceLanguage,
+        },
+      };
     } catch (error) {
       const processingTime = Date.now() - startTime;
       logger.error('Translation failed', error as Error, {

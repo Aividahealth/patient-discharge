@@ -27,12 +27,47 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+export interface ReadabilityMetrics {
+  fleschKincaidGradeLevel: number;
+  fleschReadingEase: number;
+  smogIndex: number;
+  colemanLiauIndex?: number;
+  automatedReadabilityIndex?: number;
+}
+
+export interface LexicalMetrics {
+  typeTokenRatio?: number;
+  wordCount: number;
+  sentenceCount: number;
+  syllableCount?: number;
+  complexWordCount?: number;
+}
+
+export interface TranslationQualityMetrics {
+  translationConfidence?: number;
+  detectedSourceLanguage?: string;
+  targetLanguage: string;
+  translatedWordCount: number;
+  processingTimeMs: number;
+  readability?: ReadabilityMetrics;
+}
+
 export interface QualityMetrics {
+  // Simplified version metrics (legacy fields for backwards compatibility)
   fleschKincaidGradeLevel?: number;
   fleschReadingEase?: number;
   smogIndex?: number;
   compressionRatio?: number;
   avgSentenceLength?: number;
+
+  // Raw discharge summary metrics (for comparison)
+  raw?: {
+    readability: ReadabilityMetrics;
+    lexical: LexicalMetrics;
+  };
+
+  // Translation metrics (if translated)
+  translation?: TranslationQualityMetrics;
 }
 
 export interface DischargeSummaryMetadata {
