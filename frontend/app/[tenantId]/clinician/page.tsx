@@ -563,12 +563,20 @@ export default function ClinicianDashboard() {
     };
   };
 
-  // Helper function to fetch simplified content from the API
-  const fetchSimplifiedContent = async (compositionId: string, token: string, tenantId: string) => {
+  // Helper function to fetch simplified or translated content from the API
+  const fetchSimplifiedContent = async (compositionId: string, token: string, tenantId: string, language?: string) => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
+
+      // Use translated endpoint if language is specified and not English
+      const endpoint = language && language.toLowerCase() !== 'en' ? 'translated' : 'simplified';
+      const summaryTag = endpoint === 'translated' ? 'discharge-summary-translated' : 'discharge-summary-simplified';
+      const instructionsTag = endpoint === 'translated' ? 'discharge-instructions-translated' : 'discharge-instructions-simplified';
+
+      console.log(`[ClinicianPortal] Fetching ${endpoint} content for language: ${language || 'en'}`);
+
       const simplifiedResponse = await fetch(
-        `${apiUrl}/google/fhir/Composition/${compositionId}/simplified`,
+        `${apiUrl}/google/fhir/Composition/${compositionId}/${endpoint}`,
         {
           method: 'GET',
           headers: {
@@ -581,20 +589,20 @@ export default function ClinicianDashboard() {
 
       if (simplifiedResponse.ok) {
         const simplifiedData = await simplifiedResponse.json();
-        
+
         const simplifiedSummary = simplifiedData.dischargeSummaries?.find((summary: any) =>
-          summary.tags?.some((tag: any) => tag.code === 'discharge-summary-simplified')
+          summary.tags?.some((tag: any) => tag.code === summaryTag)
         );
 
         const simplifiedInstructions = simplifiedData.dischargeInstructions?.find((instr: any) =>
-          instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
+          instr.tags?.some((tag: any) => tag.code === instructionsTag)
         );
 
-        console.log('[DEBUG] Simplified Summary length:', simplifiedSummary?.text?.length || 0);
-        console.log('[DEBUG] Simplified Summary preview:', simplifiedSummary?.text?.substring(0, 200));
-        console.log('[DEBUG] Simplified Instructions length:', simplifiedInstructions?.text?.length || 0);
-        console.log('[DEBUG] Simplified Instructions preview:', simplifiedInstructions?.text?.substring(0, 200));
-        
+        console.log(`[DEBUG] ${endpoint} Summary length:`, simplifiedSummary?.text?.length || 0);
+        console.log(`[DEBUG] ${endpoint} Summary preview:`, simplifiedSummary?.text?.substring(0, 200));
+        console.log(`[DEBUG] ${endpoint} Instructions length:`, simplifiedInstructions?.text?.length || 0);
+        console.log(`[DEBUG] ${endpoint} Instructions preview:`, simplifiedInstructions?.text?.substring(0, 200));
+
         return {
           summary: simplifiedSummary?.text || '',
           instructions: simplifiedInstructions?.text || ''
@@ -619,11 +627,15 @@ export default function ClinicianDashboard() {
     const rawSummary = patientDetails?.rawSummary;
     const rawInstructions = patientDetails?.rawInstructions;
     
-    // Fetch simplified content from the new API endpoint
+    // Fetch simplified or translated content from the new API endpoint
+    // Use viewLanguage to determine whether to fetch translated content
+    // If viewLanguage is "preferred", use the patient's preferred language, otherwise use "en"
+    const languageToFetch = viewLanguage === "preferred" ? patientPreferredLanguage || "en" : "en";
     const simplifiedContent = await fetchSimplifiedContent(
       queuePatient.compositionId,
       token || '',
-      tenantId
+      tenantId,
+      languageToFetch
     );
     
     const simplifiedSummaryText = simplifiedContent.summary;
@@ -905,6 +917,40 @@ export default function ClinicianDashboard() {
       redactInsuranceInfo: false,
     })
   }, [selectedPatient])
+
+  // Re-fetch simplified/translated content when viewLanguage changes
+  useEffect(() => {
+    const refetchContent = async () => {
+      if (!selectedPatient || !token || !tenantId) return;
+
+      const patient = patients.find(p => p.id === selectedPatient);
+      if (!patient?.compositionId) return;
+
+      const languageToFetch = viewLanguage === "preferred" ? patientPreferredLanguage || "en" : "en";
+
+      console.log('[ClinicianPortal] Re-fetching content for language:', languageToFetch);
+
+      const simplifiedContent = await fetchSimplifiedContent(
+        patient.compositionId,
+        token,
+        tenantId,
+        languageToFetch
+      );
+
+      if (simplifiedContent && patientMedicalData[selectedPatient]) {
+        setPatientMedicalData({
+          ...patientMedicalData,
+          [selectedPatient]: {
+            ...patientMedicalData[selectedPatient],
+            simplifiedSummary: simplifiedContent.summary || '',
+            simplifiedInstructions: simplifiedContent.instructions || '',
+          }
+        });
+      }
+    };
+
+    refetchContent();
+  }, [viewLanguage, selectedPatient, token, tenantId, patientPreferredLanguage]);
 
   const getCurrentPatientData = () => {
     return selectedPatient ? patientMedicalData[selectedPatient] : null
