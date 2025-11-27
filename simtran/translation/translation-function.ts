@@ -2,6 +2,7 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { TranslationService } from './translation.service';
 import { GCSService } from './gcs.service';
 import { FirestoreService } from './firestore.service';
+import { BackendClientService } from './backend-client.service';
 import { TranslationRequest, SimplificationCompletedEvent } from './common/types';
 import { createLogger } from './common/utils/logger';
 
@@ -11,6 +12,7 @@ const logger = createLogger('TranslationFunction');
 let translationService: TranslationService;
 let gcsService: GCSService;
 let firestoreService: FirestoreService;
+let backendClient: BackendClientService;
 
 /**
  * Initialize services
@@ -19,6 +21,8 @@ function initializeServices(): void {
   translationService = new TranslationService();
   gcsService = new GCSService();
   firestoreService = new FirestoreService();
+  const backendUrl = process.env.BACKEND_URL || 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
+  backendClient = new BackendClientService(backendUrl);
   logger.info('Translation services initialized');
 }
 
@@ -30,7 +34,7 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<any>): Pr
 
   try {
     // Initialize services if not already done
-    if (!translationService || !gcsService || !firestoreService) {
+    if (!translationService || !gcsService || !firestoreService || !backendClient) {
       initializeServices();
     }
 
@@ -94,6 +98,12 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<any>): Pr
       return;
     }
 
+    // Accumulate translated content for FHIR write-back
+    const translatedContentForFhir: {
+      dischargeSummary?: { content: string; language: string; gcsPath: string };
+      dischargeInstructions?: { content: string; language: string; gcsPath: string };
+    } = {};
+
     // Process each simplified file
     for (const file of event.simplifiedFiles || []) {
       try {
@@ -152,6 +162,22 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<any>): Pr
           file: outputFileName,
         });
 
+        // Store translated content for FHIR write-back
+        const gcsPath = `gs://${outputBucket}/${outputFileName}`;
+        if (file.type === 'discharge-summary') {
+          translatedContentForFhir.dischargeSummary = {
+            content: translationResult.translatedContent,
+            language: targetLanguage,
+            gcsPath,
+          };
+        } else if (file.type === 'discharge-instructions') {
+          translatedContentForFhir.dischargeInstructions = {
+            content: translationResult.translatedContent,
+            language: targetLanguage,
+            gcsPath,
+          };
+        }
+
         // Update Firestore with translation metrics
         if (event.compositionId && translationResult.qualityMetrics) {
           await firestoreService.updateTranslationMetrics(
@@ -177,6 +203,33 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<any>): Pr
           targetLanguage,
         });
         // Continue processing other files even if one fails
+      }
+    }
+
+    // Write translated content to FHIR via Backend API
+    if (event.compositionId && (translatedContentForFhir.dischargeSummary || translatedContentForFhir.dischargeInstructions)) {
+      try {
+        logger.info('Writing translated content to FHIR', {
+          compositionId: event.compositionId,
+          tenantId: event.tenantId,
+          hasDischargeSummary: !!translatedContentForFhir.dischargeSummary,
+          hasDischargeInstructions: !!translatedContentForFhir.dischargeInstructions,
+        });
+
+        await backendClient.writeTranslatedToFhir(
+          event.compositionId,
+          event.tenantId,
+          translatedContentForFhir
+        );
+
+        logger.info('Translated content written to FHIR successfully', {
+          compositionId: event.compositionId,
+        });
+      } catch (fhirError) {
+        logger.error('Failed to write translated content to FHIR', fhirError as Error, {
+          compositionId: event.compositionId,
+        });
+        // Don't throw - we still want to report success for the translation itself
       }
     }
 
