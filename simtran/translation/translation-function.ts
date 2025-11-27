@@ -2,7 +2,7 @@ import { CloudEvent } from '@google-cloud/functions-framework';
 import { TranslationService } from './translation.service';
 import { GCSService } from './gcs.service';
 import { FirestoreService } from './firestore.service';
-import { TranslationRequest, TranslationError } from './common/types';
+import { TranslationRequest, SimplificationCompletedEvent } from './common/types';
 import { createLogger } from './common/utils/logger';
 
 const logger = createLogger('TranslationFunction');
@@ -23,145 +23,162 @@ function initializeServices(): void {
 }
 
 /**
- * Main translation function triggered by GCS events
+ * Main translation function triggered by Pub/Sub events from simplification completion
  */
-export async function translateDischargeSummary(cloudEvent: CloudEvent<unknown>): Promise<void> {
+export async function translateDischargeSummary(cloudEvent: CloudEvent<{ message: { data: string } }>): Promise<void> {
   const startTime = Date.now();
 
   try {
     // Initialize services if not already done
-    if (!translationService || !gcsService) {
+    if (!translationService || !gcsService || !firestoreService) {
       initializeServices();
     }
 
-    // Parse the cloud event
-    // For Gen2 CloudEvents with GCS triggers, bucket and file info are in the eventId
-    const eventIdParts = cloudEvent.id.split('/');
-    const bucketName = eventIdParts[0];
-    const fileName = eventIdParts.slice(1, -1).join('/');
+    // Parse the Pub/Sub message
+    const messageData = cloudEvent.data?.message?.data;
+    if (!messageData) {
+      logger.error('No message data in cloud event');
+      return;
+    }
 
-    logger.info('Translation function triggered', {
-      bucket: bucketName,
-      fileName: fileName,
-      eventType: cloudEvent.type,
+    // Decode the base64 message data
+    const decodedData = Buffer.from(messageData, 'base64').toString('utf-8');
+    const event: SimplificationCompletedEvent = JSON.parse(decodedData);
+
+    logger.info('Translation function triggered by simplification completion', {
+      tenantId: event.tenantId,
+      compositionId: event.compositionId,
+      preferredLanguage: event.preferredLanguage,
+      filesCount: event.simplifiedFiles?.length || 0,
     });
 
-    // Validate file
-    if (!fileName || !fileName.endsWith('-simplified.md')) {
-      logger.info('Skipping non-simplified file', { fileName });
-      return;
-    }
-
-    // Extract language parameter from filename or metadata
-    const targetLanguage = extractLanguageFromFileName(fileName);
+    // Get the target language from the event
+    const targetLanguage = event.preferredLanguage || 'es'; // Default to Spanish
     if (!targetLanguage) {
-      logger.info('No target language specified, skipping translation', { fileName });
+      logger.info('No preferred language specified, skipping translation', { event });
       return;
     }
 
-    // Read the simplified content
-    logger.info('Reading simplified content', { fileName, targetLanguage });
-    const content = await gcsService.readFile(bucketName, fileName);
-
-    // Validate that this is simplified content
-    if (!translationService.validateSimplifiedContent(content)) {
-      logger.warning('Content does not appear to be a simplified discharge summary', { fileName });
+    // Skip if target language is English (no need to translate)
+    if (targetLanguage.toLowerCase() === 'en') {
+      logger.info('Target language is English, skipping translation', { targetLanguage });
       return;
     }
 
-    // Translate the content
-    const translationRequest: TranslationRequest = {
-      content,
-      fileName,
-      targetLanguage,
-    };
+    // Process each simplified file
+    for (const file of event.simplifiedFiles || []) {
+      try {
+        logger.info('Processing file for translation', {
+          type: file.type,
+          simplifiedPath: file.simplifiedPath,
+          targetLanguage,
+        });
 
-    logger.info('Starting translation', { fileName, targetLanguage });
-    const translationResult = await translationService.translateContent(translationRequest);
+        // Extract bucket and file path from simplifiedPath (format: gs://bucket/path or just path)
+        let bucketName: string;
+        let fileName: string;
 
-    // Generate output filename
-    const outputFileName = generateTranslatedFileName(fileName, targetLanguage);
+        if (file.simplifiedPath.startsWith('gs://')) {
+          const parts = file.simplifiedPath.replace('gs://', '').split('/');
+          bucketName = parts[0];
+          fileName = parts.slice(1).join('/');
+        } else {
+          // Assume it's a filename and construct from tenant config
+          bucketName = `discharge-summaries-simplified-${event.tenantId}`;
+          fileName = file.simplifiedPath;
+        }
 
-    // Write translated content to output bucket
-    const outputBucket = process.env.OUTPUT_BUCKET || 'discharge-summaries-translated';
-    await gcsService.writeFile(outputBucket, outputFileName, translationResult.translatedContent);
+        logger.info('Reading simplified content from GCS', {
+          bucket: bucketName,
+          file: fileName,
+        });
 
-    // Extract composition ID from filename for metrics storage
-    const compositionId = extractCompositionId(fileName);
+        // Read the simplified content from GCS
+        const content = await gcsService.readFile(bucketName, fileName);
 
-    // Update Firestore with translation info and quality metrics
-    logger.info('Updating Firestore with translation', { fileName, outputFileName, targetLanguage });
-    await firestoreService.updateTranslation(fileName, outputFileName, targetLanguage);
+        // Translate the content
+        const translationRequest: TranslationRequest = {
+          content,
+          fileName,
+          targetLanguage,
+        };
 
-    // Store translation quality metrics if we have a composition ID
-    if (compositionId && translationResult.qualityMetrics) {
-      await firestoreService.updateTranslationMetrics(
-        compositionId,
-        targetLanguage,
-        translationResult.qualityMetrics
-      );
+        logger.info('Starting translation', { fileName, targetLanguage });
+        const translationResult = await translationService.translateContent(translationRequest);
+
+        // Generate output filename
+        const outputFileName = generateTranslatedFileName(fileName, targetLanguage);
+
+        // Write translated content to output bucket
+        const outputBucket = process.env.OUTPUT_BUCKET || 'discharge-summaries-translated';
+        await gcsService.writeFile(outputBucket, outputFileName, translationResult.translatedContent);
+
+        logger.info('Translated content written to GCS', {
+          bucket: outputBucket,
+          file: outputFileName,
+        });
+
+        // Update Firestore with translation metrics
+        if (event.compositionId && translationResult.qualityMetrics) {
+          await firestoreService.updateTranslationMetrics(
+            event.compositionId,
+            targetLanguage,
+            translationResult.qualityMetrics
+          );
+
+          logger.info('Translation metrics stored in Firestore', {
+            compositionId: event.compositionId,
+            targetLanguage,
+          });
+        }
+
+        logger.info('File translation completed successfully', {
+          inputFile: fileName,
+          outputFile: outputFileName,
+          targetLanguage,
+        });
+      } catch (fileError) {
+        logger.error('Failed to translate file', fileError as Error, {
+          file: file.simplifiedPath,
+          targetLanguage,
+        });
+        // Continue processing other files even if one fails
+      }
     }
 
     const processingTime = Date.now() - startTime;
-    logger.info('Translation completed successfully', {
-      fileName,
+    logger.info('Translation function completed successfully', {
+      compositionId: event.compositionId,
       targetLanguage,
-      outputFileName,
+      filesProcessed: event.simplifiedFiles?.length || 0,
       processingTimeMs: processingTime,
     });
-
   } catch (error) {
     const processingTime = Date.now() - startTime;
     logger.error('Translation function failed', error as Error, {
       processingTimeMs: processingTime,
     });
-
     // Re-throw the error to trigger retry mechanism
     throw error;
   }
 }
 
 /**
- * Extract target language from filename
- * Expected format: filename-simplified.md -> language parameter from metadata or filename
- */
-function extractLanguageFromFileName(fileName: string): string | null {
-  // Check if language is specified in filename pattern
-  // e.g., "discharge-simplified-es.md" or "discharge-simplified-fr.md"
-  const languageMatch = fileName.match(/-simplified-([a-z]{2})\.md$/);
-  if (languageMatch) {
-    return languageMatch[1];
-  }
-
-  // Default languages to translate to (can be configured)
-  const defaultLanguages = ['es', 'fr', 'hi', 'de', 'it', 'pt', 'ru', 'ja', 'ko', 'zh'];
-  
-  // For now, return Spanish as default
-  // In production, this could be determined by:
-  // 1. Metadata in the file
-  // 2. Configuration
-  // 3. User preferences
-  return 'es'; // Default to Spanish
-}
-
-/**
  * Generate translated filename
  */
 function generateTranslatedFileName(originalFileName: string, targetLanguage: string): string {
-  // Convert: "discharge-simplified.md" -> "discharge-simplified-es.md"
-  const baseName = originalFileName.replace('-simplified.md', '');
-  return `${baseName}-simplified-${targetLanguage}.md`;
-}
+  // Convert: "discharge-summary-simplified.txt" -> "discharge-summary-simplified-es.txt"
+  // or: "composition-id/discharge-summary-simplified.txt" -> "composition-id/discharge-summary-simplified-es.txt"
 
-/**
- * Extract composition ID from filename
- * Expected format: tenantId/patientId/compositionId/discharge-summary-simplified.md
- */
-function extractCompositionId(fileName: string): string | null {
-  const parts = fileName.split('/');
-  // The composition ID is typically the third part in the path
-  if (parts.length >= 3) {
-    return parts[2];
-  }
-  return null;
+  const parts = originalFileName.split('/');
+  const filename = parts[parts.length - 1];
+  const pathPrefix = parts.length > 1 ? parts.slice(0, -1).join('/') + '/' : '';
+
+  // Replace -simplified.txt or -simplified.md with -simplified-{lang}.txt/md
+  const translatedFilename = filename.replace(
+    /-simplified\.(txt|md)$/,
+    `-simplified-${targetLanguage}.$1`
+  );
+
+  return pathPrefix + translatedFilename;
 }
