@@ -25,7 +25,7 @@ function initializeServices(): void {
 /**
  * Main translation function triggered by Pub/Sub events from simplification completion
  */
-export async function translateDischargeSummary(cloudEvent: CloudEvent<{ message: { data: string } }>): Promise<void> {
+export async function translateDischargeSummary(cloudEvent: CloudEvent<any>): Promise<void> {
   const startTime = Date.now();
 
   try {
@@ -34,15 +34,44 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<{ message
       initializeServices();
     }
 
-    // Parse the Pub/Sub message
-    const messageData = cloudEvent.data?.message?.data;
+    logger.info('Received cloud event', {
+      type: cloudEvent.type,
+      source: cloudEvent.source,
+      hasData: !!cloudEvent.data,
+    });
+
+    // Parse the Pub/Sub message - try both Gen2 CloudEvent formats
+    let messageData: string | undefined;
+
+    // Gen2 Pub/Sub format: cloudEvent.data.message.data
+    if (cloudEvent.data?.message?.data) {
+      messageData = cloudEvent.data.message.data;
+    }
+    // Alternative format: cloudEvent.data might BE the message
+    else if (typeof cloudEvent.data === 'string') {
+      messageData = cloudEvent.data;
+    }
+    // Alternative format: direct data field
+    else if (cloudEvent.data?.data) {
+      messageData = cloudEvent.data.data;
+    }
+
     if (!messageData) {
-      logger.error('No message data in cloud event');
+      const errorData = {
+        dataKeys: cloudEvent.data ? Object.keys(cloudEvent.data) : [],
+        dataType: typeof cloudEvent.data,
+      };
+      logger.error('No message data in cloud event', new Error('Missing message data'), errorData);
       return;
     }
 
     // Decode the base64 message data
     const decodedData = Buffer.from(messageData, 'base64').toString('utf-8');
+    logger.info('Decoded message data', {
+      decodedLength: decodedData.length,
+      preview: decodedData.substring(0, 200),
+    });
+
     const event: SimplificationCompletedEvent = JSON.parse(decodedData);
 
     logger.info('Translation function triggered by simplification completion', {
@@ -77,6 +106,11 @@ export async function translateDischargeSummary(cloudEvent: CloudEvent<{ message
         // Extract bucket and file path from simplifiedPath (format: gs://bucket/path or just path)
         let bucketName: string;
         let fileName: string;
+
+        if (!file.simplifiedPath) {
+          logger.error('File has no simplifiedPath', new Error('Missing simplifiedPath'), { fileType: file.type });
+          continue;
+        }
 
         if (file.simplifiedPath.startsWith('gs://')) {
           const parts = file.simplifiedPath.replace('gs://', '').split('/');
