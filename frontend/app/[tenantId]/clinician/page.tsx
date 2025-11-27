@@ -937,15 +937,28 @@ export default function ClinicianDashboard() {
         languageToFetch
       );
 
-      if (simplifiedContent && patientMedicalData[selectedPatient]) {
-        setPatientMedicalData({
-          ...patientMedicalData,
-          [selectedPatient]: {
-            ...patientMedicalData[selectedPatient],
-            simplifiedSummary: simplifiedContent.summary || '',
-            simplifiedInstructions: simplifiedContent.instructions || '',
+      if (simplifiedContent) {
+        // Update translatedContent state when viewing in preferred language
+        if (viewLanguage === "preferred") {
+          setTranslatedContent({
+            summary: simplifiedContent.summary || '',
+            instructions: simplifiedContent.instructions || '',
+          });
+        } else {
+          // Clear translated content when viewing in English
+          setTranslatedContent(null);
+          // Update the patient data with simplified content
+          if (patientMedicalData[selectedPatient]) {
+            setPatientMedicalData({
+              ...patientMedicalData,
+              [selectedPatient]: {
+                ...patientMedicalData[selectedPatient],
+                simplifiedSummary: simplifiedContent.summary || '',
+                simplifiedInstructions: simplifiedContent.instructions || '',
+              }
+            });
           }
-        });
+        }
       }
     };
 
