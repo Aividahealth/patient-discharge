@@ -413,6 +413,137 @@ export default function AdminDashboard() {
               </Card>
             </div>
 
+            {/* Quality Metrics - Aggregate Improvement */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="font-heading flex items-center gap-2">
+                      <Brain className="h-5 w-5" />
+                      Readability Improvement (AI Simplification)
+                    </CardTitle>
+                    <CardDescription>Average improvement across all discharge summaries</CardDescription>
+                  </div>
+                  <Badge className="bg-green-500">Target Met</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-3 gap-6">
+                  {/* Grade Level Improvement */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Reading Grade Level</span>
+                      <Zap className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Original</span>
+                        <Badge variant="secondary" className="text-xs">Grade 16.8</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: "84%" }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Simplified</span>
+                        <Badge className="bg-green-500 text-xs">Grade 5.4</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: "27%" }}></div>
+                      </div>
+                    </div>
+                    <div className="pt-2 text-center">
+                      <div className="text-2xl font-bold text-green-600">11.4</div>
+                      <div className="text-xs text-muted-foreground">grades easier</div>
+                    </div>
+                  </div>
+
+                  {/* Reading Ease Improvement */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Reading Ease Score</span>
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Original</span>
+                        <Badge variant="secondary" className="text-xs">21.3</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: "21%" }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Simplified</span>
+                        <Badge className="bg-green-500 text-xs">75.2</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: "75%" }}></div>
+                      </div>
+                    </div>
+                    <div className="pt-2 text-center">
+                      <div className="text-2xl font-bold text-green-600">+253%</div>
+                      <div className="text-xs text-muted-foreground">improvement</div>
+                    </div>
+                  </div>
+
+                  {/* SMOG Index Improvement */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>SMOG Index</span>
+                      <Star className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Original</span>
+                        <Badge variant="secondary" className="text-xs">18.6</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: "93%" }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Simplified</span>
+                        <Badge className="bg-green-500 text-xs">9.1</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: "46%" }}></div>
+                      </div>
+                    </div>
+                    <div className="pt-2 text-center">
+                      <div className="text-2xl font-bold text-green-600">9.5</div>
+                      <div className="text-xs text-muted-foreground">points lower</div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Summaries Processed</div>
+                    <div className="text-2xl font-bold mt-1">1,247</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Avg. Compression</div>
+                    <div className="text-2xl font-bold mt-1">52.3%</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Target Achievement</div>
+                    <div className="text-2xl font-bold mt-1 text-green-600">94.2%</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Patient Readability</div>
+                    <div className="text-2xl font-bold mt-1 text-green-600">Grade 5-9</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Section Completion Rates */}
             <div className="grid md:grid-cols-2 gap-6">
               <Card>
