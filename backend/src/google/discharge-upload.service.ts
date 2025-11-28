@@ -833,12 +833,7 @@ export class DischargeUploadService {
         }
       }
 
-      // Filter out patients with status "approved"
-      const filteredPatients = patients.filter(patient => patient.status !== 'approved');
-      
-      this.logger.log(`✅ Retrieved ${filteredPatients.length} patients from discharge queue (${patients.length - filteredPatients.length} approved patients filtered out)`);
-
-      // Fetch quality metrics for all compositions in batch
+      // Fetch quality metrics for all compositions in batch BEFORE filtering
       const compositionIds = patients.map(p => p.compositionId);
       const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
 
@@ -851,6 +846,11 @@ export class DischargeUploadService {
       });
 
       this.logger.log(`✅ Added quality metrics to ${qualityMetricsMap.size}/${patients.length} patients`);
+
+      // Filter out patients with status "approved" AFTER adding quality metrics
+      const filteredPatients = patients.filter(patient => patient.status !== 'approved');
+
+      this.logger.log(`✅ Retrieved ${filteredPatients.length} patients from discharge queue (${patients.length - filteredPatients.length} approved patients filtered out)`);
 
       return {
         patients: filteredPatients,
