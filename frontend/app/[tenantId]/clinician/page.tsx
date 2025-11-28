@@ -756,7 +756,8 @@ export default function ClinicianDashboard() {
             name: firstPatient.attendingPhysician || '',
             id: `physician-${firstPatient.id}`
           },
-          avatar: null
+          avatar: null,
+          qualityMetrics: firstPatient.qualityMetrics, // Preserve quality metrics
         };
         await loadPatientDetails(firstPatient.id, firstPatient.compositionId, queuePatientForTransform);
       }
