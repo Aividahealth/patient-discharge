@@ -36,6 +36,7 @@ export const patientTranslations = {
     // Medications
     yourMedications: "Your Medications",
     printChecklist: "Print Checklist",
+    medicineName: "Medicine Name",
     frequency: "Frequency",
     whenToTake: "When to Take",
     specialInstructions: "Special Instructions",
@@ -153,6 +154,7 @@ export const patientTranslations = {
     // Medications
     yourMedications: "Sus Medicamentos",
     printChecklist: "Imprimir Lista",
+    medicineName: "Nombre del Medicamento",
     frequency: "Frecuencia",
     whenToTake: "Cuándo Tomar",
     specialInstructions: "Instrucciones Especiales",
@@ -270,6 +272,7 @@ export const patientTranslations = {
     // Medications
     yourMedications: "आपकी दवाएं",
     printChecklist: "चेकलिस्ट प्रिंट करें",
+    medicineName: "दवा का नाम",
     frequency: "आवृत्ति",
     whenToTake: "कब लें",
     specialInstructions: "विशेष निर्देश",
@@ -387,6 +390,7 @@ export const patientTranslations = {
     // Medications
     yourMedications: "Thuốc của Bạn",
     printChecklist: "In Danh sách Kiểm tra",
+    medicineName: "Tên Thuốc",
     frequency: "Tần suất",
     whenToTake: "Khi nào Uống",
     specialInstructions: "Hướng dẫn Đặc biệt",
@@ -504,6 +508,7 @@ export const patientTranslations = {
     // Medications
     yourMedications: "Vos Médicaments",
     printChecklist: "Imprimer la Liste",
+    medicineName: "Nom du Médicament",
     frequency: "Fréquence",
     whenToTake: "Quand Prendre",
     specialInstructions: "Instructions Spéciales",

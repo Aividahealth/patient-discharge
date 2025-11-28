@@ -973,8 +973,13 @@ EMERGENCY CONTACTS:
 
             <Card>
               <CardContent className="pt-6">
-                <MedicationsSection 
-                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
+                <MedicationsSection
+                  content={
+                    viewTranslated && translatedParsedSections.medications
+                      ? translatedParsedSections.medications
+                      : parsedSections.medications || dischargeInstructions
+                  }
+                  language={viewTranslated ? preferredLanguage || 'en' : 'en'}
                 />
               </CardContent>
             </Card>
@@ -992,8 +997,12 @@ EMERGENCY CONTACTS:
 
             <Card>
               <CardContent className="pt-6">
-                <AppointmentsSection 
-                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
+                <AppointmentsSection
+                  content={
+                    viewTranslated && translatedParsedSections.appointments
+                      ? translatedParsedSections.appointments
+                      : parsedSections.appointments || dischargeInstructions
+                  }
                 />
               </CardContent>
             </Card>
@@ -1005,8 +1014,12 @@ EMERGENCY CONTACTS:
 
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
-                <SimplifiedDischargeInstructions 
-                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
+                <DietActivitySection
+                  content={
+                    viewTranslated && translatedParsedSections.dietActivity
+                      ? translatedParsedSections.dietActivity
+                      : parsedSections.dietActivity || dischargeInstructions
+                  }
                 />
               </CardContent>
             </Card>
@@ -1018,8 +1031,12 @@ EMERGENCY CONTACTS:
 
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
-                <WarningSignsSection 
-                  content={viewTranslated && translatedInstructions && translatedInstructions.trim() ? translatedInstructions : dischargeInstructions}
+                <WarningSignsSection
+                  content={
+                    viewTranslated && translatedParsedSections.warningsSigns
+                      ? translatedParsedSections.warningsSigns
+                      : parsedSections.warningsSigns || dischargeInstructions
+                  }
                 />
               </CardContent>
             </Card>
