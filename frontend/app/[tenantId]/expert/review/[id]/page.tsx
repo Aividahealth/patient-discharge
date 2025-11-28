@@ -84,7 +84,20 @@ export default function ExpertReviewPage() {
   const [simplifiedInstructions, setSimplifiedInstructions] = useState<string>("")
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
-  const [qualityMetrics, setQualityMetrics] = useState<{ fleschKincaidGradeLevel?: number; fleschReadingEase?: number; smogIndex?: number; compressionRatio?: number; avgSentenceLength?: number } | null>(null)
+  const [qualityMetrics, setQualityMetrics] = useState<{
+    fleschKincaidGradeLevel?: number;
+    fleschReadingEase?: number;
+    smogIndex?: number;
+    compressionRatio?: number;
+    avgSentenceLength?: number;
+    raw?: {
+      readability: {
+        fleschKincaidGradeLevel: number;
+        fleschReadingEase: number;
+        smogIndex: number;
+      };
+    };
+  } | null>(null)
   const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
 
   // Form state
@@ -343,11 +356,89 @@ export default function ExpertReviewPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        {/* Quality Metrics - Show at top for expert review */}
+        {/* Quality Metrics - Compact side-by-side comparison */}
         {qualityMetrics && (
-          <div className="mb-6">
-            <QualityMetricsCard metrics={qualityMetrics} />
-          </div>
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Quality Metrics</CardTitle>
+                  <CardDescription className="text-xs">
+                    Readability comparison: Original vs. Simplified
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  Target: Grade 5-9
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Original Metrics */}
+                {qualityMetrics.raw?.readability && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Original</div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Grade Level:</span>
+                      <Badge variant="secondary">{qualityMetrics.raw.readability.fleschKincaidGradeLevel.toFixed(1)}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Reading Ease:</span>
+                      <Badge variant="secondary">{qualityMetrics.raw.readability.fleschReadingEase.toFixed(1)}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>SMOG Index:</span>
+                      <Badge variant="secondary">{qualityMetrics.raw.readability.smogIndex.toFixed(1)}</Badge>
+                    </div>
+                  </div>
+                )}
+
+                {/* Simplified Metrics */}
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-muted-foreground mb-2">Simplified</div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Grade Level:</span>
+                    <Badge
+                      variant={(qualityMetrics.fleschKincaidGradeLevel ?? 0) <= 9 ? "default" : "destructive"}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {qualityMetrics.fleschKincaidGradeLevel?.toFixed(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Reading Ease:</span>
+                    <Badge
+                      variant={(qualityMetrics.fleschReadingEase ?? 0) >= 60 ? "default" : "destructive"}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {qualityMetrics.fleschReadingEase?.toFixed(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>SMOG Index:</span>
+                    <Badge
+                      variant={(qualityMetrics.smogIndex ?? 0) <= 9 ? "default" : "destructive"}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {qualityMetrics.smogIndex?.toFixed(1)}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Improvement Summary */}
+              {qualityMetrics.raw?.readability && (
+                <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between">
+                    <span>Improvement:</span>
+                    <span className="font-medium text-green-600">
+                      {(qualityMetrics.raw.readability.fleschKincaidGradeLevel - (qualityMetrics.fleschKincaidGradeLevel ?? 0)).toFixed(1)} grades easier
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Side-by-side content */}
