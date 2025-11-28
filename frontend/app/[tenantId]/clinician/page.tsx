@@ -1555,13 +1555,32 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                 {/* Side-by-Side Editor */}
                 <div className="grid lg:grid-cols-2 gap-6 mb-6">
                   {/* Original Document */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="font-heading text-lg flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        {t.originalDischargeSummary}
-                      </CardTitle>
-                    </CardHeader>
+                  <div className="space-y-3">
+                    {/* Quality Metrics for Original Summary */}
+                    {currentPatient?.qualityMetrics?.raw && (
+                      <Card className="bg-muted/30">
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">Original Quality</span>
+                            <QualityMetricsCard
+                              metrics={{
+                                fleschKincaidGradeLevel: currentPatient.qualityMetrics.raw.readability.fleschKincaidGradeLevel,
+                                fleschReadingEase: currentPatient.qualityMetrics.raw.readability.fleschReadingEase,
+                                smogIndex: currentPatient.qualityMetrics.raw.readability.smogIndex
+                              }}
+                              compact={true}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-heading text-lg flex items-center gap-2">
+                          <FileText className="h-5 w-5" />
+                          {t.originalDischargeSummary}
+                        </CardTitle>
+                      </CardHeader>
                     <CardContent>
                       <div className="bg-muted/30 p-4 rounded-lg text-sm max-h-[70vh] overflow-y-auto">
                         {(() => {
@@ -1657,24 +1676,44 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                       </div>
                     </CardContent>
                   </Card>
+                  </div>
 
                   {/* Simplified Patient Version */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="font-heading text-lg flex items-center gap-2">
-                        <User className="h-5 w-5" />
-                        {t.patientFriendlyVersion}
-                        {editMode && <Badge variant="secondary">{t.editingMode || 'Editing Mode'}</Badge>}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                          AI Generated
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          This content has been simplified using artificial intelligence
-                        </span>
-                      </div>
-                    </CardHeader>
+                  <div className="space-y-3">
+                    {/* Quality Metrics for Patient-Friendly Summary */}
+                    {currentPatient?.qualityMetrics && (
+                      <Card className="bg-muted/30">
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">Simplified Quality</span>
+                            <QualityMetricsCard
+                              metrics={{
+                                fleschKincaidGradeLevel: currentPatient.qualityMetrics.fleschKincaidGradeLevel,
+                                fleschReadingEase: currentPatient.qualityMetrics.fleschReadingEase,
+                                smogIndex: currentPatient.qualityMetrics.smogIndex
+                              }}
+                              compact={true}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-heading text-lg flex items-center gap-2">
+                          <User className="h-5 w-5" />
+                          {t.patientFriendlyVersion}
+                          {editMode && <Badge variant="secondary">{t.editingMode || 'Editing Mode'}</Badge>}
+                        </CardTitle>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                            AI Generated
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            This content has been simplified using artificial intelligence
+                          </span>
+                        </div>
+                      </CardHeader>
                     <CardContent>
                       {editMode ? (
                         <div className="space-y-4">
@@ -1788,6 +1827,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                       )}
                     </CardContent>
                   </Card>
+                  </div>
                 </div>
 
                 {/* Review Sections */}
