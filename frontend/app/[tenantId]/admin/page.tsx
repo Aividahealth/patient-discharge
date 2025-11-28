@@ -26,6 +26,7 @@ import { listUsers, createUser, updateUser, deleteUser, type User, type CreateUs
 import { getTenantMetrics } from "@/lib/api/tenant"
 import { getAuditLogs } from "@/lib/api/audit-logs"
 import { republishDischargeEvents } from "@/lib/api/discharge-events"
+import { getAggregateQualityMetrics, type AggregateQualityMetrics } from "@/lib/tenant-api"
 import type { TenantMetrics } from "@/types/tenant-metrics"
 import type { AuditLog } from "@/types/audit-logs"
 import { useToast } from "@/hooks/use-toast"
@@ -96,6 +97,8 @@ export default function AdminDashboard() {
   // Analytics/metrics state
   const [metrics, setMetrics] = useState<TenantMetrics | null>(null)
   const [loadingMetrics, setLoadingMetrics] = useState(false)
+  const [aggregateQualityMetrics, setAggregateQualityMetrics] = useState<AggregateQualityMetrics | null>(null)
+  const [loadingAggregateMetrics, setLoadingAggregateMetrics] = useState(false)
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -106,6 +109,13 @@ export default function AdminDashboard() {
   const [republishing, setRepublishing] = useState(false)
   const [republishHoursAgo, setRepublishHoursAgo] = useState(1)
   const [republishLimit, setRepublishLimit] = useState(10)
+
+  // Fetch aggregate quality metrics when overview tab is active
+  useEffect(() => {
+    if (activeTab === "overview" && token && tenantId) {
+      fetchAggregateQualityMetrics()
+    }
+  }, [activeTab, token, tenantId])
 
   // Fetch users when component mounts or when users tab is active
   useEffect(() => {
@@ -163,6 +173,28 @@ export default function AdminDashboard() {
       })
     } finally {
       setLoadingMetrics(false)
+    }
+  }
+
+  const fetchAggregateQualityMetrics = async () => {
+    if (!token || !tenantId) return
+
+    setLoadingAggregateMetrics(true)
+    try {
+      const fetchedMetrics = await getAggregateQualityMetrics(token, tenantId)
+      setAggregateQualityMetrics(fetchedMetrics)
+    } catch (error) {
+      console.error('Error fetching aggregate quality metrics:', error)
+      // Don't show error toast if metrics don't exist yet
+      if (error instanceof Error && !error.message.includes('404')) {
+        toast({
+          title: "Error",
+          description: "Failed to load quality metrics. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setLoadingAggregateMetrics(false)
     }
   }
 
@@ -414,20 +446,38 @@ export default function AdminDashboard() {
             </div>
 
             {/* Quality Metrics - Aggregate Improvement */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="font-heading flex items-center gap-2">
-                      <Brain className="h-5 w-5" />
-                      Readability Improvement (AI Simplification)
-                    </CardTitle>
-                    <CardDescription>Average improvement across all discharge summaries</CardDescription>
+            {loadingAggregateMetrics ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-heading flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    Readability Improvement (AI Simplification)
+                  </CardTitle>
+                  <CardDescription>Loading quality metrics...</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
-                  <Badge className="bg-green-500">Target Met</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
+                </CardContent>
+              </Card>
+            ) : aggregateQualityMetrics ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="font-heading flex items-center gap-2">
+                        <Brain className="h-5 w-5" />
+                        Readability Improvement (AI Simplification)
+                      </CardTitle>
+                      <CardDescription>Average improvement across all discharge summaries</CardDescription>
+                    </div>
+                    <Badge className={aggregateQualityMetrics.targetAchievementRate >= 80 ? "bg-green-500" : "bg-yellow-500"}>
+                      {aggregateQualityMetrics.targetAchievementRate >= 80 ? "Target Met" : "In Progress"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
                 <div className="grid md:grid-cols-3 gap-6">
                   {/* Grade Level Improvement */}
                   <div className="space-y-3">
@@ -438,23 +488,23 @@ export default function AdminDashboard() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs">Original</span>
-                        <Badge variant="secondary" className="text-xs">Grade 16.8</Badge>
+                        <Badge variant="secondary" className="text-xs">Grade {aggregateQualityMetrics.original.avgGradeLevel.toFixed(1)}</Badge>
                       </div>
                       <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: "84%" }}></div>
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.original.avgGradeLevel / 20) * 100)}%` }}></div>
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs">Simplified</span>
-                        <Badge className="bg-green-500 text-xs">Grade 5.4</Badge>
+                        <Badge className="bg-green-500 text-xs">Grade {aggregateQualityMetrics.simplified.avgGradeLevel.toFixed(1)}</Badge>
                       </div>
                       <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: "27%" }}></div>
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.simplified.avgGradeLevel / 20) * 100)}%` }}></div>
                       </div>
                     </div>
                     <div className="pt-2 text-center">
-                      <div className="text-2xl font-bold text-green-600">11.4</div>
+                      <div className="text-2xl font-bold text-green-600">{aggregateQualityMetrics.improvement.gradeLevel.toFixed(1)}</div>
                       <div className="text-xs text-muted-foreground">grades easier</div>
                     </div>
                   </div>
@@ -468,23 +518,23 @@ export default function AdminDashboard() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs">Original</span>
-                        <Badge variant="secondary" className="text-xs">21.3</Badge>
+                        <Badge variant="secondary" className="text-xs">{aggregateQualityMetrics.original.avgReadingEase.toFixed(1)}</Badge>
                       </div>
                       <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: "21%" }}></div>
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, aggregateQualityMetrics.original.avgReadingEase)}%` }}></div>
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs">Simplified</span>
-                        <Badge className="bg-green-500 text-xs">75.2</Badge>
+                        <Badge className="bg-green-500 text-xs">{aggregateQualityMetrics.simplified.avgReadingEase.toFixed(1)}</Badge>
                       </div>
                       <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: "75%" }}></div>
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, aggregateQualityMetrics.simplified.avgReadingEase)}%` }}></div>
                       </div>
                     </div>
                     <div className="pt-2 text-center">
-                      <div className="text-2xl font-bold text-green-600">+253%</div>
+                      <div className="text-2xl font-bold text-green-600">+{aggregateQualityMetrics.improvement.readingEasePercent.toFixed(0)}%</div>
                       <div className="text-xs text-muted-foreground">improvement</div>
                     </div>
                   </div>
@@ -498,23 +548,23 @@ export default function AdminDashboard() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs">Original</span>
-                        <Badge variant="secondary" className="text-xs">18.6</Badge>
+                        <Badge variant="secondary" className="text-xs">{aggregateQualityMetrics.original.avgSmogIndex.toFixed(1)}</Badge>
                       </div>
                       <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: "93%" }}></div>
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.original.avgSmogIndex / 20) * 100)}%` }}></div>
                       </div>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs">Simplified</span>
-                        <Badge className="bg-green-500 text-xs">9.1</Badge>
+                        <Badge className="bg-green-500 text-xs">{aggregateQualityMetrics.simplified.avgSmogIndex.toFixed(1)}</Badge>
                       </div>
                       <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: "46%" }}></div>
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.simplified.avgSmogIndex / 20) * 100)}%` }}></div>
                       </div>
                     </div>
                     <div className="pt-2 text-center">
-                      <div className="text-2xl font-bold text-green-600">9.5</div>
+                      <div className="text-2xl font-bold text-green-600">{aggregateQualityMetrics.improvement.smogIndex.toFixed(1)}</div>
                       <div className="text-xs text-muted-foreground">points lower</div>
                     </div>
                   </div>
@@ -526,15 +576,17 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-4 gap-4 text-center">
                   <div>
                     <div className="text-sm text-muted-foreground">Summaries Processed</div>
-                    <div className="text-2xl font-bold mt-1">1,247</div>
+                    <div className="text-2xl font-bold mt-1">{aggregateQualityMetrics.totalSummaries.toLocaleString()}</div>
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Avg. Compression</div>
-                    <div className="text-2xl font-bold mt-1">52.3%</div>
+                    <div className="text-2xl font-bold mt-1">{aggregateQualityMetrics.avgCompressionRatio.toFixed(1)}%</div>
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Target Achievement</div>
-                    <div className="text-2xl font-bold mt-1 text-green-600">94.2%</div>
+                    <div className={`text-2xl font-bold mt-1 ${aggregateQualityMetrics.targetAchievementRate >= 80 ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {aggregateQualityMetrics.targetAchievementRate.toFixed(1)}%
+                    </div>
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Patient Readability</div>
@@ -543,6 +595,7 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
+            ) : null}
 
             {/* Section Completion Rates */}
             <div className="grid md:grid-cols-2 gap-6">

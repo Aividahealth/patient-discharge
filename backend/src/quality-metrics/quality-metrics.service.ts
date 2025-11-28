@@ -179,6 +179,115 @@ export class QualityMetricsService {
   }
 
   /**
+   * Get aggregate quality metrics for a tenant
+   */
+  async getAggregateMetrics(tenantId: string): Promise<{
+    totalSummaries: number;
+    avgCompressionRatio: number;
+    targetAchievementRate: number;
+    original: {
+      avgGradeLevel: number;
+      avgReadingEase: number;
+      avgSmogIndex: number;
+    };
+    simplified: {
+      avgGradeLevel: number;
+      avgReadingEase: number;
+      avgSmogIndex: number;
+    };
+    improvement: {
+      gradeLevel: number;
+      readingEase: number;
+      readingEasePercent: number;
+      smogIndex: number;
+    };
+  } | null> {
+    try {
+      // Query all quality metrics for the tenant
+      const snapshot = await this.getFirestore()
+        .collection(this.collectionName)
+        .where('tenantId', '==', tenantId)
+        .get();
+
+      if (snapshot.empty) {
+        this.logger.warn(`No quality metrics found for tenant ${tenantId}`);
+        return null;
+      }
+
+      const allMetrics: QualityMetrics[] = [];
+
+      snapshot.forEach((doc) => {
+        const data = doc.data() as QualityMetricsDocument;
+        if (data?.qualityMetrics) {
+          const metrics = this.extractMetrics(data.qualityMetrics);
+          if (metrics && metrics.raw?.readability) {
+            allMetrics.push(metrics);
+          }
+        }
+      });
+
+      if (allMetrics.length === 0) {
+        this.logger.warn(`No valid quality metrics found for tenant ${tenantId}`);
+        return null;
+      }
+
+      // Calculate averages
+      const totalSummaries = allMetrics.length;
+
+      const avgOriginalGrade = allMetrics.reduce((sum, m) => sum + (m.raw?.readability.fleschKincaidGradeLevel ?? 0), 0) / totalSummaries;
+      const avgOriginalEase = allMetrics.reduce((sum, m) => sum + (m.raw?.readability.fleschReadingEase ?? 0), 0) / totalSummaries;
+      const avgOriginalSmog = allMetrics.reduce((sum, m) => sum + (m.raw?.readability.smogIndex ?? 0), 0) / totalSummaries;
+
+      const avgSimplifiedGrade = allMetrics.reduce((sum, m) => sum + m.fleschKincaidGradeLevel, 0) / totalSummaries;
+      const avgSimplifiedEase = allMetrics.reduce((sum, m) => sum + m.fleschReadingEase, 0) / totalSummaries;
+      const avgSimplifiedSmog = allMetrics.reduce((sum, m) => sum + m.smogIndex, 0) / totalSummaries;
+
+      const avgCompressionRatio = allMetrics.reduce((sum, m) => sum + m.compressionRatio, 0) / totalSummaries;
+
+      // Calculate target achievement rate (Grade 5-9 is target)
+      const targetMin = 5;
+      const targetMax = 9;
+      const summariesInTarget = allMetrics.filter(m =>
+        m.fleschKincaidGradeLevel >= targetMin && m.fleschKincaidGradeLevel <= targetMax
+      ).length;
+      const targetAchievementRate = (summariesInTarget / totalSummaries) * 100;
+
+      // Calculate improvements
+      const gradeImprovement = avgOriginalGrade - avgSimplifiedGrade;
+      const easeImprovement = avgSimplifiedEase - avgOriginalEase;
+      const easeImprovementPercent = avgOriginalEase > 0 ? (easeImprovement / avgOriginalEase) * 100 : 0;
+      const smogImprovement = avgOriginalSmog - avgSimplifiedSmog;
+
+      this.logger.log(`Aggregate metrics calculated for tenant ${tenantId}: ${totalSummaries} summaries`);
+
+      return {
+        totalSummaries,
+        avgCompressionRatio,
+        targetAchievementRate,
+        original: {
+          avgGradeLevel: avgOriginalGrade,
+          avgReadingEase: avgOriginalEase,
+          avgSmogIndex: avgOriginalSmog,
+        },
+        simplified: {
+          avgGradeLevel: avgSimplifiedGrade,
+          avgReadingEase: avgSimplifiedEase,
+          avgSmogIndex: avgSimplifiedSmog,
+        },
+        improvement: {
+          gradeLevel: gradeImprovement,
+          readingEase: easeImprovement,
+          readingEasePercent: easeImprovementPercent,
+          smogIndex: smogImprovement,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get aggregate metrics for tenant ${tenantId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Extract the key metrics from the full quality metrics object
    */
   private extractMetrics(fullMetrics: any): QualityMetrics | null {
