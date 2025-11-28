@@ -172,8 +172,18 @@ This document explains the Firestore indexes needed for optimal query performanc
 
 ### Option 2: Deploy via gcloud CLI
 
+**Note:** gcloud doesn't support bulk index creation from JSON. You need to use Firebase CLI for bulk deployment, or create indexes individually:
+
 ```bash
-gcloud firestore indexes create firestore.indexes.json --project=simtran-474018
+# Individual index creation example:
+gcloud firestore indexes composite create \
+  --collection-group=audit_logs \
+  --query-scope=COLLECTION \
+  --field-config=field-path=tenantId,order=ascending \
+  --field-config=field-path=timestamp,order=descending \
+  --project=simtran-474018
+
+# For multiple indexes, use Firebase CLI (Option 1) instead
 ```
 
 ### Option 3: Manual Creation via Console
