@@ -2114,6 +2114,18 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
               }
             }
 
+            // Fetch quality metrics from the discharge queue API
+            let qualityMetrics = undefined;
+            try {
+              const queueData = await getDischargeQueue(token || '', tenantId || '');
+              const matchingPatient = queueData.patients?.find((p: any) => p.compositionId === data.compositionId);
+              if (matchingPatient?.qualityMetrics) {
+                qualityMetrics = matchingPatient.qualityMetrics;
+              }
+            } catch (error) {
+              console.warn('[ClinicianPortal] Failed to fetch quality metrics for uploaded patient:', error);
+            }
+
             // Create a new patient entry matching the expected structure (reused from file upload)
             const newPatient = {
               id: data.patientId || `patient-${Date.now()}`,
@@ -2126,6 +2138,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
               specialty: data.patientInfo?.unit || 'General',
               attendingPhysician: data.patientInfo?.attendingPhysician?.name || undefined,
               compositionId: data.compositionId,
+              qualityMetrics: qualityMetrics, // Include quality metrics
               // Add parsed data for structured rendering
               originalSummaryParsed: parsedSummaryData,
               originalInstructionsParsed: parsedInstructionsData,
