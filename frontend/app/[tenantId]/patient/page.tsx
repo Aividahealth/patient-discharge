@@ -974,11 +974,7 @@ EMERGENCY CONTACTS:
             <Card>
               <CardContent className="pt-6">
                 <MedicationsSection
-                  content={
-                    viewTranslated && translatedParsedSections.medications
-                      ? translatedParsedSections.medications
-                      : parsedSections.medications || dischargeInstructions
-                  }
+                  content={viewTranslated ? (translatedInstructions || dischargeInstructions) : dischargeInstructions}
                   language={viewTranslated ? preferredLanguage || 'en' : 'en'}
                 />
               </CardContent>
@@ -998,11 +994,7 @@ EMERGENCY CONTACTS:
             <Card>
               <CardContent className="pt-6">
                 <AppointmentsSection
-                  content={
-                    viewTranslated && translatedParsedSections.appointments
-                      ? translatedParsedSections.appointments
-                      : parsedSections.appointments || dischargeInstructions
-                  }
+                  content={viewTranslated ? (translatedInstructions || dischargeInstructions) : dischargeInstructions}
                 />
               </CardContent>
             </Card>
@@ -1015,11 +1007,7 @@ EMERGENCY CONTACTS:
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
                 <DietActivitySection
-                  content={
-                    viewTranslated && translatedParsedSections.dietActivity
-                      ? translatedParsedSections.dietActivity
-                      : parsedSections.dietActivity || dischargeInstructions
-                  }
+                  content={viewTranslated ? (translatedInstructions || dischargeInstructions) : dischargeInstructions}
                 />
               </CardContent>
             </Card>
@@ -1032,11 +1020,7 @@ EMERGENCY CONTACTS:
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="pt-6">
                 <WarningSignsSection
-                  content={
-                    viewTranslated && translatedParsedSections.warningsSigns
-                      ? translatedParsedSections.warningsSigns
-                      : parsedSections.warningsSigns || dischargeInstructions
-                  }
+                  content={viewTranslated ? (translatedInstructions || dischargeInstructions) : dischargeInstructions}
                 />
               </CardContent>
             </Card>
