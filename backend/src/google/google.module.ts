@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { GoogleController } from './google.controller';
 import { CompositionSimplifiedController } from './composition-simplified.controller';
 import { DischargeUploadController } from './discharge-upload.controller';
@@ -11,10 +11,11 @@ import { PubSubModule } from '../pubsub/pubsub.module';
 import { AuditModule } from '../audit/audit.module';
 import { QualityMetricsModule } from '../quality-metrics/quality-metrics.module';
 import { DischargeSummariesModule } from '../discharge-summaries/discharge-summaries.module';
+import { CernerModule } from '../cerner/cerner.module';
 import { PatientResourceGuard } from '../auth/guards/patient-resource.guard';
 
 @Module({
-  imports: [ConfigModule, PubSubModule, AuditModule, QualityMetricsModule, DischargeSummariesModule],
+  imports: [ConfigModule, PubSubModule, AuditModule, QualityMetricsModule, DischargeSummariesModule, CernerModule],
   controllers: [GoogleController, CompositionSimplifiedController, DischargeUploadController, PatientsController],
   providers: [GoogleService, SimplifiedContentService, DischargeUploadService, PatientResourceGuard],
   exports: [GoogleService],

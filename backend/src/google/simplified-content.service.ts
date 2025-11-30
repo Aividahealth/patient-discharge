@@ -1,7 +1,9 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { Storage } from '@google-cloud/storage';
+import { v4 as uuidv4 } from 'uuid';
 import { GoogleService } from './google.service';
 import { DevConfigService } from '../config/dev-config.service';
+import { CernerService } from '../cerner/cerner.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { resolveServiceAccountPath } from '../utils/path.helper';
 import { logPipelineEvent } from '../utils/pipeline-logger';
@@ -25,6 +27,7 @@ export class SimplifiedContentService {
   constructor(
     private readonly googleService: GoogleService,
     private readonly configService: DevConfigService,
+    private readonly cernerService: CernerService,
   ) {}
 
   /**
@@ -637,6 +640,12 @@ export class SimplifiedContentService {
         },
         error: null,
       });
+
+      // Step 4: Write content back to Cerner EHR (if tenant is configured for Cerner)
+      // This is done asynchronously after Google FHIR write succeeds
+      // Errors in Cerner write-back are logged but don't fail the main operation
+      await this.writeToCernerEHR(compositionId, content, contentType, ctx);
+
       return result;
     } catch (error) {
       this.logger.error(`❌ Error processing ${contentType} content: ${error.message}`);
@@ -657,6 +666,316 @@ export class SimplifiedContentService {
       throw error;
     }
   }
+
+  // =============================================================================
+  // Cerner EHR Write-back Methods
+  // =============================================================================
+
+  /**
+   * Check if tenant is configured for Cerner EHR integration
+   */
+  private async isCernerTenant(tenantId: string): Promise<boolean> {
+    try {
+      const ehrVendor = await this.configService.getTenantEHRVendor(tenantId);
+      return ehrVendor === 'cerner';
+    } catch (error) {
+      this.logger.warn(`Could not determine EHR vendor for tenant ${tenantId}: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Extract Cerner encounter ID from Composition's Encounter resource
+   * The Encounter is tagged with 'original-cerner-id' when exported from Cerner
+   */
+  private async extractCernerEncounterId(compositionId: string, ctx: TenantContext): Promise<string | null> {
+    try {
+      // Step 1: Read Composition from Google FHIR
+      this.logger.log(`📋 [CernerWriteback] Reading Composition ${compositionId} to extract encounter reference`);
+      const composition = await this.googleService.fhirRead('Composition', compositionId, ctx);
+      
+      if (!composition || composition.resourceType !== 'Composition') {
+        this.logger.warn(`[CernerWriteback] Composition ${compositionId} not found or invalid`);
+        return null;
+      }
+
+      // Step 2: Extract encounter reference
+      const encounterRef = composition.encounter?.reference;
+      if (!encounterRef) {
+        this.logger.warn(`[CernerWriteback] Composition ${compositionId} does not have an encounter reference`);
+        return null;
+      }
+
+      // Step 3: Parse encounter ID from reference (remove "Encounter/" prefix)
+      const encounterId = encounterRef.replace('Encounter/', '');
+      if (!encounterId) {
+        this.logger.warn(`[CernerWriteback] Invalid encounter reference format: ${encounterRef}`);
+        return null;
+      }
+
+      // Step 4: Fetch Encounter from Google FHIR
+      this.logger.log(`🏥 [CernerWriteback] Fetching Encounter ${encounterId} to check for Cerner encounter ID`);
+      const encounter = await this.googleService.fhirRead('Encounter', encounterId, ctx);
+      
+      if (!encounter || encounter.resourceType !== 'Encounter') {
+        this.logger.warn(`[CernerWriteback] Encounter ${encounterId} not found or invalid`);
+        return null;
+      }
+
+      // Step 5: Check meta.tag for original-cerner-id
+      const tags = encounter.meta?.tag || [];
+      const cernerTag = tags.find((tag: any) => tag.system === 'original-cerner-id');
+      
+      if (cernerTag && cernerTag.code) {
+        const cernerEncounterId = cernerTag.code;
+        this.logger.log(`✅ [CernerWriteback] Found Cerner encounter ID: ${cernerEncounterId}`);
+        return cernerEncounterId;
+      }
+
+      this.logger.log(`ℹ️ [CernerWriteback] Encounter ${encounterId} does not have original-cerner-id tag (not from Cerner)`);
+      return null;
+    } catch (error) {
+      this.logger.error(`❌ [CernerWriteback] Error extracting Cerner encounter ID: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Create DocumentReference in Cerner with simplified/translated content
+   */
+  private async createCernerDocumentReference(
+    cernerEncounterId: string,
+    content: string,
+    contentType: 'simplified' | 'translated',
+    documentType: 'discharge-summary' | 'discharge-instructions',
+    ctx: TenantContext,
+  ): Promise<{ success: boolean; documentReferenceId?: string }> {
+    try {
+      // Fetch Encounter from Cerner to get patient reference
+      this.logger.log(`📋 [CernerWriteback] Fetching Encounter ${cernerEncounterId} from Cerner to extract patient reference`);
+      const encounter = await this.cernerService.fetchResource('Encounter', cernerEncounterId, ctx);
+      
+      if (!encounter || encounter.resourceType !== 'Encounter') {
+        this.logger.warn(`[CernerWriteback] Encounter ${cernerEncounterId} not found or invalid in Cerner`);
+        return { success: false };
+      }
+
+      // Extract patient reference from encounter
+      const patientRef = encounter.subject?.reference;
+      if (!patientRef) {
+        this.logger.warn(`[CernerWriteback] Encounter ${cernerEncounterId} does not have a patient reference`);
+        return { success: false };
+      }
+
+      // Extract patient display name if available
+      const patientDisplay = encounter.subject?.display || 
+        (patientRef.includes('/') ? patientRef.split('/')[1] : patientRef);
+
+      this.logger.log(`✅ [CernerWriteback] Found patient reference: ${patientRef} (display: ${patientDisplay})`);
+
+      // Determine LOINC code and display text based on document type
+      const isDischargeInstructions = documentType === 'discharge-instructions';
+      const loincCode = isDischargeInstructions ? '74213-0' : '18842-5';
+      const loincDisplay = isDischargeInstructions ? 'Discharge instructions' : 'Discharge summary';
+      const title = `${isDischargeInstructions ? 'Discharge Instructions' : 'Discharge Summary'} (${contentType === 'simplified' ? 'Simplified' : 'Translated'})`;
+
+      // Build DocumentReference payload
+      const documentReference = {
+        resourceType: 'DocumentReference',
+        identifier: [
+          {
+            system: 'https://fhir.cerner.com/ceuuid',
+            value: `CE${uuidv4().replace(/-/g, '')}`,
+          },
+        ],
+        status: 'current',
+        docStatus: 'final',
+        type: {
+          coding: [
+            {
+              system: 'http://loinc.org',
+              code: loincCode,
+              display: loincDisplay,
+              userSelected: false,
+            },
+          ],
+          text: title,
+        },
+        category: [
+          {
+            coding: [
+              {
+                system: 'http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category',
+                code: 'clinical-note',
+                display: 'Clinical Note',
+                userSelected: false,
+              },
+            ],
+            text: 'Clinical Note',
+          },
+          {
+            coding: [
+              {
+                system: 'http://loinc.org',
+                code: '11488-4',
+                display: 'Consult note',
+                userSelected: false,
+              },
+            ],
+          },
+        ],
+        subject: {
+          reference: patientRef,
+          display: patientDisplay,
+        },
+        author: [
+          {
+            display: `Aivida Health - ${contentType === 'simplified' ? 'Simplification' : 'Translation'} Service`,
+          },
+        ],
+        date: new Date().toISOString(),
+        content: [
+          {
+            attachment: {
+              contentType: 'text/plain; charset=UTF-8',
+              title: title,
+              creation: new Date().toISOString(),
+              data: Buffer.from(content, 'utf8').toString('base64'),
+            },
+            format: {
+              system: 'http://ihe.net/fhir/ValueSet/IHE.FormatCode.codesystem',
+              code: 'urn:ihe:iti:xds:2017:mimeTypeSufficient',
+              display: 'mimeType Sufficient',
+            },
+          },
+        ],
+        context: {
+          encounter: [
+            {
+              reference: `Encounter/${cernerEncounterId}`,
+            },
+          ],
+          period: {
+            start: new Date().toISOString(),
+            end: new Date().toISOString(),
+          },
+        },
+      };
+
+      this.logger.log(`📤 [CernerWriteback] Creating DocumentReference in Cerner for ${documentType} (${contentType})`);
+      const result = await this.cernerService.createResource('DocumentReference', documentReference, ctx);
+      
+      // Extract ID from various possible response formats
+      let documentReferenceId: string | undefined;
+      
+      if (result) {
+        if (result.resourceType === 'DocumentReference' && result.id) {
+          documentReferenceId = result.id;
+        } else if (result.id) {
+          documentReferenceId = String(result.id);
+        } else if (typeof result === 'string' || typeof result === 'number') {
+          documentReferenceId = String(result);
+        }
+      }
+      
+      if (documentReferenceId) {
+        this.logger.log(`✅ [CernerWriteback] Successfully created DocumentReference in Cerner: ${documentReferenceId}`);
+        return { success: true, documentReferenceId };
+      } else {
+        this.logger.warn(`⚠️ [CernerWriteback] DocumentReference creation returned unexpected result. Could not extract ID.`);
+        return { success: false };
+      }
+    } catch (error) {
+      this.logger.error(`❌ [CernerWriteback] Failed to create DocumentReference in Cerner: ${error.message}`);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Write simplified/translated content back to Cerner EHR
+   * This is called after content is written to Google FHIR
+   */
+  private async writeToCernerEHR(
+    compositionId: string,
+    content: SimplifiedContentRequest,
+    contentType: 'simplified' | 'translated',
+    ctx: TenantContext,
+  ): Promise<void> {
+    try {
+      // Check if tenant is configured for Cerner
+      const isCerner = await this.isCernerTenant(ctx.tenantId);
+      if (!isCerner) {
+        this.logger.log(`ℹ️ [CernerWriteback] Tenant ${ctx.tenantId} is not configured for Cerner - skipping write-back`);
+        return;
+      }
+
+      // Extract Cerner encounter ID
+      const cernerEncounterId = await this.extractCernerEncounterId(compositionId, ctx);
+      if (!cernerEncounterId) {
+        this.logger.log(`ℹ️ [CernerWriteback] No Cerner encounter ID found for Composition ${compositionId} - skipping write-back`);
+        return;
+      }
+
+      this.logger.log(`📤 [CernerWriteback] Writing ${contentType} content back to Cerner for encounter ${cernerEncounterId}`);
+
+      // Write discharge summary if provided
+      if (content.dischargeSummary) {
+        let summaryContent = content.dischargeSummary.content;
+        if (!summaryContent && content.dischargeSummary.gcsPath) {
+          summaryContent = await this.fetchContentFromGCS(content.dischargeSummary.gcsPath);
+        }
+        
+        if (summaryContent) {
+          const result = await this.createCernerDocumentReference(
+            cernerEncounterId,
+            summaryContent,
+            contentType,
+            'discharge-summary',
+            ctx,
+          );
+          
+          if (result.success) {
+            this.logger.log(`✅ [CernerWriteback] Discharge Summary written to Cerner: ${result.documentReferenceId}`);
+          } else {
+            this.logger.warn(`⚠️ [CernerWriteback] Failed to write Discharge Summary to Cerner`);
+          }
+        }
+      }
+
+      // Write discharge instructions if provided
+      if (content.dischargeInstructions) {
+        let instructionsContent = content.dischargeInstructions.content;
+        if (!instructionsContent && content.dischargeInstructions.gcsPath) {
+          instructionsContent = await this.fetchContentFromGCS(content.dischargeInstructions.gcsPath);
+        }
+        
+        if (instructionsContent) {
+          const result = await this.createCernerDocumentReference(
+            cernerEncounterId,
+            instructionsContent,
+            contentType,
+            'discharge-instructions',
+            ctx,
+          );
+          
+          if (result.success) {
+            this.logger.log(`✅ [CernerWriteback] Discharge Instructions written to Cerner: ${result.documentReferenceId}`);
+          } else {
+            this.logger.warn(`⚠️ [CernerWriteback] Failed to write Discharge Instructions to Cerner`);
+          }
+        }
+      }
+
+      this.logger.log(`✅ [CernerWriteback] Completed writing ${contentType} content to Cerner`);
+    } catch (error) {
+      // Log error but don't fail the main operation - Cerner write-back is non-critical
+      this.logger.error(`❌ [CernerWriteback] Error writing to Cerner (non-fatal): ${error.message}`);
+    }
+  }
+
+  // =============================================================================
+  // Wrapper Methods
+  // =============================================================================
 
   /**
    * Wrapper method: Process simplified content
