@@ -39,7 +39,6 @@ import {
   DietActivitySection,
   WarningSignsSection
 } from "@/components/simplified-discharge-renderer"
-import html2canvas from "html2canvas"
 import {
   Heart,
   Pill,

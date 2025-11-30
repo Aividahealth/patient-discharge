@@ -16,8 +16,7 @@ import { AuthGuard } from "@/components/auth-guard"
 import { useTenant } from "@/contexts/tenant-context"
 import { login } from "@/lib/api/auth"
 import { getPatientDetails, getTranslatedContent } from "@/lib/discharge-summaries"
-import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
+import { usePDFExport } from "@/hooks/use-pdf-export"
 import {
   Heart,
   Pill,
@@ -39,6 +38,7 @@ import {
 export default function PatientDashboard() {
   const searchParams = useSearchParams()
   const { login: contextLogin, token, user, tenant, isAuthenticated } = useTenant()
+  const { exportToPDF } = usePDFExport()
 
   const [patientId, setPatientId] = useState<string | null>(null)
   const [compositionId, setCompositionId] = useState<string | null>(null)
@@ -419,25 +419,20 @@ IMPORTANT: This content has been simplified using artificial intelligence for be
   }
 
   const downloadPDF = async () => {
-    try {
-      // Get the current language translations
-      const t = translations[language as keyof typeof translations]
-      
-      // Create a comprehensive discharge summary content
-      const content = `
-DISCHARGE INSTRUCTIONS - ${patientData.name}
-Discharge Date: March 15, 2024
-Attending Physician: Dr. Sarah Johnson, MD
-
+    // Get the current language translations
+    const t = translations[language as keyof typeof translations]
+    
+    // Create a comprehensive discharge summary content
+    const content = `
 ${t.recoverySummary}
 ${t.reasonForStay}: ${t.reasonText}
 ${t.whatHappened}: ${t.whatHappenedText}
 
 ${t.yourMedications}:
-${patientData.medications.map((med) => `- ${med.name} ${med.dose}: ${med.instructions}`).join("\n")}
+${patientData.medications.map((med: any) => `- ${med.name} ${med.dose}: ${med.instructions}`).join("\n")}
 
 ${t.upcomingAppointments}:
-${patientData.appointments.map((apt) => `- ${apt.date}: ${apt.doctor} (${apt.specialty})`).join("\n")}
+${patientData.appointments.map((apt: any) => `- ${apt.date}: ${apt.doctor} (${apt.specialty})`).join("\n")}
 
 ${t.dietActivityGuidelines}:
 ${t.foodsToInclude}:
@@ -485,85 +480,21 @@ EMERGENCY CONTACTS:
 - 24/7 Nurse Hotline: (555) 999-0000
 - Dr. Sarah Johnson: (555) 123-4567
 - Emergency: 911
+`
 
-IMPORTANT: This content has been simplified using artificial intelligence for better patient understanding.
-      `
-
-      // Create PDF
-      const pdf = new jsPDF()
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 20
-      const maxWidth = pageWidth - (margin * 2)
-
-      // Add AI Generated warning at the top
-      pdf.setFontSize(14)
-      pdf.setFont("helvetica", "bold")
-      pdf.setTextColor(245, 158, 11) // Orange color
-      pdf.text("⚠️ AI GENERATED CONTENT ⚠️", pageWidth / 2, 20, { align: "center" })
-
-      // Add title
-      pdf.setTextColor(0, 0, 0) // Reset to black
-      pdf.setFontSize(18)
-      pdf.text("DISCHARGE INSTRUCTIONS", margin, 35)
-      
-      // Add patient info
-      pdf.setFontSize(12)
-      pdf.setFont("helvetica", "normal")
-      pdf.text(`${patientData.name}`, margin, 50)
-      pdf.text(`Discharge Date: March 15, 2024`, margin, 60)
-      pdf.text(`Attending Physician: Dr. Sarah Johnson, MD`, margin, 70)
-
-      // Add content with word wrapping
-      const lines = pdf.splitTextToSize(content, maxWidth)
-      let yPosition = 85
-      
-      pdf.setFontSize(10)
-      for (let i = 0; i < lines.length; i++) {
-        if (yPosition > pageHeight - 20) {
-          pdf.addPage()
-          yPosition = 20
-        }
-        pdf.text(lines[i], margin, yPosition)
-        yPosition += 6
-      }
-      
-      // Add AI disclaimer at the bottom
-      pdf.setFontSize(8)
-      pdf.setFont("helvetica", "italic")
-      pdf.text("This content has been simplified using artificial intelligence for better patient understanding.", margin, yPosition + 10)
-      
-      // Save the PDF
-      pdf.save(`discharge-instructions-${patientData.name.replace(" ", "-").toLowerCase()}.pdf`)
-    } catch (error) {
-      console.error("Error generating PDF:", error)
-      // Fallback to text download
-      const content = `
-DISCHARGE INSTRUCTIONS - ${patientData.name}
-Discharge Date: March 15, 2024
-Attending Physician: Dr. Sarah Johnson, MD
-
-MEDICATIONS:
-${patientData.medications.map((med) => `- ${med.name} ${med.dose}: ${med.instructions}`).join("\n")}
-
-APPOINTMENTS:
-${patientData.appointments.map((apt) => `- ${apt.date}: ${apt.doctor} (${apt.specialty})`).join("\n")}
-
-EMERGENCY CONTACTS:
-- 24/7 Nurse Hotline: (555) 999-0000
-- Dr. Sarah Johnson: (555) 123-4567
-- Emergency: 911
-      `
-      const blob = new Blob([content], { type: "text/plain" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `discharge-instructions-${patientData.name.replace(" ", "-").toLowerCase()}.txt`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    }
+    await exportToPDF({
+      header: {
+        title: '⚠️ AI GENERATED CONTENT ⚠️\n\nDISCHARGE INSTRUCTIONS',
+        patientName: patientData.name,
+        fields: [
+          { label: 'Discharge Date', value: 'March 15, 2024' },
+          { label: 'Attending Physician', value: 'Dr. Sarah Johnson, MD' }
+        ]
+      },
+      content,
+      footer: 'This content has been simplified using artificial intelligence for better patient understanding.',
+      filename: `discharge-instructions-${patientData.name.replace(" ", "-").toLowerCase()}.pdf`
+    })
   }
 
   const languages = {
