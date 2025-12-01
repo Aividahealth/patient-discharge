@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EHRController } from './controllers/ehr.controller';
+import { JWKSController } from './controllers/jwks.controller';
 import { EHRServiceFactory } from './factories/ehr-service.factory';
 import { VendorRegistryService } from './services/vendor-registry.service';
 import { CernerAdapter } from './adapters/cerner.adapter';
@@ -24,7 +25,7 @@ import { AuditModule } from '../audit/audit.module';
  */
 @Module({
   imports: [ConfigModule, AuditModule],
-  controllers: [EHRController],
+  controllers: [EHRController, JWKSController],
   providers: [
     EHRServiceFactory,
     VendorRegistryService,
