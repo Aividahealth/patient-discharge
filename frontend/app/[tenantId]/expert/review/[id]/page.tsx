@@ -21,6 +21,8 @@ import { useTenant } from "@/contexts/tenant-context"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
 import { SimplifiedDischargeContent } from "@/components/simplified-discharge-renderer"
+import { QualityMetricsCard } from "@/components/quality-metrics-card"
+import { getLanguageName } from "@/lib/constants/languages"
 
 // Star Rating Component
 const StarRating = ({ value, onChange, label, required = false }: {
@@ -82,6 +84,21 @@ export default function ExpertReviewPage() {
   const [simplifiedInstructions, setSimplifiedInstructions] = useState<string>("")
   const [patientName, setPatientName] = useState<string>("")
   const [mrn, setMrn] = useState<string>("")
+  const [qualityMetrics, setQualityMetrics] = useState<{
+    fleschKincaidGradeLevel?: number;
+    fleschReadingEase?: number;
+    smogIndex?: number;
+    compressionRatio?: number;
+    avgSentenceLength?: number;
+    raw?: {
+      readability: {
+        fleschKincaidGradeLevel: number;
+        fleschReadingEase: number;
+        smogIndex: number;
+      };
+    };
+  } | null>(null)
+  const [preferredLanguage, setPreferredLanguage] = useState<string | null>(null)
 
   // Form state
   const [reviewerName, setReviewerName] = useState("")
@@ -172,6 +189,18 @@ export default function ExpertReviewPage() {
       
       if (details) {
         setPatientName(details.patientId || patientName)
+        setQualityMetrics(details.qualityMetrics || null)
+        
+        // Set preferred language from patient details
+        if (details.preferredLanguage) {
+          setPreferredLanguage(details.preferredLanguage)
+          // Set language state to preferred language for translation reviews
+          if (reviewType === 'translation') {
+            setLanguage(details.preferredLanguage)
+          }
+        } else {
+          setPreferredLanguage(null)
+        }
       }
     } catch (error) {
       console.error('Failed to load content:', error)
@@ -327,6 +356,91 @@ export default function ExpertReviewPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* Quality Metrics - Compact side-by-side comparison */}
+        {qualityMetrics && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Quality Metrics</CardTitle>
+                  <CardDescription className="text-xs">
+                    Readability comparison: Original vs. Simplified
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  Target: Grade 5-9
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Original Metrics */}
+                {qualityMetrics.raw?.readability && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground mb-2">Original</div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Grade Level:</span>
+                      <Badge variant="secondary">{qualityMetrics.raw.readability.fleschKincaidGradeLevel.toFixed(1)}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Reading Ease:</span>
+                      <Badge variant="secondary">{qualityMetrics.raw.readability.fleschReadingEase.toFixed(1)}</Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>SMOG Index:</span>
+                      <Badge variant="secondary">{qualityMetrics.raw.readability.smogIndex.toFixed(1)}</Badge>
+                    </div>
+                  </div>
+                )}
+
+                {/* Simplified Metrics */}
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-muted-foreground mb-2">Simplified</div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Grade Level:</span>
+                    <Badge
+                      variant={(qualityMetrics.fleschKincaidGradeLevel ?? 0) <= 9 ? "default" : "destructive"}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {qualityMetrics.fleschKincaidGradeLevel?.toFixed(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Reading Ease:</span>
+                    <Badge
+                      variant={(qualityMetrics.fleschReadingEase ?? 0) >= 60 ? "default" : "destructive"}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {qualityMetrics.fleschReadingEase?.toFixed(1)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>SMOG Index:</span>
+                    <Badge
+                      variant={(qualityMetrics.smogIndex ?? 0) <= 9 ? "default" : "destructive"}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {qualityMetrics.smogIndex?.toFixed(1)}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Improvement Summary */}
+              {qualityMetrics.raw?.readability && (
+                <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between">
+                    <span>Improvement:</span>
+                    <span className="font-medium text-green-600">
+                      {(qualityMetrics.raw.readability.fleschKincaidGradeLevel - (qualityMetrics.fleschKincaidGradeLevel ?? 0)).toFixed(1)} grades easier
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Side-by-side content */}
         <div className="grid lg:grid-cols-2 gap-6 mb-8">
           {/* Left side - always shows simplified (English) */}
@@ -364,12 +478,14 @@ export default function ExpertReviewPage() {
           <Card className="flex flex-col">
             <CardHeader>
               <CardTitle>
-                {reviewType === 'simplification' ? 'Original (Raw)' : `Translated (${language.toUpperCase()})`}
+                {reviewType === 'simplification' 
+                  ? 'Original (Raw)' 
+                  : `Translated (${preferredLanguage ? getLanguageName(preferredLanguage) : getLanguageName(language)})`}
               </CardTitle>
               <CardDescription>
                 {reviewType === 'simplification'
                   ? 'Original medical documentation as written by clinical team'
-                  : `Translation of simplified version to ${language.toUpperCase()}`
+                  : `Translation of simplified version to ${preferredLanguage ? getLanguageName(preferredLanguage) : getLanguageName(language)}`
                 }
               </CardDescription>
               {reviewType === 'translation' && (
@@ -397,7 +513,7 @@ export default function ExpertReviewPage() {
                   translatedContent?.content?.content ? (
                     <MarkdownRenderer content={translatedContent.content.content} className="text-sm leading-relaxed" />
                   ) : (
-                    <p className="text-sm text-muted-foreground">Translated version not available for {language.toUpperCase()}</p>
+                    <p className="text-sm text-muted-foreground">Translated version not available for {preferredLanguage ? getLanguageName(preferredLanguage) : getLanguageName(language)}</p>
                   )
                 )}
               </div>

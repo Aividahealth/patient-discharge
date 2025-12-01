@@ -6,6 +6,7 @@ import { BackendClientService } from './backend-client.service';
 import { StorageService } from './storage.service';
 import { PubSubPublisherService } from './pubsub-publisher.service';
 import { QualityMetricsService } from './quality-metrics.service';
+import { FirestoreService } from './firestore.service';
 import { createLogger } from './common/utils/logger';
 import { logPipelineEvent } from './common/utils/pipeline-logger';
 import { calculateQualityMetrics } from './common/utils/quality-metrics';
@@ -19,6 +20,7 @@ let backendClient: BackendClientService;
 let storageService: StorageService;
 let pubsubPublisher: PubSubPublisherService;
 let qualityMetricsService: QualityMetricsService;
+let firestoreService: FirestoreService;
 
 /**
  * Initialize services lazily (on first invocation)
@@ -43,6 +45,9 @@ function initializeServices(): void {
   }
   if (!qualityMetricsService) {
     qualityMetricsService = new QualityMetricsService();
+  }
+  if (!firestoreService) {
+    firestoreService = new FirestoreService();
   }
 }
 
@@ -225,7 +230,7 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
     });
 
     // Step 2a: Get patient's preferred language
-    // Priority: 1) From event (passed from backend), 2) From FHIR Patient resource, 3) Default to Spanish
+    // Priority: 1) From event (passed from backend), 2) From Firestore (discharge_summaries), 3) From FHIR Patient resource
     logger.debug('Step 2a: Getting patient preferred language');
     let preferredLanguage: string | undefined;
     
@@ -238,51 +243,77 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
         compositionId: event.googleCompositionId,
       });
     } else {
-      // Fallback: Fetch from FHIR Patient resource if not in event
+      // Second, check Firestore discharge_summaries collection (where backend stores it during upload)
       try {
-        if (event.patientId) {
-          const patientResponse = await fetch(
-            `${process.env.FHIR_API_BASE_URL || process.env.BACKEND_API_URL}/google/fhir/Patient/${event.patientId}`,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'X-Tenant-ID': tenantId,
-              },
-            }
-          );
-          if (patientResponse.ok) {
-            const patient = await patientResponse.json() as any;
-            // Extract preferred language from patient.communication array
-            // FHIR format: communication: [{ language: { coding: [{ code: "en" }] }, preferred: true }]
-            const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
-            if (preferredComm?.language?.coding?.[0]?.code) {
-              preferredLanguage = preferredComm.language.coding[0].code;
-              logger.info('Patient preferred language found from FHIR', { 
-                preferredLanguage, 
-                patientId: event.patientId 
-              });
-            } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
-              // Fallback to first communication language if no preferred
-              preferredLanguage = patient.communication[0].language.coding[0].code;
-              logger.info('Using first patient communication language from FHIR', { 
-                preferredLanguage, 
-                patientId: event.patientId 
-              });
-            }
+        if (event.googleCompositionId) {
+          preferredLanguage = await firestoreService.getPreferredLanguage(event.googleCompositionId, tenantId);
+          if (preferredLanguage) {
+            logger.info('Patient preferred language found from Firestore', { 
+              preferredLanguage, 
+              compositionId: event.googleCompositionId,
+              tenantId,
+            });
           }
         }
       } catch (error) {
-        logger.warning('Failed to fetch patient preferred language from FHIR, will use default', {
+        logger.warning('Failed to fetch preferred language from Firestore, trying FHIR', {
           error: (error as Error).message,
-          patientId: event.patientId,
+          compositionId: event.googleCompositionId,
         });
+      }
+      
+      // Third, fallback: Fetch from FHIR Patient resource if not in event or Firestore
+      if (!preferredLanguage) {
+        try {
+          if (event.patientId) {
+            const patientResponse = await fetch(
+              `${process.env.FHIR_API_BASE_URL || process.env.BACKEND_API_URL}/google/fhir/Patient/${event.patientId}`,
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Tenant-ID': tenantId,
+                },
+              }
+            );
+            if (patientResponse.ok) {
+              const patient = await patientResponse.json() as any;
+              // Extract preferred language from patient.communication array
+              // FHIR format: communication: [{ language: { coding: [{ code: "en" }] }, preferred: true }]
+              const preferredComm = patient.communication?.find((c: any) => c.preferred === true);
+              if (preferredComm?.language?.coding?.[0]?.code) {
+                preferredLanguage = preferredComm.language.coding[0].code;
+                logger.info('Patient preferred language found from FHIR', { 
+                  preferredLanguage, 
+                  patientId: event.patientId 
+                });
+              } else if (patient.communication?.[0]?.language?.coding?.[0]?.code) {
+                // Fallback to first communication language if no preferred
+                preferredLanguage = patient.communication[0].language.coding[0].code;
+                logger.info('Using first patient communication language from FHIR', { 
+                  preferredLanguage, 
+                  patientId: event.patientId 
+                });
+              }
+            }
+          }
+        } catch (error) {
+          logger.warning('Failed to fetch patient preferred language from FHIR', {
+            error: (error as Error).message,
+            patientId: event.patientId,
+          });
+        }
       }
     }
     
-    // Default to Spanish if no preferred language found
-    if (!preferredLanguage) {
-      preferredLanguage = 'es';
-      logger.info('No preferred language found, defaulting to Spanish', {
+    // Log preferred language status (but don't default - let translation service decide)
+    if (preferredLanguage) {
+      logger.info('Preferred language will be passed to translation service', {
+        preferredLanguage,
+        patientId: event.patientId,
+        compositionId: event.googleCompositionId,
+      });
+    } else {
+      logger.info('No preferred language found - translation service will use tenant default', {
         patientId: event.patientId,
         compositionId: event.googleCompositionId,
       });
@@ -399,7 +430,9 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
     logger.debug('Step 7: Publishing to discharge-simplification-completed topic');
 
     const publishStartTime = Date.now();
-    const messageId = await pubsubPublisher.publishSimplificationCompleted({
+    
+    // Always include preferredLanguage if available (even if undefined, it won't be included in the message)
+    const simplificationCompletedMessage: any = {
       tenantId,
       compositionId: event.googleCompositionId,
       simplifiedFiles,
@@ -407,8 +440,25 @@ async function processDischargeExport(event: DischargeExportEvent): Promise<void
       tokensUsed: totalTokens,
       timestamp: new Date().toISOString(),
       patientId: event.patientId,
-      preferredLanguage,
-    });
+    };
+    
+    // Only include preferredLanguage if it's actually set (not undefined)
+    if (preferredLanguage) {
+      simplificationCompletedMessage.preferredLanguage = preferredLanguage;
+      logger.info('Including preferredLanguage in SimplificationCompletedEvent', {
+        preferredLanguage,
+        patientId: event.patientId,
+        compositionId: event.googleCompositionId,
+      });
+    } else {
+      logger.warning('preferredLanguage not found - translation service will use tenant default', {
+        patientId: event.patientId,
+        compositionId: event.googleCompositionId,
+        eventHadPreferredLanguage: !!event.preferredLanguage,
+      });
+    }
+    
+    const messageId = await pubsubPublisher.publishSimplificationCompleted(simplificationCompletedMessage);
     const publishDuration = Date.now() - publishStartTime;
 
     logger.info('Published to discharge-simplification-completed topic', {

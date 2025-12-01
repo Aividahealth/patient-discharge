@@ -537,6 +537,7 @@ export class DischargeUploadService {
             files: {
               raw: `Binary/${dischargeSummaryBinaryId}`,
             },
+            preferredLanguage: request.preferredLanguage, // Store preferred language in Firestore
             metadata: {
               attendingPhysician: request.attendingPhysician?.name || 'Unknown',
             },
@@ -544,6 +545,9 @@ export class DischargeUploadService {
           ctx.tenantId,
         );
         this.logger.log(`✅ Created discharge summary metadata in Firestore: ${compositionId}`);
+        if (request.preferredLanguage) {
+          this.logger.log(`🗣️ Stored preferred language in Firestore: ${request.preferredLanguage}`);
+        }
       } catch (firestoreError) {
         // Log error but don't fail the upload - quality metrics will still be created
         this.logger.error(`❌ Failed to write discharge summary metadata to Firestore: ${firestoreError.message}`);
@@ -574,13 +578,13 @@ export class DischargeUploadService {
           exportTimestamp: new Date().toISOString(),
           status: 'success',
           // Include preferredLanguage to help downstream services
-          // Default to Spanish if not provided (for manual uploads)
-          preferredLanguage: request.preferredLanguage || 'es',
+          // (simtran will also verify via FHIR Patient if needed)
+          ...(request.preferredLanguage ? { preferredLanguage: request.preferredLanguage } : {}),
         };
 
-        this.logger.log(`📤 Publishing Pub/Sub event for composition: ${compositionId} with preferredLanguage: ${event.preferredLanguage}`);
         await this.pubSubService.publishEncounterExportEvent(event);
-        this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}`);
+        this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}, patientId: ${patientId}, tenantId: ${ctx.tenantId}`);
+        this.logger.debug(`Event payload: ${JSON.stringify(event)}`);
         // Log backend_publish_to_topic completion
         logPipelineEvent({
           tenantId: ctx.tenantId,
@@ -646,8 +650,9 @@ export class DischargeUploadService {
 
   /**
    * Get discharge queue - list of patients ready for discharge review
+   * @param patientIdFilter - Optional patient ID to filter results (for patient role users)
    */
-  async getDischargeQueue(ctx: TenantContext): Promise<{
+  async getDischargeQueue(ctx: TenantContext, patientIdFilter?: string): Promise<{
     patients: Array<{
       id: string;
       mrn: string;
@@ -742,6 +747,12 @@ export class DischargeUploadService {
           }
 
           const patientId = patientRef.replace('Patient/', '');
+          
+          // Filter by patientId if provided (for patient role users)
+          if (patientIdFilter && patientId !== patientIdFilter) {
+            continue; // Skip this patient if it doesn't match the filter
+          }
+          
           const encounterId = encounterRef.replace('Encounter/', '');
 
           // Fetch Patient resource
@@ -822,9 +833,7 @@ export class DischargeUploadService {
         }
       }
 
-      this.logger.log(`✅ Retrieved ${patients.length} patients from discharge queue`);
-
-      // Fetch quality metrics for all compositions in batch
+      // Fetch quality metrics for all compositions in batch BEFORE filtering
       const compositionIds = patients.map(p => p.compositionId);
       const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
 
@@ -838,10 +847,15 @@ export class DischargeUploadService {
 
       this.logger.log(`✅ Added quality metrics to ${qualityMetricsMap.size}/${patients.length} patients`);
 
+      // Filter out patients with status "approved" AFTER adding quality metrics
+      const filteredPatients = patients.filter(patient => patient.status !== 'approved');
+
+      this.logger.log(`✅ Retrieved ${filteredPatients.length} patients from discharge queue (${patients.length - filteredPatients.length} approved patients filtered out)`);
+
       return {
-        patients,
+        patients: filteredPatients,
         meta: {
-          total: patients.length,
+          total: filteredPatients.length,
           ...statusCounts,
         },
       };

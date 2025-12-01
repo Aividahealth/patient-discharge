@@ -16,8 +16,7 @@ import { AuthGuard } from "@/components/auth-guard"
 import { FileUploadModal } from "@/components/file-upload-modal"
 import { MarkdownRenderer, markdownToHtml } from "@/components/markdown-renderer"
 import { useTenant } from "@/contexts/tenant-context"
-import jsPDF from "jspdf"
-import html2canvas from "html2canvas"
+import { usePDFExport } from "@/hooks/use-pdf-export"
 import {
   Upload,
   FileText,
@@ -36,6 +35,7 @@ import {
 
 export default function ClinicianDashboard() {
   const { user } = useTenant()
+  const { exportToPDF } = usePDFExport()
   const [selectedPatient, setSelectedPatient] = useState<string | null>("patient-1")
   const [editMode, setEditMode] = useState(false)
   const [language, setLanguage] = useState("en")
@@ -971,17 +971,8 @@ IMPORTANT: The patient-friendly content has been simplified using artificial int
   const downloadPDF = async () => {
     if (!currentPatient) return
     
-    try {
-      // Get the current language translations
-      const t = translations[language as keyof typeof translations]
-      
-      // Create a comprehensive discharge summary content
-      const content = `
-DISCHARGE SUMMARY - ${currentPatient.name}
-MRN: ${currentPatient.mrn}
-Discharge Date: ${currentPatient.dischargeDate}
-Attending Physician: ${currentPatient.attendingPhysician}
-
+    // Create a comprehensive discharge summary content
+    const content = `
 ORIGINAL DISCHARGE SUMMARY:
 ${currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}
 
@@ -1007,79 +998,22 @@ ${currentPatient.patientFriendly?.appointments?.[language as keyof typeof curren
 
 ACTIVITY GUIDELINES (Simplified):
 ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPatient.patientFriendly.activity] || 'N/A'}
+`
 
-IMPORTANT: The patient-friendly content has been simplified using artificial intelligence for better patient understanding.
-      `
-
-      // Create PDF
-      const pdf = new jsPDF()
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 20
-      const maxWidth = pageWidth - (margin * 2)
-      
-      // Add title
-      pdf.setFontSize(18)
-      pdf.setFont("helvetica", "bold")
-      pdf.text("DISCHARGE SUMMARY", margin, 30)
-      
-      // Add patient info
-      pdf.setFontSize(12)
-      pdf.setFont("helvetica", "normal")
-      pdf.text(`${currentPatient.name}`, margin, 45)
-      pdf.text(`MRN: ${currentPatient.mrn}`, margin, 55)
-      pdf.text(`Discharge Date: ${currentPatient.dischargeDate}`, margin, 65)
-      pdf.text(`Attending Physician: ${currentPatient.attendingPhysician}`, margin, 75)
-      
-      // Add content with word wrapping
-      const lines = pdf.splitTextToSize(content, maxWidth)
-      let yPosition = 90
-      
-      pdf.setFontSize(10)
-      for (let i = 0; i < lines.length; i++) {
-        if (yPosition > pageHeight - 20) {
-          pdf.addPage()
-          yPosition = 20
-        }
-        pdf.text(lines[i], margin, yPosition)
-        yPosition += 6
-      }
-      
-      // Add AI disclaimer at the bottom
-      pdf.setFontSize(8)
-      pdf.setFont("helvetica", "italic")
-      pdf.text("The patient-friendly content has been simplified using artificial intelligence for better patient understanding.", margin, yPosition + 10)
-      
-      // Save the PDF
-      pdf.save(`discharge-summary-${currentPatient.name.replace(" ", "-").toLowerCase()}.pdf`)
-    } catch (error) {
-      console.error("Error generating PDF:", error)
-      // Fallback to text download
-      const content = `
-DISCHARGE SUMMARY - ${currentPatient.name}
-MRN: ${currentPatient.mrn}
-Discharge Date: ${currentPatient.dischargeDate}
-Attending Physician: ${currentPatient.attendingPhysician}
-
-ORIGINAL DISCHARGE SUMMARY:
-${currentPatient.originalSummary?.diagnosis?.[language as keyof typeof currentPatient.originalSummary.diagnosis] || 'N/A'}
-
-MEDICATIONS:
-${currentPatient.originalSummary?.medications?.[language as keyof typeof currentPatient.originalSummary.medications] || 'N/A'}
-
-FOLLOW-UP:
-${currentPatient.originalSummary?.followUp?.[language as keyof typeof currentPatient.originalSummary.followUp] || 'N/A'}
-      `
-      const blob = new Blob([content], { type: "text/plain" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `discharge-summary-${currentPatient.name.replace(" ", "-").toLowerCase()}.txt`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    }
+    await exportToPDF({
+      header: {
+        title: 'DISCHARGE SUMMARY',
+        patientName: currentPatient.name,
+        fields: [
+          { label: 'MRN', value: currentPatient.mrn },
+          { label: 'Discharge Date', value: currentPatient.dischargeDate },
+          { label: 'Attending Physician', value: currentPatient.attendingPhysician }
+        ]
+      },
+      content,
+      footer: 'The patient-friendly content has been simplified using artificial intelligence for better patient understanding.',
+      filename: `discharge-summary-${currentPatient.name.replace(" ", "-").toLowerCase()}.pdf`
+    })
   }
 
   return (

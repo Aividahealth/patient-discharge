@@ -64,7 +64,7 @@ export class DischargeSummariesExportService {
     try {
       // Step 1: Get Cerner patient and map to Google FHIR
       this.logger.log(`👤 Step 1: Getting Cerner patient and mapping to Google FHIR...`);
-      const patientMapping = await this.dischargeExportService['mapCernerPatientToGoogle'](patientId, ctx);
+      const patientMapping = await this.dischargeExportService.mapCernerPatientToGoogle(patientId, ctx);
       if (!patientMapping.success) {
         return {
           success: false,
@@ -903,8 +903,8 @@ export class DischargeSummariesExportService {
           coding: [
             {
               system: 'http://loinc.org',
-              code: '11488-4',
-              display: 'Consult note',
+              code: '18842-5',
+              display: 'Discharge Summary',
             },
           ],
         },

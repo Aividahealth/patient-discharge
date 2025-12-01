@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { patientTranslations } from '@/lib/translations';
 
 interface SimplifiedDischargeSummaryProps {
   content: string;
@@ -265,8 +266,14 @@ export const SimplifiedDischargeInstructions: React.FC<SimplifiedDischargeInstru
 /**
  * Section-specific renderers for tabs
  */
-export const MedicationsSection: React.FC<{ content: string; className?: string }> = ({ content, className = '' }) => {
+export const MedicationsSection: React.FC<{ content: string; className?: string; language?: string }> = ({
+  content,
+  className = '',
+  language = 'en'
+}) => {
   const parsed = parseDischargeInstructions(content);
+  const t = patientTranslations[language as keyof typeof patientTranslations] || patientTranslations.en;
+
   if (!parsed.medications || parsed.medications.length === 0) {
     return (
       <div className={className}>
@@ -281,10 +288,10 @@ export const MedicationsSection: React.FC<{ content: string; className?: string 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="font-semibold">Medicine Name</TableHead>
-              <TableHead className="font-semibold">Frequency</TableHead>
-              <TableHead className="font-semibold">When to Take</TableHead>
-              <TableHead className="font-semibold">Special Instructions</TableHead>
+              <TableHead className="font-semibold">{t.medicineName}</TableHead>
+              <TableHead className="font-semibold">{t.frequency}</TableHead>
+              <TableHead className="font-semibold">{t.whenToTake}</TableHead>
+              <TableHead className="font-semibold">{t.specialInstructions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

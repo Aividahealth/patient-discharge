@@ -136,19 +136,19 @@ To complete full end-to-end testing with authentication:
 
 ### Run Integration Tests
 ```bash
-cd backend
+cd test
 npx ts-node scripts/test-cerner-integration.ts
 ```
 
 ### Run End-to-End Tests
 ```bash
-cd backend
+cd test
 npx ts-node scripts/test-ctest-end-to-end.ts
 ```
 
 ### Check Configuration
 ```bash
-cd backend
+cd test
 npx ts-node scripts/get-ctest-config.ts
 ```
 

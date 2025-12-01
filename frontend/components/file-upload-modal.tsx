@@ -26,6 +26,7 @@ import {
 import { useTenant } from "@/contexts/tenant-context"
 import { createApiClient } from "@/lib/api-client"
 import { parseDischargeDocument } from "@/lib/parsers/parser-registry"
+import { SUPPORTED_LANGUAGES, getLanguageName } from "@/lib/constants/languages"
 
 /**
  * Load PDF.js library from CDN
@@ -567,12 +568,11 @@ export function FileUploadModal({ isOpen, onClose, onUploadSuccess }: FileUpload
                     value={patientFormData.preferredLanguage || 'es'}
                     onChange={(e) => setPatientFormData({ ...patientFormData, preferredLanguage: e.target.value })}
                   >
-                    <option value="en">English</option>
-                    <option value="es">Spanish</option>
-                    <option value="vi">Vietnamese</option>
-                    <option value="fr">French</option>
-                    <option value="hi">Hindi</option>
-                    <option value="zh">Mandarin</option>
+                    {Object.entries(SUPPORTED_LANGUAGES).map(([code, config]) => (
+                      <option key={code} value={code}>
+                        {getLanguageName(code, false)} ({config.nativeName})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>

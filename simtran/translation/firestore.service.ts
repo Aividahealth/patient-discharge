@@ -6,6 +6,7 @@ const logger = createLogger('FirestoreService');
 export class FirestoreService {
   private firestore: Firestore;
   private readonly collection = 'discharge_summaries';
+  private readonly metricsCollection = 'quality_metrics';
 
   constructor() {
     // Use Application Default Credentials in Cloud Run
@@ -66,6 +67,57 @@ export class FirestoreService {
       });
       // Don't throw - Firestore errors shouldn't fail the whole function
       // The file is already processed and saved to GCS
+    }
+  }
+
+  /**
+   * Update quality metrics with translation information
+   */
+  async updateTranslationMetrics(
+    compositionId: string,
+    targetLanguage: string,
+    translationMetrics: {
+      translatedWordCount: number;
+      processingTimeMs: number;
+      detectedSourceLanguage?: string;
+    }
+  ): Promise<void> {
+    try {
+      const metricsRef = this.firestore
+        .collection(this.metricsCollection)
+        .doc(compositionId);
+
+      // Get existing metrics document
+      const metricsDoc = await metricsRef.get();
+
+      if (metricsDoc.exists) {
+        // Update existing document with translation metrics
+        await metricsRef.update({
+          'qualityMetrics.translation': {
+            targetLanguage,
+            translatedWordCount: translationMetrics.translatedWordCount,
+            processingTimeMs: translationMetrics.processingTimeMs,
+            detectedSourceLanguage: translationMetrics.detectedSourceLanguage || 'en',
+          },
+          updatedAt: new Date(),
+        });
+
+        logger.info('Updated quality metrics with translation info', {
+          compositionId,
+          targetLanguage,
+          translatedWordCount: translationMetrics.translatedWordCount,
+        });
+      } else {
+        logger.warning('No quality metrics document found for composition', {
+          compositionId,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to update translation metrics', error as Error, {
+        compositionId,
+        targetLanguage,
+      });
+      // Don't throw - metrics errors shouldn't fail the whole function
     }
   }
 }

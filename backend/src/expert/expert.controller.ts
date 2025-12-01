@@ -38,7 +38,7 @@ export class ExpertController {
     @TenantContext() ctx: TenantContextType,
   ) {
     this.logger.log(`Getting review list with filters: ${JSON.stringify(query)} for tenant: ${ctx.tenantId}`);
-    return this.expertService.getReviewList(query, ctx.tenantId);
+    return this.expertService.getReviewList(query, ctx);
   }
 
   /**
@@ -79,7 +79,7 @@ export class ExpertController {
         );
       }
 
-      const feedback = await this.expertService.submitFeedback(dto, ctx.tenantId);
+      const feedback = await this.expertService.submitFeedback(dto, ctx.tenantId, ctx);
       return {
         success: true,
         id: feedback.id,

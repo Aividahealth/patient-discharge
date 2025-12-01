@@ -6,6 +6,7 @@ import { SessionService } from '../../cerner-auth/session.service';
 import { TenantContext } from '../../tenant/tenant-context';
 import { AuthType } from '../../cerner-auth/types/auth.types';
 import { PubSubService } from '../../pubsub/pubsub.service';
+import { EHRServiceFactory } from '../../ehr/factories/ehr-service.factory';
 
 @Injectable()
 export class EncounterExportScheduler {
@@ -16,6 +17,7 @@ export class EncounterExportScheduler {
     private readonly configService: DevConfigService,
     private readonly sessionService: SessionService,
     private readonly pubSubService: PubSubService,
+    private readonly ehrFactory: EHRServiceFactory,
   ) {
     this.logger.log(`⏰ EncounterExportScheduler initializing with NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
   }
@@ -29,15 +31,20 @@ export class EncounterExportScheduler {
     this.logger.log('🕐 Starting scheduled encounter data export check...');
     
     try {
-      // Get all tenants from config.yaml
-      const tenantIds = this.configService.getAllTenantIds();
+      // Get all tenants from YAML config and Firestore
+      const tenantIds = await this.configService.getAllTenantIds();
       this.logger.log(`🏥 Found ${tenantIds.length} tenants to process: ${tenantIds.join(', ')}`);
 
       for (const tenantId of tenantIds) {
-        await this.processTenantEncounters(tenantId);
+        try {
+          await this.processTenantEncounters(tenantId);
+        } catch (error) {
+          this.logger.error(`❌ Error processing tenant ${tenantId} in scheduler loop: ${error.message}`);
+          // Continue with next tenant instead of breaking
+        }
       }
 
-      this.logger.log('✅ Encounter export cron job completed successfully');
+      this.logger.log(`✅ Encounter export cron job completed successfully (processed ${tenantIds.length} tenants)`);
     } catch (error) {
       this.logger.error(`❌ Error in encounter export cron job: ${error.message}`);
     }
@@ -49,6 +56,19 @@ export class EncounterExportScheduler {
   private async processTenantEncounters(tenantId: string): Promise<void> {
     try {
       this.logger.log(`🏥 Processing encounters for tenant: ${tenantId}`);
+
+      // Check if tenant has EHR integration configured (skip Manual tenants)
+      try {
+        const ehrVendor = await this.configService.getTenantEHRVendor(tenantId);
+        if (!ehrVendor) {
+          this.logger.log(`⏭️  Skipping tenant ${tenantId} - no EHR integration configured (Manual tenant)`);
+          return;
+        }
+        this.logger.log(`✅ Tenant ${tenantId} has EHR integration: ${ehrVendor}`);
+      } catch (error) {
+        // If we can't determine EHR vendor, try to proceed (might be a config issue)
+        this.logger.warn(`⚠️  Could not determine EHR vendor for tenant ${tenantId}: ${error.message}`);
+      }
 
       // Check for active provider app sessions
       const activeSessions = this.sessionService.getActiveSessions(tenantId, AuthType.PROVIDER);
@@ -76,9 +96,32 @@ export class EncounterExportScheduler {
         timestamp: new Date(),
       };
 
-      // Get patient list from config
-      const patients = await this.configService.getTenantCernerPatients(tenantId);
-      this.logger.log(`👥 Processing ${patients.length} patients for tenant ${tenantId}`);
+      // Discover patients automatically from EHR (hybrid approach)
+      let patients: string[] = [];
+      try {
+        this.logger.log(`🔍 Attempting to discover patients for tenant ${tenantId}...`);
+        const ehrService = await this.ehrFactory.getEHRService(ctx);
+        this.logger.log(`✅ EHR service obtained for tenant ${tenantId}, starting patient discovery...`);
+        patients = await ehrService.discoverPatients(ctx);
+        this.logger.log(`👥 Discovered ${patients.length} patients for tenant ${tenantId}`);
+      } catch (error) {
+        this.logger.error(`❌ Error discovering patients for tenant ${tenantId}: ${error.message}`);
+        this.logger.error(`   Error stack: ${error.stack}`);
+        // Fallback to manual list if discovery fails
+        this.logger.log(`🔄 Falling back to manual patient list for tenant ${tenantId}`);
+        try {
+          patients = await this.configService.getTenantCernerPatients(tenantId);
+          this.logger.log(`📝 Retrieved ${patients.length} patients from manual list for tenant ${tenantId}`);
+        } catch (fallbackError) {
+          this.logger.error(`❌ Failed to get manual patient list for tenant ${tenantId}: ${fallbackError.message}`);
+          patients = [];
+        }
+      }
+
+      if (patients.length === 0) {
+        this.logger.log(`📭 No patients found for tenant ${tenantId}, skipping encounter processing`);
+        return;
+      }
 
       for (const patientId of patients) {
         await this.processPatientEncounters(tenantId, patientId, ctx);
@@ -94,19 +137,33 @@ export class EncounterExportScheduler {
    */
   private async processEncountersForProvider(tenantId: string, activeSessions: any[]): Promise<void> {
     try {
-      // Get patient list from config
-      const patients = await this.configService.getTenantCernerPatients(tenantId);
-      this.logger.log(`👥 Processing ${patients.length} patients for tenant ${tenantId} with provider app`);
+      // Use the first active session for this tenant
+      const session = activeSessions[0];
+      const ctx: TenantContext = {
+        tenantId,
+        userId: session.userId,
+        timestamp: new Date(),
+      };
+
+      // Discover patients automatically from EHR (hybrid approach)
+      let patients: string[] = [];
+      try {
+        const ehrService = await this.ehrFactory.getEHRService(ctx);
+        patients = await ehrService.discoverPatients(ctx);
+        this.logger.log(`👥 Discovered ${patients.length} patients for tenant ${tenantId} with provider app`);
+      } catch (error) {
+        this.logger.error(`❌ Error discovering patients: ${error.message}`);
+        // Fallback to manual list if discovery fails
+        this.logger.log('🔄 Falling back to manual patient list');
+        patients = await this.configService.getTenantCernerPatients(tenantId);
+      }
+
+      if (patients.length === 0) {
+        this.logger.log(`📭 No patients found for tenant ${tenantId}, skipping encounter processing`);
+        return;
+      }
 
       for (const patientId of patients) {
-        // Use the first active session for this tenant
-        const session = activeSessions[0];
-        const ctx: TenantContext = {
-          tenantId,
-          userId: session.userId,
-          timestamp: new Date(),
-        };
-
         await this.processPatientEncounters(tenantId, patientId, ctx);
       }
 
@@ -150,7 +207,7 @@ export class EncounterExportScheduler {
         await this.processTenantEncounters(tenantId);
       } else {
         // Process all tenants
-        const tenantIds = this.configService.getAllTenantIds();
+        const tenantIds = await this.configService.getAllTenantIds();
         for (const tid of tenantIds) {
           await this.processTenantEncounters(tid);
         }

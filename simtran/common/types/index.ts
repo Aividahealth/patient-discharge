@@ -118,6 +118,11 @@ export interface TranslationResponse {
   translatedContent: string;
   sourceLanguage: string;
   targetLanguage: string;
+  qualityMetrics?: {
+    translatedWordCount: number;
+    processingTimeMs: number;
+    detectedSourceLanguage?: string;
+  };
 }
 
 export class TranslationError extends Error {

@@ -251,16 +251,28 @@ export class AuthService {
     token: string,
     serviceAccountPath: string,
   ): Promise<{ email: string; email_verified: boolean } | null> {
+    const logContext = {
+      tokenLength: token?.length || 0,
+      tokenPreview: token ? `${token.substring(0, 20)}...${token.substring(token.length - 20)}` : 'null',
+    };
+
+    // Declare variables in outer scope for error logging
+    let tokenAudience: string | undefined;
+    let tokenIssuer: string | undefined;
+    let tokenEmail: string | undefined;
+
+    this.logger.log(`[GoogleOIDC] Starting token verification`, logContext);
+
     try {
       // Validate token format before attempting verification
       if (!token || typeof token !== 'string') {
-        this.logger.warn('Invalid token: token is empty or not a string');
+        this.logger.warn(`[GoogleOIDC] Invalid token: token is empty or not a string`, logContext);
         return null;
       }
 
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
-        this.logger.warn(`Invalid token format: expected 3 segments, got ${tokenParts.length}`);
+        this.logger.warn(`[GoogleOIDC] Invalid token format: expected 3 segments, got ${tokenParts.length}`, logContext);
         return null;
       }
 
@@ -268,26 +280,50 @@ export class AuthService {
       let clientId: string | undefined;
 
       const serviceAccountPathResolved = resolveServiceAccountPath(serviceAccountPath);
+      this.logger.debug(`[GoogleOIDC] Checking service account file at: ${serviceAccountPathResolved}`);
+      
       if (fs.existsSync(serviceAccountPathResolved)) {
         const serviceAccountContent = fs.readFileSync(serviceAccountPathResolved, 'utf8');
         const serviceAccount = JSON.parse(serviceAccountContent);
         clientId = serviceAccount.client_id;
-        this.logger.debug(`Using client_id from service account: ${clientId}`);
+        this.logger.log(`[GoogleOIDC] Using client_id from service account: ${clientId}`);
       } else {
-        this.logger.debug(`Service account file not found at ${serviceAccountPathResolved}, will verify without audience check`);
+        this.logger.warn(`[GoogleOIDC] Service account file not found at ${serviceAccountPathResolved}, will verify without audience check`);
       }
 
       // First, decode the token to check the audience
-      const parts = token.split('.');
-      const payloadB64 = parts[1];
-      const decodedPayload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
-      const tokenAudience = decodedPayload.aud;
+      let decodedPayload: any;
+      let tokenEmailVerified: boolean | undefined;
 
-      this.logger.debug(`Token audience: ${tokenAudience}`);
+      try {
+        const parts = token.split('.');
+        const payloadB64 = parts[1];
+        decodedPayload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
+        tokenAudience = decodedPayload.aud;
+        tokenIssuer = decodedPayload.iss;
+        tokenEmail = decodedPayload.email;
+        tokenEmailVerified = decodedPayload.email_verified;
+
+        this.logger.log(`[GoogleOIDC] Decoded token payload:`, {
+          aud: tokenAudience || 'missing (not a Google Identity token?)',
+          iss: tokenIssuer || 'missing (not a Google Identity token?)',
+          email: tokenEmail || 'missing (not a Google Identity token?)',
+          email_verified: tokenEmailVerified || 'missing',
+          exp: decodedPayload.exp ? new Date(decodedPayload.exp * 1000).toISOString() : 'missing',
+          iat: decodedPayload.iat ? new Date(decodedPayload.iat * 1000).toISOString() : 'missing',
+          sub: decodedPayload.sub || 'missing',
+          allKeys: Object.keys(decodedPayload).join(', '),
+          tokenType: tokenIssuer ? 'Google Identity Token' : (decodedPayload.userId || decodedPayload.username ? 'App JWT Token' : 'Unknown Token Type'),
+        });
+      } catch (decodeError) {
+        this.logger.error(`[GoogleOIDC] Failed to decode token payload: ${decodeError.message}`, decodeError);
+        return null;
+      }
 
       // Verify the token
       const client = new OAuth2Client();
       let payload: any;
+      let verificationMethod = 'unknown';
 
       try {
         // Check if the token's audience is a Cloud Run URL
@@ -298,54 +334,95 @@ export class AuthService {
         if (isCloudRunToken) {
           // Cloud Run service-to-service token - verify signature but don't check audience
           // The audience will be the backend's Cloud Run URL
-          this.logger.debug(`Detected Cloud Run identity token with audience: ${tokenAudience}`);
+          this.logger.log(`[GoogleOIDC] Detected Cloud Run identity token with audience: ${tokenAudience}`);
+          verificationMethod = 'cloud-run-token';
+          
           try {
+            this.logger.debug(`[GoogleOIDC] Attempting getTokenInfo() for Cloud Run token`);
             const tokenInfo = await client.getTokenInfo(token);
-            this.logger.debug(`Token info: email=${tokenInfo.email}, aud=${tokenInfo.aud}`);
-          } catch (tokenInfoError) {
-            this.logger.debug(`getTokenInfo failed: ${tokenInfoError.message}, continuing with signature verification`);
-            // If getTokenInfo fails, try verifyIdToken without audience check
-            const ticket = await client.verifyIdToken({
-              idToken: token,
-              // Don't specify audience - accept any valid Google-signed token
+            this.logger.log(`[GoogleOIDC] getTokenInfo() succeeded: email=${tokenInfo.email}, aud=${tokenInfo.aud}`);
+            payload = decodedPayload; // Use decoded payload if getTokenInfo succeeds
+          } catch (tokenInfoError: any) {
+            this.logger.warn(`[GoogleOIDC] getTokenInfo() failed: ${tokenInfoError.message}`, {
+              errorCode: tokenInfoError.code,
+              errorStack: tokenInfoError.stack?.substring(0, 500),
             });
-            const verifiedPayload = ticket.getPayload();
-            if (verifiedPayload) {
-              payload = verifiedPayload;
-              this.logger.debug(`Google OIDC verified using verifyIdToken (Cloud Run identity token)`);
-            } else {
-              throw new Error('Token verification returned no payload');
+            this.logger.debug(`[GoogleOIDC] Falling back to verifyIdToken() without audience check`);
+            
+            // If getTokenInfo fails, try verifyIdToken without audience check
+            try {
+              const ticket = await client.verifyIdToken({
+                idToken: token,
+                // Don't specify audience - accept any valid Google-signed token
+              });
+              const verifiedPayload = ticket.getPayload();
+              if (verifiedPayload) {
+                payload = verifiedPayload;
+                this.logger.log(`[GoogleOIDC] verifyIdToken() succeeded (Cloud Run identity token)`);
+                verificationMethod = 'verifyIdToken-no-audience';
+              } else {
+                throw new Error('Token verification returned no payload');
+              }
+            } catch (verifyIdTokenError: any) {
+              this.logger.error(`[GoogleOIDC] verifyIdToken() failed: ${verifyIdTokenError.message}`, {
+                errorCode: verifyIdTokenError.code,
+                errorStack: verifyIdTokenError.stack?.substring(0, 500),
+              });
+              throw verifyIdTokenError;
             }
           }
-          if (!payload) {
-            payload = decodedPayload; // Use the already-decoded payload if we got tokenInfo successfully
-          }
-          this.logger.debug(`Google OIDC verified (Cloud Run identity token)`);
         } else if (clientId && tokenAudience === clientId) {
           // Service account token with matching client_id - do full verification
-          this.logger.debug(`Verifying token with audience check for client_id: ${clientId}`);
+          this.logger.log(`[GoogleOIDC] Verifying token with audience check for client_id: ${clientId}`);
+          verificationMethod = 'verifyIdToken-with-audience';
+          
           const ticket = await client.verifyIdToken({
             idToken: token,
             audience: clientId,
           });
           payload = ticket.getPayload();
-          this.logger.debug(`Google OIDC verified with audience check (client_id: ${clientId})`);
+          this.logger.log(`[GoogleOIDC] verifyIdToken() with audience check succeeded`);
         } else {
           // Fallback: verify without audience check
-          this.logger.debug(`Verifying token without audience check (audience: ${tokenAudience})`);
-          const tokenInfo = await client.getTokenInfo(token);
-          this.logger.debug(`Token info: email=${tokenInfo.email}, aud=${tokenInfo.aud}`);
-          payload = decodedPayload;
-          this.logger.debug(`Google OIDC verified without audience check`);
+          this.logger.log(`[GoogleOIDC] Verifying token without audience check (audience: ${tokenAudience}, clientId: ${clientId})`);
+          verificationMethod = 'fallback-no-audience';
+          
+          try {
+            const tokenInfo = await client.getTokenInfo(token);
+            this.logger.log(`[GoogleOIDC] getTokenInfo() succeeded: email=${tokenInfo.email}, aud=${tokenInfo.aud}`);
+            payload = decodedPayload;
+          } catch (tokenInfoError: any) {
+            this.logger.error(`[GoogleOIDC] getTokenInfo() failed in fallback: ${tokenInfoError.message}`, {
+              errorCode: tokenInfoError.code,
+              errorStack: tokenInfoError.stack?.substring(0, 500),
+            });
+            throw tokenInfoError;
+          }
         }
-      } catch (verifyError) {
-        this.logger.warn(`Token verification failed: ${verifyError.message}`);
+      } catch (verifyError: any) {
+        this.logger.error(`[GoogleOIDC] Token verification failed`, {
+          method: verificationMethod,
+          error: verifyError.message,
+          errorCode: verifyError.code,
+          errorName: verifyError.name,
+          tokenAudience: tokenAudience || 'undefined',
+          tokenIssuer: tokenIssuer || 'undefined',
+          tokenEmail: tokenEmail || 'undefined',
+          clientId: clientId || 'undefined',
+          serviceAccountPath: serviceAccountPathResolved,
+          decodedPayloadKeys: decodedPayload ? Object.keys(decodedPayload).join(', ') : 'failed to decode',
+          decodedPayloadSample: decodedPayload ? JSON.stringify(decodedPayload).substring(0, 500) : 'failed to decode',
+          errorStack: verifyError.stack?.substring(0, 1000),
+        });
         throw verifyError;
       }
 
-
       if (!payload) {
-        this.logger.warn('Google OIDC token verification returned no payload');
+        this.logger.error(`[GoogleOIDC] Token verification returned no payload`, {
+          verificationMethod,
+          tokenAudience,
+          tokenIssuer,
+        });
         return null;
       }
 
@@ -354,32 +431,79 @@ export class AuthService {
         'accounts.google.com',
         'https://accounts.google.com',
       ];
-      if (!validIssuers.includes(payload.iss || '')) {
-        this.logger.warn(`Invalid issuer: ${payload.iss}`);
+      const payloadIss = payload.iss || '';
+      if (!validIssuers.includes(payloadIss)) {
+        this.logger.error(`[GoogleOIDC] Invalid issuer: ${payloadIss}`, {
+          validIssuers,
+          payloadIss,
+          tokenAudience,
+          tokenEmail: payload.email,
+        });
         return null;
       }
 
       // Check email_verified
-      if (payload.email_verified !== true) {
-        this.logger.warn(`Email not verified for: ${payload.email}`);
+      const emailVerified = payload.email_verified;
+      if (emailVerified !== true) {
+        this.logger.error(`[GoogleOIDC] Email not verified`, {
+          email: payload.email,
+          email_verified: emailVerified,
+          tokenAudience,
+        });
         return null;
       }
 
       // Extract email
       const email = payload.email;
       if (!email) {
-        this.logger.warn('Google OIDC token missing email claim');
+        this.logger.error(`[GoogleOIDC] Token missing email claim`, {
+          payloadKeys: Object.keys(payload),
+          tokenAudience,
+        });
         return null;
       }
 
-      // Log token details for debugging
-      this.logger.debug(`✅ Google OIDC token verified for email: ${email}, aud: ${payload.aud}`);
+      // Log successful verification
+      this.logger.log(`[GoogleOIDC] ✅ Token verified successfully`, {
+        email,
+        email_verified: emailVerified,
+        aud: payload.aud,
+        iss: payload.iss,
+        verificationMethod,
+      });
+
       return {
         email,
-        email_verified: payload.email_verified === true,
+        email_verified: emailVerified === true,
       };
-    } catch (error) {
-      this.logger.warn(`Google OIDC token verification failed: ${error.message}`);
+    } catch (error: any) {
+      // Determine if this is an expected failure (App JWT token) or unexpected (Google Identity token)
+      const isExpectedFailure = !tokenAudience || 
+                                (!tokenIssuer || !tokenIssuer.includes('google.com')) ||
+                                (!tokenEmail && !tokenAudience?.includes('.run.app'));
+      
+      if (isExpectedFailure) {
+        // This is likely an App JWT token trying Google OIDC first - expected to fail
+        this.logger.debug(`[GoogleOIDC] Token verification failed (expected for App JWT tokens, will fallback to App JWT verification)`, {
+          error: error.message,
+          tokenType: 'App JWT (expected failure)',
+          tokenAudience: tokenAudience || 'missing (not a Google Identity token)',
+          tokenIssuer: tokenIssuer || 'missing (not a Google Identity token)',
+        });
+      } else {
+        // This is a Google Identity token that should have worked - unexpected failure
+        this.logger.error(`[GoogleOIDC] ❌ Token verification failed with exception (unexpected - this was a Google Identity token)`, {
+          error: error.message,
+          errorCode: error.code,
+          errorName: error.name,
+          errorStack: error.stack?.substring(0, 1000),
+          tokenAudience: tokenAudience || 'undefined',
+          tokenIssuer: tokenIssuer || 'undefined',
+          tokenEmail: tokenEmail || 'undefined',
+          tokenLength: token?.length || 0,
+          tokenPreview: token ? `${token.substring(0, 30)}...${token.substring(Math.max(0, token.length - 30))}` : 'null',
+        });
+      }
       return null;
     }
   }

@@ -27,12 +27,47 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+export interface ReadabilityMetrics {
+  fleschKincaidGradeLevel: number;
+  fleschReadingEase: number;
+  smogIndex: number;
+  colemanLiauIndex?: number;
+  automatedReadabilityIndex?: number;
+}
+
+export interface LexicalMetrics {
+  typeTokenRatio?: number;
+  wordCount: number;
+  sentenceCount: number;
+  syllableCount?: number;
+  complexWordCount?: number;
+}
+
+export interface TranslationQualityMetrics {
+  translationConfidence?: number;
+  detectedSourceLanguage?: string;
+  targetLanguage: string;
+  translatedWordCount: number;
+  processingTimeMs: number;
+  readability?: ReadabilityMetrics;
+}
+
 export interface QualityMetrics {
+  // Simplified version metrics (legacy fields for backwards compatibility)
   fleschKincaidGradeLevel?: number;
   fleschReadingEase?: number;
   smogIndex?: number;
   compressionRatio?: number;
   avgSentenceLength?: number;
+
+  // Raw discharge summary metrics (for comparison)
+  raw?: {
+    readability: ReadabilityMetrics;
+    lexical: LexicalMetrics;
+  };
+
+  // Translation metrics (if translated)
+  translation?: TranslationQualityMetrics;
 }
 
 export interface DischargeSummaryMetadata {
@@ -388,6 +423,7 @@ export interface PatientDetailsResponse {
   simplifiedInstructions?: {
     text: string;
   };
+  qualityMetrics?: QualityMetrics;
 }
 
 /**
@@ -580,6 +616,34 @@ export async function getPatientDetails(
     console.warn('Failed to fetch AI-simplified content:', error);
   }
 
+  // Fetch quality metrics from discharge queue API
+  let qualityMetrics: QualityMetrics | undefined = undefined;
+  try {
+    const queueResponse = await fetch(
+      `${apiUrl}/api/patients/discharge-queue`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      }
+    );
+
+    if (queueResponse.ok) {
+      const queueData = await queueResponse.json();
+      // Find the patient with matching compositionId
+      const matchingPatient = queueData.patients?.find((p: any) => p.compositionId === compositionId);
+      if (matchingPatient?.qualityMetrics) {
+        qualityMetrics = matchingPatient.qualityMetrics;
+      }
+    }
+  } catch (error) {
+    // Ignore errors fetching quality metrics
+    console.warn('Failed to fetch quality metrics:', error);
+  }
+
   return {
     patientId,
     compositionId,
@@ -598,5 +662,6 @@ export async function getPatientDetails(
     simplifiedInstructions: (aiSimplifiedInstructions || simplifiedInstructions) ? {
       text: (aiSimplifiedInstructions || simplifiedInstructions)?.text
     } : undefined,
+    qualityMetrics,
   };
 }

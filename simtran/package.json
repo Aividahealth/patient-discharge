@@ -2,7 +2,7 @@
   "name": "discharge-summary-backend",
   "version": "1.0.0",
   "description": "Backend Cloud Functions for discharge summary processing",
-  "main": "translation/lib/translation/translation-function.js",
+  "main": "translation/index.js",
   "scripts": {
     "build": "cd common && npm install && npm run build && cd ../translation && npm install && npm run build",
     "deploy:simplification": "cd simplification && ./deploy.sh",

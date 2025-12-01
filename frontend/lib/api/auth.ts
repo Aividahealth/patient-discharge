@@ -144,7 +144,7 @@ export async function login(request: LoginRequest): Promise<AuthData> {
       features: {
         aiGeneration: true,
         multiLanguage: true,
-        supportedLanguages: ['en', 'es', 'hi', 'vi', 'fr'],
+        supportedLanguages: ['en', 'es', 'hi', 'vi', 'fr', 'zh'],
         fileUpload: true,
         expertPortal: true,
         clinicianPortal: true,

@@ -8,34 +8,71 @@
  */
 
 /**
+ * Readability metrics structure
+ */
+export interface ReadabilityMetrics {
+  fleschKincaidGradeLevel: number;
+  fleschReadingEase: number;
+  smogIndex: number;
+  colemanLiauIndex: number;
+  automatedReadabilityIndex: number;
+}
+
+/**
+ * Simplification metrics structure
+ */
+export interface SimplificationMetrics {
+  compressionRatio: number; // (original - simplified) / original
+  sentenceLengthReduction: number; // average sentence length reduction
+  avgSentenceLength: number;
+  avgWordLength: number;
+}
+
+/**
+ * Lexical metrics structure
+ */
+export interface LexicalMetrics {
+  typeTokenRatio: number; // vocabulary diversity
+  wordCount: number;
+  sentenceCount: number;
+  syllableCount: number;
+  complexWordCount: number; // words with 3+ syllables
+}
+
+/**
+ * Translation quality metrics from Google Translate API
+ */
+export interface TranslationQualityMetrics {
+  translationConfidence?: number; // 0-1 confidence score
+  detectedSourceLanguage?: string;
+  targetLanguage: string;
+  translatedWordCount: number;
+  processingTimeMs: number;
+  // Readability metrics for translated content
+  readability?: ReadabilityMetrics;
+}
+
+/**
  * Quality metrics for simplified text
  */
 export interface QualityMetrics {
-  // Readability Metrics
-  readability: {
-    fleschKincaidGradeLevel: number;
-    fleschReadingEase: number;
-    smogIndex: number;
-    colemanLiauIndex: number;
-    automatedReadabilityIndex: number;
-  };
+  // Readability Metrics for simplified version
+  readability: ReadabilityMetrics;
 
   // Simplification Metrics
-  simplification: {
-    compressionRatio: number; // (original - simplified) / original
-    sentenceLengthReduction: number; // average sentence length reduction
-    avgSentenceLength: number;
-    avgWordLength: number;
+  simplification: SimplificationMetrics;
+
+  // Lexical Metrics for simplified version
+  lexical: LexicalMetrics;
+
+  // Raw discharge summary metrics (original/unsimplified)
+  raw?: {
+    readability: ReadabilityMetrics;
+    lexical: LexicalMetrics;
   };
 
-  // Lexical Metrics
-  lexical: {
-    typeTokenRatio: number; // vocabulary diversity
-    wordCount: number;
-    sentenceCount: number;
-    syllableCount: number;
-    complexWordCount: number; // words with 3+ syllables
-  };
+  // Translation quality metrics (if translated)
+  translation?: TranslationQualityMetrics;
 
   // Semantic Preservation (placeholder for future BERTScore)
   semantic?: {
@@ -196,6 +233,67 @@ function tokenizeSentences(text: string): string[] {
 }
 
 /**
+ * Calculate readability and lexical metrics for a single text
+ * (Used for raw discharge summaries and translations)
+ */
+export function calculateTextMetrics(text: string): {
+  readability: ReadabilityMetrics;
+  lexical: LexicalMetrics;
+} {
+  // Tokenize
+  const words = tokenizeWords(text);
+  const sentences = tokenizeSentences(text);
+
+  // Count syllables and letters
+  let totalSyllables = 0;
+  let totalLetters = 0;
+  let totalCharacters = 0;
+  let complexWordCount = 0; // Words with 3+ syllables
+
+  for (const word of words) {
+    const syllables = countSyllables(word);
+    totalSyllables += syllables;
+    totalLetters += word.replace(/[^a-zA-Z]/g, '').length;
+    totalCharacters += word.length;
+
+    if (syllables >= 3) {
+      complexWordCount++;
+    }
+  }
+
+  // Calculate metrics
+  const wordCount = words.length;
+  const sentenceCount = sentences.length || 1; // Avoid division by zero
+
+  // Readability metrics
+  const fleschReadingEase = calculateFleschReadingEase(wordCount, sentenceCount, totalSyllables);
+  const fleschKincaidGradeLevel = calculateFleschKincaidGradeLevel(wordCount, sentenceCount, totalSyllables);
+  const smogIndex = calculateSMOGIndex(sentenceCount, complexWordCount);
+  const colemanLiauIndex = calculateColemanLiauIndex(wordCount, sentenceCount, totalLetters);
+  const automatedReadabilityIndex = calculateAutomatedReadabilityIndex(wordCount, sentenceCount, totalCharacters);
+
+  // Lexical metrics
+  const typeTokenRatio = calculateTypeTokenRatio(words);
+
+  return {
+    readability: {
+      fleschKincaidGradeLevel: Math.round(fleschKincaidGradeLevel * 10) / 10,
+      fleschReadingEase: Math.round(fleschReadingEase * 10) / 10,
+      smogIndex: Math.round(smogIndex * 10) / 10,
+      colemanLiauIndex: Math.round(colemanLiauIndex * 10) / 10,
+      automatedReadabilityIndex: Math.round(automatedReadabilityIndex * 10) / 10,
+    },
+    lexical: {
+      typeTokenRatio: Math.round(typeTokenRatio * 100) / 100,
+      wordCount,
+      sentenceCount,
+      syllableCount: totalSyllables,
+      complexWordCount,
+    },
+  };
+}
+
+/**
  * Calculate all quality metrics for a simplified text
  */
 export function calculateQualityMetrics(
@@ -250,6 +348,9 @@ export function calculateQualityMetrics(
   // Lexical metrics
   const typeTokenRatio = calculateTypeTokenRatio(simplifiedWords);
 
+  // Calculate raw metrics for the original text
+  const rawMetrics = calculateTextMetrics(originalText);
+
   return {
     readability: {
       fleschKincaidGradeLevel: Math.round(fleschKincaidGradeLevel * 10) / 10,
@@ -271,6 +372,7 @@ export function calculateQualityMetrics(
       syllableCount: totalSyllables,
       complexWordCount,
     },
+    raw: rawMetrics,
     metadata: {
       calculatedAt: new Date(),
       originalWordCount: originalWords.length,

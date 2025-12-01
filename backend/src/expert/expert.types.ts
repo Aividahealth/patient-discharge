@@ -33,6 +33,7 @@ export interface ExpertFeedback {
   // Metadata
   createdAt: Date;
   updatedAt?: Date;
+  cernerDocumentReferenceId?: string; // Cerner DocumentReference ID if created
 }
 
 export interface SubmitFeedbackDto {
@@ -74,7 +75,8 @@ export interface ReviewQualityMetrics {
 }
 
 export interface ReviewSummary {
-  id: string;
+  id: string; // Patient ID (for consistency with clinician portal)
+  compositionId: string; // Composition ID (for fetching content)
   patientName?: string;
   mrn?: string;
   simplifiedAt?: Date;
@@ -83,6 +85,7 @@ export interface ReviewSummary {
   avgRating?: number;
   latestReviewDate?: Date;
   qualityMetrics?: ReviewQualityMetrics;
+  language?: string; // Patient's preferred language (for translation reviews)
 }
 
 export interface ReviewListQuery {

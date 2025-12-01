@@ -35,15 +35,29 @@ export class TranslationService {
       const result = await this.callTranslateWithRetry(request);
       const processingTime = Date.now() - startTime;
 
+      // Calculate word count for quality metrics
+      const translatedWordCount = result.translatedContent
+        .split(/\s+/)
+        .filter(word => word.length > 0).length;
+
       logger.info('Translation completed successfully', {
         fileName: request.fileName,
         targetLanguage: request.targetLanguage,
         originalLength: request.content.length,
         translatedLength: result.translatedContent.length,
+        translatedWordCount,
         processingTimeMs: processingTime,
       });
 
-      return result;
+      // Add quality metrics to the response
+      return {
+        ...result,
+        qualityMetrics: {
+          translatedWordCount,
+          processingTimeMs: processingTime,
+          detectedSourceLanguage: result.sourceLanguage,
+        },
+      };
     } catch (error) {
       const processingTime = Date.now() - startTime;
       logger.error('Translation failed', error as Error, {
@@ -110,8 +124,11 @@ export class TranslationService {
         throw new TranslationError('Empty translation response from Google Translate', false);
       }
 
+      // Post-process translation to ensure section headers are correctly translated
+      const processedTranslation = this.postProcessTranslation(translation.trim(), request.targetLanguage);
+
       return {
-        translatedContent: translation.trim(),
+        translatedContent: processedTranslation,
         sourceLanguage: 'en',
         targetLanguage: request.targetLanguage,
       };
@@ -123,6 +140,216 @@ export class TranslationService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new TranslationError(`Google Translate API error: ${errorMessage}`, this.isRetryableError(error));
     }
+  }
+
+  /**
+   * Post-process translation to ensure section headers match expected patterns
+   * This ensures consistent header translation for proper parsing and preserves formatting
+   */
+  private postProcessTranslation(translatedContent: string, targetLanguage: string): string {
+    // Define expected header translations for each language
+    // These match the headers expected by the frontend parsers
+    const headerMappings: Record<string, Array<{ patterns: string[]; replacement: string }>> = {
+      fr: [
+        {
+          patterns: [
+            '## vos médicaments',
+            '## médicaments',
+            '## vos medicaments',
+            '## vos médicament',
+            '## votre médicament',
+            '## vos médicaments:',
+            '## médicaments:',
+          ],
+          replacement: '## Vos Médicaments',
+        },
+        {
+          patterns: [
+            '## rendez-vous à venir',
+            '## rendez-vous',
+            '## rendez vous à venir',
+            '## rendez-vous à venir:',
+            '## rendez-vous:',
+            '## prochains rendez-vous',
+          ],
+          replacement: '## Rendez-vous à Venir',
+        },
+        {
+          patterns: [
+            '## régime et activité',
+            '## régime et activités',
+            '## alimentation et activité',
+            '## régime et activité:',
+            '## alimentation et activités',
+          ],
+          replacement: '## Régime et Activité',
+        },
+        {
+          patterns: [
+            '## signes d\'alerte',
+            '## signes d\'alerte:',
+            '## symptômes d\'alerte',
+            '## signes d\'alarme',
+            '## signes d\'avertissement',
+          ],
+          replacement: '## Signes d\'Alerte',
+        },
+        {
+          patterns: [
+            '## aperçu',
+            '## résumé',
+            '## vue d\'ensemble',
+            '## aperçu:',
+            '## résumé:',
+          ],
+          replacement: '## Aperçu',
+        },
+      ],
+      es: [
+        {
+          patterns: [
+            '## sus medicamentos',
+            '## medicamentos',
+            '## sus medicamento',
+            '## su medicamento',
+            '## sus medicamentos:',
+            '## medicamentos:',
+          ],
+          replacement: '## Sus Medicamentos',
+        },
+        {
+          patterns: [
+            '## próximas citas',
+            '## citas',
+            '## próximas citas:',
+            '## citas:',
+            '## citas próximas',
+            '## citas de seguimiento',
+          ],
+          replacement: '## Próximas Citas',
+        },
+        {
+          patterns: [
+            '## dieta y actividad',
+            '## dieta y actividades',
+            '## alimentación y actividad',
+            '## dieta y actividad:',
+            '## alimentación y actividades',
+          ],
+          replacement: '## Dieta y Actividad',
+        },
+        {
+          patterns: [
+            '## señales de advertencia',
+            '## señales de advertencia:',
+            '## síntomas de advertencia',
+            '## señales de alarma',
+            '## signos de advertencia',
+          ],
+          replacement: '## Señales de Advertencia',
+        },
+        {
+          patterns: [
+            '## resumen',
+            '## resumen:',
+            '## vista general',
+            '## visión general',
+            '## resumen de alta',
+            '## resumen del alta',
+            '## resumen del alta:',
+          ],
+          replacement: '## Resumen',
+        },
+      ],
+      ps: [
+        {
+          patterns: [
+            '## ستاسو درمل',
+            '## درمل',
+            '## ستاسو درمل:',
+            '## درمل:',
+          ],
+          replacement: '## ستاسو درمل',
+        },
+        {
+          patterns: [
+            '## راتلونکي ناستې',
+            '## ناستې',
+            '## راتلونکي ناستې:',
+            '## ناستې:',
+          ],
+          replacement: '## راتلونکي ناستې',
+        },
+        {
+          patterns: [
+            '## خوراک او فعالیت',
+            '## خوراک او فعالیتونه',
+            '## خوراک او فعالیت:',
+          ],
+          replacement: '## خوراک او فعالیت',
+        },
+        {
+          patterns: [
+            '## د خطر نښې',
+            '## د خطر نښې:',
+            '## د خطر نښانې',
+          ],
+          replacement: '## د خطر نښې',
+        },
+        {
+          patterns: [
+            '## لنډیز',
+            '## لنډیز:',
+            '## کتنه',
+          ],
+          replacement: '## لنډیز',
+        },
+      ],
+    };
+
+    const mappings = headerMappings[targetLanguage];
+    if (!mappings) {
+      // No post-processing needed for unsupported languages
+      return translatedContent;
+    }
+
+    let processed = translatedContent;
+    const lines = processed.split('\n');
+
+    // Process each line to normalize headers while preserving formatting
+    const processedLines = lines.map((line) => {
+      const trimmedLine = line.trim();
+      
+      // Check if this line is a section header (starts with ##)
+      if (trimmedLine.startsWith('##')) {
+        // For RTL languages (like Pashto), don't convert to lowercase
+        // For LTR languages, convert to lowercase for matching
+        const isRTL = targetLanguage === 'ps' || targetLanguage === 'ar' || targetLanguage === 'he' || targetLanguage === 'ur';
+        const lineForMatching = isRTL ? trimmedLine : trimmedLine.toLowerCase();
+        
+        // Check against all mappings
+        for (const mapping of mappings) {
+          for (const pattern of mapping.patterns) {
+            // For RTL languages, match exactly (case-sensitive)
+            // For LTR languages, match case-insensitively
+            const patternForMatching = isRTL ? pattern : pattern.toLowerCase();
+            const matchPattern = isRTL ? pattern : pattern.toLowerCase();
+            
+            // Match exact pattern or pattern with colon
+            if (lineForMatching === matchPattern || lineForMatching === matchPattern + ':') {
+              // Preserve original indentation if any
+              const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
+              return leadingWhitespace + mapping.replacement;
+            }
+          }
+        }
+      }
+      
+      // Preserve all other lines as-is (including markdown formatting, bold headers, tables, etc.)
+      return line;
+    });
+
+    return processedLines.join('\n');
   }
 
   /**

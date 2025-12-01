@@ -59,7 +59,7 @@ The `ctest` tenant needs to have Cerner sandbox credentials added via the System
 After configuration, run the test script to verify:
 
 ```bash
-cd backend
+cd test
 npx ts-node scripts/test-cerner-integration.ts
 ```
 

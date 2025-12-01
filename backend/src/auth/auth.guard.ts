@@ -78,9 +78,25 @@ export class AuthGuard implements CanActivate {
     try {
       const headerB64 = token.split('.')[0];
       const header = JSON.parse(Buffer.from(headerB64, 'base64').toString());
-      this.logger.debug(`Token header: ${JSON.stringify(header)}`);
+      this.logger.debug(`[AuthGuard] Token header decoded: ${JSON.stringify(header)}`);
+      
+      // Also try to decode payload for debugging
+      try {
+        const payloadB64 = token.split('.')[1];
+        const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString());
+        this.logger.debug(`[AuthGuard] Token payload preview:`, {
+          aud: payload.aud,
+          iss: payload.iss,
+          email: payload.email,
+          email_verified: payload.email_verified,
+          exp: payload.exp ? new Date(payload.exp * 1000).toISOString() : 'missing',
+          iat: payload.iat ? new Date(payload.iat * 1000).toISOString() : 'missing',
+        });
+      } catch (payloadError) {
+        this.logger.debug(`[AuthGuard] Could not decode token payload: ${payloadError.message}`);
+      }
     } catch (e) {
-      this.logger.debug(`Could not decode token header: ${e.message}`);
+      this.logger.debug(`[AuthGuard] Could not decode token header: ${e.message}`);
     }
 
     // Validate token format (JWT should have 3 parts separated by dots)
@@ -102,6 +118,12 @@ export class AuthGuard implements CanActivate {
 
     try {
       const config = this.devConfigService.get();
+      this.logger.debug(`[AuthGuard] Attempting Google OIDC verification`, {
+        hasServiceAuthnPath: !!config.service_authn_path,
+        serviceAuthnPath: config.service_authn_path,
+        tenantId: tenantIdHeader,
+      });
+
       if (config.service_authn_path) {
         const googleOidcResult = await this.authService.verifyGoogleOIDCToken(
           token,
@@ -115,13 +137,21 @@ export class AuthGuard implements CanActivate {
             email: googleOidcResult.email,
             tenantId: tenantIdHeader,
           };
-          this.logger.debug(
-            `✅ Google OIDC authentication successful for service: ${googleOidcResult.email} in tenant: ${tenantIdHeader}`,
+          this.logger.log(
+            `[AuthGuard] ✅ Google OIDC authentication successful for service: ${googleOidcResult.email} in tenant: ${tenantIdHeader}`,
           );
+        } else {
+          this.logger.warn(`[AuthGuard] Google OIDC verification returned null (token invalid or verification failed)`);
         }
+      } else {
+        this.logger.debug(`[AuthGuard] service_authn_path not configured, skipping Google OIDC verification`);
       }
-    } catch (error) {
-      this.logger.debug(`Google OIDC verification failed: ${error.message}`);
+    } catch (error: any) {
+      this.logger.error(`[AuthGuard] Google OIDC verification threw exception: ${error.message}`, {
+        errorCode: error.code,
+        errorName: error.name,
+        errorStack: error.stack?.substring(0, 500),
+      });
       // Continue to try app JWT verification
     }
 
