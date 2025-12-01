@@ -442,4 +442,121 @@ export class EPICAdapter implements IEHRService {
 
     return parsed;
   }
+
+  /**
+   * Discover patients automatically from EPIC using hybrid approach:
+   * 1. Search for recent Encounters (primary)
+   * 2. Search for recent DocumentReferences (secondary)
+   * 3. Include manual patient list from config (optional)
+   * 
+   * Lookback period: 1 hour (hardcoded)
+   */
+  async discoverPatients(ctx: TenantContext): Promise<string[]> {
+    const patientIds = new Set<string>();
+    const lookbackHours = 1; // Hardcoded to 1 hour
+    const oneHourAgo = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+
+    this.logger.log(`🔍 Discovering patients from EPIC for tenant: ${ctx.tenantId} (lookback: ${lookbackHours} hour)`);
+
+    try {
+      // Ensure authenticated
+      if (!(await this.authenticate(ctx, AuthType.SYSTEM))) {
+        this.logger.error('❌ Failed to authenticate with EPIC for patient discovery');
+        // Fallback to manual list
+        return await this.getManualPatientList(ctx);
+      }
+
+      // Step 1: Search for recent Encounters (primary method)
+      this.logger.log('📋 Step 1: Searching for recent Encounters...');
+      try {
+        const encounters = await this.searchResource('Encounter', {
+          status: 'finished',
+          _lastUpdated: `ge${oneHourAgo}`,
+          _count: 100,
+          _sort: '-_lastUpdated',
+        }, ctx, AuthType.SYSTEM);
+
+        if (encounters?.entry) {
+          for (const entry of encounters.entry) {
+            const patientRef = entry.resource.subject?.reference;
+            if (patientRef?.startsWith('Patient/')) {
+              const patientId = patientRef.replace('Patient/', '');
+              patientIds.add(patientId);
+            }
+          }
+          this.logger.log(`   ✅ Found ${encounters.entry.length} encounters, extracted ${patientIds.size} unique patient IDs`);
+        } else {
+          this.logger.log('   ⚠️  No recent encounters found');
+        }
+      } catch (error) {
+        this.logger.warn(`   ⚠️  Error searching for Encounters: ${error.message}`);
+      }
+
+      // Step 2: Search for recent DocumentReferences (secondary method)
+      this.logger.log('📄 Step 2: Searching for recent DocumentReferences...');
+      try {
+        const documents = await this.searchResource('DocumentReference', {
+          type: 'http://loinc.org|18842-5', // Discharge summary
+          _lastUpdated: `ge${oneHourAgo}`,
+          _count: 100,
+          _sort: '-_lastUpdated',
+        }, ctx, AuthType.SYSTEM);
+
+        if (documents?.entry) {
+          const beforeDocCount = patientIds.size;
+          for (const entry of documents.entry) {
+            const patientRef = entry.resource.subject?.reference;
+            if (patientRef?.startsWith('Patient/')) {
+              const patientId = patientRef.replace('Patient/', '');
+              patientIds.add(patientId);
+            }
+          }
+          const newPatients = patientIds.size - beforeDocCount;
+          this.logger.log(`   ✅ Found ${documents.entry.length} documents, added ${newPatients} new patient IDs`);
+        } else {
+          this.logger.log('   ⚠️  No recent DocumentReferences found');
+        }
+      } catch (error) {
+        this.logger.warn(`   ⚠️  Error searching for DocumentReferences: ${error.message}`);
+      }
+
+      // Step 3: Include manual patient list from config (optional fallback)
+      this.logger.log('📝 Step 3: Including manual patient list from config...');
+      const manualPatients = await this.getManualPatientList(ctx);
+      if (manualPatients.length > 0) {
+        const beforeManualCount = patientIds.size;
+        manualPatients.forEach(id => patientIds.add(id));
+        const addedManual = patientIds.size - beforeManualCount;
+        this.logger.log(`   ✅ Added ${addedManual} patients from manual list (${manualPatients.length} total in config)`);
+      } else {
+        this.logger.log('   ℹ️  No manual patient list configured');
+      }
+
+      const finalPatientList = Array.from(patientIds);
+      this.logger.log(`✅ Patient discovery complete: ${finalPatientList.length} total patients discovered`);
+      if (finalPatientList.length > 0) {
+        this.logger.log(`   Patient IDs: ${finalPatientList.slice(0, 10).join(', ')}${finalPatientList.length > 10 ? '...' : ''}`);
+      }
+
+      return finalPatientList;
+    } catch (error) {
+      this.logger.error(`❌ Error during patient discovery: ${error.message}`);
+      // Fallback to manual list on error
+      this.logger.log('🔄 Falling back to manual patient list');
+      return await this.getManualPatientList(ctx);
+    }
+  }
+
+  /**
+   * Get manual patient list from configuration (fallback)
+   */
+  private async getManualPatientList(ctx: TenantContext): Promise<string[]> {
+    try {
+      const ehrConfig = await this.configService.getTenantEHRConfig(ctx.tenantId);
+      return ehrConfig?.patients || [];
+    } catch (error) {
+      this.logger.warn(`Could not retrieve manual patient list: ${error.message}`);
+      return [];
+    }
+  }
 }

@@ -5,6 +5,7 @@ import { AuditService } from '../../audit/audit.service';
 import { DevConfigService } from '../../config/dev-config.service';
 import { TenantContext } from '../../tenant/tenant-context';
 import { ExportResult } from '../types/discharge-export.types';
+import { EHRVendor } from '../../ehr/interfaces/ehr-service.interface';
 
 @Injectable()
 export class DischargeExportService {
@@ -576,6 +577,39 @@ export class DischargeExportService {
       };
     } catch (error) {
       this.logger.error(`Error mapping ${vendor} patient ${ehrPatientId} to Google: ${error.message}`);
+      return {
+        success: false,
+        action: 'failed',
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Public method: Map Cerner patient to Google FHIR patient
+   * Used by DischargeSummariesExportService for encounter exports
+   */
+  async mapCernerPatientToGoogle(cernerPatientId: string, ctx: TenantContext): Promise<{
+    success: boolean;
+    googlePatientId?: string;
+    action: 'found' | 'created' | 'failed';
+    error?: string;
+  }> {
+    try {
+      // Get Cerner EHR service from factory
+      const cernerService = this.ehrFactory.getEHRServiceByVendor(EHRVendor.CERNER, ctx.tenantId);
+      if (!cernerService) {
+        return {
+          success: false,
+          action: 'failed',
+          error: 'Cerner service not available',
+        };
+      }
+
+      // Use the existing private method
+      return await this.mapEHRPatientToGoogle(cernerService, cernerPatientId, ctx);
+    } catch (error) {
+      this.logger.error(`Error mapping Cerner patient ${cernerPatientId} to Google: ${error.message}`);
       return {
         success: false,
         action: 'failed',

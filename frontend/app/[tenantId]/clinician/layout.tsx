@@ -8,7 +8,7 @@ export default function ClinicianLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthGuard>
+    <AuthGuard requiredRole="clinician">
       <TenantBranding />
       {children}
     </AuthGuard>

@@ -1,5 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import { createLogger } from './common/utils/logger';
+import { QualityMetrics } from './common/utils/quality-metrics';
 
 const logger = createLogger('FirestoreService');
 
@@ -17,6 +18,7 @@ export interface DischargeSummaryMetadata {
     dischargeDate?: Date;
     diagnosis?: string[];
   };
+  qualityMetrics?: QualityMetrics;
   createdAt: Date;
   updatedAt: Date;
   simplifiedAt?: Date;
@@ -39,6 +41,7 @@ export class FirestoreService {
   async upsertDischargeSummary(
     rawFileName: string,
     simplifiedFileName: string,
+    qualityMetrics?: QualityMetrics,
   ): Promise<void> {
     try {
       const now = new Date();
@@ -56,17 +59,25 @@ export class FirestoreService {
       if (!existingSnapshot.empty) {
         // Update existing record
         const doc = existingSnapshot.docs[0];
-        await doc.ref.update({
+        const updateData: any = {
           'files.simplified': simplifiedFileName,
           status: 'simplified',
           simplifiedAt: now,
           updatedAt: now,
-        });
+        };
+
+        // Add quality metrics if provided
+        if (qualityMetrics) {
+          updateData.qualityMetrics = qualityMetrics;
+        }
+
+        await doc.ref.update(updateData);
 
         logger.info('Updated existing Firestore record', {
           id: doc.id,
           rawFileName,
           simplifiedFileName,
+          hasQualityMetrics: !!qualityMetrics,
         });
       } else {
         // Create new record
@@ -84,12 +95,18 @@ export class FirestoreService {
           simplifiedAt: now,
         };
 
+        // Add quality metrics if provided
+        if (qualityMetrics) {
+          newDoc.qualityMetrics = qualityMetrics;
+        }
+
         const docRef = await this.firestore.collection(this.collection).add(newDoc);
 
         logger.info('Created new Firestore record', {
           id: docRef.id,
           rawFileName,
           simplifiedFileName,
+          hasQualityMetrics: !!qualityMetrics,
         });
       }
     } catch (error) {
@@ -99,6 +116,49 @@ export class FirestoreService {
       });
       // Don't throw - Firestore errors shouldn't fail the whole function
       // The file is already processed and saved to GCS
+    }
+  }
+
+  /**
+   * Get preferred language from Firestore discharge_summaries document
+   * The document ID is the compositionId
+   */
+  async getPreferredLanguage(compositionId: string, tenantId: string): Promise<string | undefined> {
+    try {
+      const docRef = this.firestore
+        .collection(this.collection)
+        .doc(compositionId);
+      
+      const doc = await docRef.get();
+      
+      if (doc.exists) {
+        const data = doc.data();
+        const preferredLang = data?.preferredLanguage;
+        
+        if (preferredLang) {
+          logger.info('Found preferred language in Firestore', {
+            compositionId,
+            preferredLanguage: preferredLang,
+            tenantId,
+          });
+          return preferredLang;
+        }
+      }
+      
+      logger.debug('No preferred language found in Firestore', {
+        compositionId,
+        tenantId,
+        documentExists: doc.exists,
+      });
+      
+      return undefined;
+    } catch (error) {
+      logger.warning('Failed to fetch preferred language from Firestore', {
+        error: (error as Error).message,
+        compositionId,
+        tenantId,
+      });
+      return undefined;
     }
   }
 

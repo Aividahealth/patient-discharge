@@ -1,0 +1,27 @@
+{
+  "timedOut": [],
+  "failed": [
+    {
+      "file": "ui-tests/clinician-upload-workflow.spec.ts",
+      "testName": "should complete full upload workflow with all required fields",
+      "timeout": 0,
+      "timestamp": "2025-11-21T01:46:15.812Z",
+      "error": "ReferenceError: uploadedSummaryIdFromResponse is not defined"
+    },
+    {
+      "file": "ui-tests/clinician-upload-workflow.spec.ts",
+      "testName": "should verify uploaded summary details are correct",
+      "timeout": 0,
+      "timestamp": "2025-11-21T01:46:40.622Z",
+      "error": "TimeoutError: locator.waitFor: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('table') to be visible\u001b[22m\n"
+    },
+    {
+      "file": "ui-tests/end-to-end-workflow.spec.ts",
+      "testName": "should complete full discharge summary lifecycle",
+      "timeout": 0,
+      "timestamp": "2025-11-21T01:47:14.889Z",
+      "error": "TimeoutError: locator.waitFor: Timeout 5000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input[name=\"patientName\"], input[placeholder*=\"Patient Name\"], input[placeholder*=\"name\"]').first() to be visible\u001b[22m\n"
+    }
+  ],
+  "lastUpdated": "2025-11-21T01:47:14.890Z"
+}

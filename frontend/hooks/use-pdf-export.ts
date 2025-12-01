@@ -1,5 +1,4 @@
-import { useCallback } from 'react'
-import jsPDF from 'jspdf'
+import { useCallback, useState } from 'react'
 
 export interface PDFHeader {
   title: string
@@ -40,11 +39,17 @@ export interface PDFExportError {
  * })
  */
 export function usePDFExport() {
+  const [isGenerating, setIsGenerating] = useState(false)
+
   const exportToPDF = useCallback(
     async (options: PDFExportOptions): Promise<boolean> => {
       const { header, content, footer, filename } = options
 
+      setIsGenerating(true)
       try {
+        // Dynamically import jsPDF to reduce initial bundle size
+        const { default: jsPDF } = await import('jspdf')
+        
         // Create PDF instance
         const pdf = new jsPDF()
         const pageWidth = pdf.internal.pageSize.getWidth()
@@ -122,12 +127,14 @@ export function usePDFExport() {
           console.error('[usePDFExport] Fallback text download failed:', fallbackError)
           return false
         }
+      } finally {
+        setIsGenerating(false)
       }
     },
     []
   )
 
-  return { exportToPDF }
+  return { exportToPDF, isGenerating }
 }
 
 /**

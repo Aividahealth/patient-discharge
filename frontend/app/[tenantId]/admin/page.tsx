@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { FeedbackButton } from "@/components/feedback-button"
 import { CommonHeader } from "@/components/common-header"
 import { CommonFooter } from "@/components/common-footer"
@@ -24,6 +25,8 @@ import { AddUserDialog, EditUserDialog, DeleteUserDialog } from "@/components/us
 import { listUsers, createUser, updateUser, deleteUser, type User, type CreateUserRequest, type UpdateUserRequest } from "@/lib/api/users"
 import { getTenantMetrics } from "@/lib/api/tenant"
 import { getAuditLogs } from "@/lib/api/audit-logs"
+import { republishDischargeEvents } from "@/lib/api/discharge-events"
+import { getAggregateQualityMetrics, type AggregateQualityMetrics } from "@/lib/tenant-api"
 import type { TenantMetrics } from "@/types/tenant-metrics"
 import type { AuditLog } from "@/types/audit-logs"
 import { useToast } from "@/hooks/use-toast"
@@ -94,11 +97,25 @@ export default function AdminDashboard() {
   // Analytics/metrics state
   const [metrics, setMetrics] = useState<TenantMetrics | null>(null)
   const [loadingMetrics, setLoadingMetrics] = useState(false)
+  const [aggregateQualityMetrics, setAggregateQualityMetrics] = useState<AggregateQualityMetrics | null>(null)
+  const [loadingAggregateMetrics, setLoadingAggregateMetrics] = useState(false)
 
   // Audit logs state
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false)
   const [auditLogFilter, setAuditLogFilter] = useState<'all' | 'clinician_activity' | 'simplification' | 'translation' | 'chatbot'>('all')
+
+  // Republish events state
+  const [republishing, setRepublishing] = useState(false)
+  const [republishHoursAgo, setRepublishHoursAgo] = useState(1)
+  const [republishLimit, setRepublishLimit] = useState(10)
+
+  // Fetch aggregate quality metrics when overview tab is active
+  useEffect(() => {
+    if (activeTab === "overview" && token && tenantId) {
+      fetchAggregateQualityMetrics()
+    }
+  }, [activeTab, token, tenantId])
 
   // Fetch users when component mounts or when users tab is active
   useEffect(() => {
@@ -156,6 +173,28 @@ export default function AdminDashboard() {
       })
     } finally {
       setLoadingMetrics(false)
+    }
+  }
+
+  const fetchAggregateQualityMetrics = async () => {
+    if (!token || !tenantId) return
+
+    setLoadingAggregateMetrics(true)
+    try {
+      const fetchedMetrics = await getAggregateQualityMetrics(token, tenantId)
+      setAggregateQualityMetrics(fetchedMetrics)
+    } catch (error) {
+      console.error('Error fetching aggregate quality metrics:', error)
+      // Don't show error toast if metrics don't exist yet
+      if (error instanceof Error && !error.message.includes('404')) {
+        toast({
+          title: "Error",
+          description: "Failed to load quality metrics. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setLoadingAggregateMetrics(false)
     }
   }
 
@@ -255,7 +294,7 @@ export default function AdminDashboard() {
 
   return (
     <ErrorBoundary>
-      <AuthGuard>
+      <AuthGuard requiredRole={['tenant_admin', 'system_admin']}>
         <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Admin Portal" />
       
@@ -405,6 +444,158 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Quality Metrics - Aggregate Improvement */}
+            {loadingAggregateMetrics ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-heading flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    Readability Improvement (AI Simplification)
+                  </CardTitle>
+                  <CardDescription>Loading quality metrics...</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+            ) : aggregateQualityMetrics ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="font-heading flex items-center gap-2">
+                        <Brain className="h-5 w-5" />
+                        Readability Improvement (AI Simplification)
+                      </CardTitle>
+                      <CardDescription>Average improvement across all discharge summaries</CardDescription>
+                    </div>
+                    <Badge className={aggregateQualityMetrics.targetAchievementRate >= 80 ? "bg-green-500" : "bg-yellow-500"}>
+                      {aggregateQualityMetrics.targetAchievementRate >= 80 ? "Target Met" : "In Progress"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                <div className="grid md:grid-cols-3 gap-6">
+                  {/* Grade Level Improvement */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Reading Grade Level</span>
+                      <Zap className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Original</span>
+                        <Badge variant="secondary" className="text-xs">Grade {aggregateQualityMetrics.original.avgGradeLevel.toFixed(1)}</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.original.avgGradeLevel / 20) * 100)}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Simplified</span>
+                        <Badge className="bg-green-500 text-xs">Grade {aggregateQualityMetrics.simplified.avgGradeLevel.toFixed(1)}</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.simplified.avgGradeLevel / 20) * 100)}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="pt-2 text-center">
+                      <div className="text-2xl font-bold text-green-600">{aggregateQualityMetrics.improvement.gradeLevel.toFixed(1)}</div>
+                      <div className="text-xs text-muted-foreground">grades easier</div>
+                    </div>
+                  </div>
+
+                  {/* Reading Ease Improvement */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>Reading Ease Score</span>
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Original</span>
+                        <Badge variant="secondary" className="text-xs">{aggregateQualityMetrics.original.avgReadingEase.toFixed(1)}</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, aggregateQualityMetrics.original.avgReadingEase)}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Simplified</span>
+                        <Badge className="bg-green-500 text-xs">{aggregateQualityMetrics.simplified.avgReadingEase.toFixed(1)}</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, aggregateQualityMetrics.simplified.avgReadingEase)}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="pt-2 text-center">
+                      <div className="text-2xl font-bold text-green-600">+{aggregateQualityMetrics.improvement.readingEasePercent.toFixed(0)}%</div>
+                      <div className="text-xs text-muted-foreground">improvement</div>
+                    </div>
+                  </div>
+
+                  {/* SMOG Index Improvement */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>SMOG Index</span>
+                      <Star className="h-4 w-4 text-green-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Original</span>
+                        <Badge variant="secondary" className="text-xs">{aggregateQualityMetrics.original.avgSmogIndex.toFixed(1)}</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.original.avgSmogIndex / 20) * 100)}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs">Simplified</span>
+                        <Badge className="bg-green-500 text-xs">{aggregateQualityMetrics.simplified.avgSmogIndex.toFixed(1)}</Badge>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-1.5">
+                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${Math.min(100, (aggregateQualityMetrics.simplified.avgSmogIndex / 20) * 100)}%` }}></div>
+                      </div>
+                    </div>
+                    <div className="pt-2 text-center">
+                      <div className="text-2xl font-bold text-green-600">{aggregateQualityMetrics.improvement.smogIndex.toFixed(1)}</div>
+                      <div className="text-xs text-muted-foreground">points lower</div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator className="my-4" />
+
+                {/* Summary Stats */}
+                <div className="grid grid-cols-4 gap-4 text-center">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Summaries Processed</div>
+                    <div className="text-2xl font-bold mt-1">{aggregateQualityMetrics.totalSummaries.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Avg. Compression</div>
+                    <div className="text-2xl font-bold mt-1">{aggregateQualityMetrics.avgCompressionRatio.toFixed(1)}%</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Target Achievement</div>
+                    <div className={`text-2xl font-bold mt-1 ${aggregateQualityMetrics.targetAchievementRate >= 80 ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {aggregateQualityMetrics.targetAchievementRate.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-muted-foreground">Patient Readability</div>
+                    <div className="text-2xl font-bold mt-1 text-green-600">Grade 5-9</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            ) : null}
 
             {/* Section Completion Rates */}
             <div className="grid md:grid-cols-2 gap-6">
@@ -736,6 +927,225 @@ export default function AdminDashboard() {
                   </CardContent>
                 </Card>
               </div>
+            )}
+
+            {/* Readability Metrics */}
+            {metrics?.qualityMetrics && (
+              <TooltipProvider>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-heading font-semibold mb-2">Readability Metrics</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Automated quality assessment of simplified discharge summaries
+                  </p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Grade Distribution Histogram */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="font-heading">Reading Grade Distribution</CardTitle>
+                      <CardDescription>
+                        Flesch-Kincaid grade levels across {metrics.qualityMetrics.totalWithMetrics} summaries
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-3">
+                        {/* Elementary (≤5th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Elementary (≤5th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.elementary}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-green-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.elementary / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.elementary / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+
+                        {/* Middle School (6-8th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Middle School (6-8th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.middleSchool}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-blue-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.middleSchool / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.middleSchool / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+
+                        {/* High School (9-12th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">High School (9-12th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.highSchool}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-yellow-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.highSchool / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.highSchool / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+
+                        {/* College (>12th grade) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">College (>12th grade)</span>
+                            <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.college}</span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-red-500 h-3 rounded-full transition-all"
+                              style={{
+                                width: `${(metrics.qualityMetrics.gradeDistribution.college / metrics.qualityMetrics.totalWithMetrics) * 100}%`
+                              }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {((metrics.qualityMetrics.gradeDistribution.college / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+
+                      <Separator />
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>• Target: 5th-9th grade reading level for patient comprehension</p>
+                        <p>• Color coding: Green (excellent), Blue (good), Yellow (acceptable), Red (needs review)</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Target Compliance & Averages */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="font-heading">Quality Metrics Summary</CardTitle>
+                      <CardDescription>
+                        Average readability scores and target compliance
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {/* Target Compliance */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">Target Compliance</h4>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Meets Target</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default" className="bg-green-600">
+                              {metrics.qualityMetrics.targetCompliance.meetsTarget}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              ({((metrics.qualityMetrics.targetCompliance.meetsTarget / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Needs Review</span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="destructive">
+                              {metrics.qualityMetrics.targetCompliance.needsReview}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              ({((metrics.qualityMetrics.targetCompliance.needsReview / metrics.qualityMetrics.totalWithMetrics) * 100).toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      {/* Average Metrics */}
+                      <div className="space-y-2">
+                        <h4 className="text-sm font-medium">Average Scores</h4>
+                        <div className="space-y-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-between text-sm cursor-help">
+                                <span className="text-muted-foreground">Flesch-Kincaid Grade</span>
+                                <span className={`font-medium ${metrics.qualityMetrics.averageFleschKincaid <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {metrics.qualityMetrics.averageFleschKincaid.toFixed(1)}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="max-w-xs">
+                                <p className="font-semibold mb-1">Average Flesch-Kincaid Grade: {metrics.qualityMetrics.averageFleschKincaid.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Average U.S. school grade level across all summaries. Target: ≤9.0 (5th-9th grade). Lower is better.
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-between text-sm cursor-help">
+                                <span className="text-muted-foreground">Reading Ease Score</span>
+                                <span className={`font-medium ${metrics.qualityMetrics.averageReadingEase >= 60 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {metrics.qualityMetrics.averageReadingEase.toFixed(1)}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="max-w-xs">
+                                <p className="font-semibold mb-1">Average Reading Ease: {metrics.qualityMetrics.averageReadingEase.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Average readability score (0-100 scale). Target: ≥60. Higher scores indicate easier reading.
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-between text-sm cursor-help">
+                                <span className="text-muted-foreground">SMOG Index</span>
+                                <span className={`font-medium ${metrics.qualityMetrics.averageSmog <= 9 ? 'text-green-600' : 'text-yellow-600'}`}>
+                                  {metrics.qualityMetrics.averageSmog.toFixed(1)}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <div className="max-w-xs">
+                                <p className="font-semibold mb-1">Average SMOG Index: {metrics.qualityMetrics.averageSmog.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Average years of education needed to understand text. Target: ≤9.0. Lower values indicate simpler language.
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+
+                      <Separator />
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>• FK Grade ≤ 9.0 (target)</p>
+                        <p>• Reading Ease ≥ 60 (fairly easy)</p>
+                        <p>• SMOG ≤ 9.0 (9th grade level)</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+              </TooltipProvider>
             )}
 
           </TabsContent>
@@ -1148,6 +1558,100 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Event Management */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading">Event Management</CardTitle>
+                <CardDescription>Republish discharge export events to trigger processing</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-900">
+                    <strong>What this does:</strong> Republishes discharge export events for recently uploaded compositions.
+                    This triggers the discharge-export-processor to fetch binaries, simplify content, and write back to FHIR.
+                  </p>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="republish-hours">Hours Ago</Label>
+                    <Input
+                      id="republish-hours"
+                      type="number"
+                      min="1"
+                      max="168"
+                      value={republishHoursAgo}
+                      onChange={(e) => setRepublishHoursAgo(parseInt(e.target.value) || 1)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">How many hours back to look for compositions</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="republish-limit">Limit</Label>
+                    <Input
+                      id="republish-limit"
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={republishLimit}
+                      onChange={(e) => setRepublishLimit(parseInt(e.target.value) || 10)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Maximum number of compositions to process</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={async () => {
+                    // Use tenantId from URL params, not from context (context might be "system" for system_admin)
+                    const urlTenantId = params.tenantId as string
+                    if (!token || !urlTenantId) {
+                      toast({
+                        title: "Error",
+                        description: "Authentication required",
+                        variant: "destructive",
+                      })
+                      return
+                    }
+
+                    try {
+                      setRepublishing(true)
+                      const result = await republishDischargeEvents(republishHoursAgo, republishLimit, token, urlTenantId)
+                      
+                      toast({
+                        title: "Success",
+                        description: `Republished ${result.republished} events. ${result.failed > 0 ? `${result.failed} failed.` : ''}`,
+                      })
+
+                      if (result.errors && result.errors.length > 0) {
+                        console.error("Republish errors:", result.errors)
+                      }
+                    } catch (error) {
+                      toast({
+                        title: "Error",
+                        description: error instanceof Error ? error.message : "Failed to republish events",
+                        variant: "destructive",
+                      })
+                    } finally {
+                      setRepublishing(false)
+                    }
+                  }}
+                  disabled={republishing}
+                  className="w-full"
+                >
+                  {republishing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Republishing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Republish Events
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
 

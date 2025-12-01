@@ -22,6 +22,14 @@ export interface ExpertFeedback {
   createdAt: Date;
 }
 
+export interface QualityMetrics {
+  fleschKincaidGradeLevel?: number;
+  fleschReadingEase?: number;
+  smogIndex?: number;
+  compressionRatio?: number;
+  avgSentenceLength?: number;
+}
+
 export interface FeedbackStats {
   totalReviews: number;
   simplificationReviews: number;
@@ -72,6 +80,7 @@ export interface ReviewSummary {
   latestReviewDate?: Date;
   fileName?: string;               // For display purposes
   language?: string;               // Language for translation reviews
+  qualityMetrics?: QualityMetrics; // Automated quality metrics
   // Detailed stats from feedback API
   stats?: FeedbackStats;
 }
@@ -103,7 +112,7 @@ export interface SubmitFeedbackRequest {
 
 /**
  * Get list of discharge summaries for review
- * Uses the discharge-queue endpoint
+ * Uses the expert/list endpoint which includes preferred language
  */
 export async function getReviewList(params?: {
   type?: ReviewType;
@@ -115,8 +124,8 @@ export async function getReviewList(params?: {
 }): Promise<ReviewListResponse> {
   const queryParams = new URLSearchParams();
 
-  // Add expert-specific query params
-  if (params?.type) queryParams.append('reviewType', params.type);
+  // Add expert-specific query params (backend expects 'type' not 'reviewType')
+  if (params?.type) queryParams.append('type', params.type);
   if (params?.filter) queryParams.append('filter', params.filter);
   if (params?.limit) queryParams.append('limit', params.limit.toString());
   if (params?.offset) queryParams.append('offset', params.offset.toString());
@@ -130,11 +139,12 @@ export async function getReviewList(params?: {
     headers['Authorization'] = `Bearer ${params.token}`;
   }
   if (params?.tenantId) {
-    headers['x-tenant-id'] = params.tenantId;
+    headers['X-Tenant-ID'] = params.tenantId;
   }
 
+  // Use the expert/list endpoint which fetches preferred language
   const response = await fetch(
-    `${API_BASE_URL}/api/patients/discharge-queue?${queryParams.toString()}`,
+    `${API_BASE_URL}/expert/list?${queryParams.toString()}`,
     { headers }
   );
 
@@ -150,26 +160,28 @@ export async function getReviewList(params?: {
 
   const data = await response.json();
 
-  // Transform discharge-queue response to ReviewListResponse
+  // Transform expert/list response to ReviewListResponse
+  // Backend now returns id (patientId) and compositionId separately (same as clinician portal)
   return {
-    summaries: data.patients?.map((patient: any) => ({
-      id: patient.id,
-      compositionId: patient.compositionId,
-      mrn: patient.mrn,
-      patientName: patient.name,
-      room: patient.room,
-      unit: patient.unit,
-      dischargeDate: patient.dischargeDate ? new Date(patient.dischargeDate) : undefined,
-      status: patient.status,
-      attendingPhysician: patient.attendingPhysician,
-      avatar: patient.avatar,
-      // Review stats - backend should add these
-      reviewCount: patient.reviewCount || 0,
-      avgRating: patient.avgRating,
-      latestReviewDate: patient.latestReviewDate ? new Date(patient.latestReviewDate) : undefined,
-      fileName: patient.fileName || `${patient.mrn}-discharge-summary`,
+    summaries: data.summaries?.map((summary: any) => ({
+      id: summary.id, // Patient ID (from backend)
+      compositionId: summary.compositionId || summary.id, // Composition ID (fallback to id for backward compatibility)
+      mrn: summary.mrn || '',
+      patientName: summary.patientName || 'Unknown',
+      room: undefined,
+      unit: undefined,
+      dischargeDate: summary.dischargeDate ? new Date(summary.dischargeDate) : undefined,
+      status: undefined,
+      attendingPhysician: undefined,
+      avatar: undefined,
+      reviewCount: summary.reviewCount || 0,
+      avgRating: summary.avgRating,
+      latestReviewDate: summary.latestReviewDate ? new Date(summary.latestReviewDate) : undefined,
+      fileName: undefined,
+      qualityMetrics: summary.qualityMetrics,
+      language: summary.language, // Preferred language from backend
     })) || [],
-    total: data.meta?.total || 0,
+    total: data.total || 0,
     meta: data.meta
   };
 }

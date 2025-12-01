@@ -21,11 +21,54 @@ const getApiBaseUrl = () => {
     return 'http://localhost:3000';
   }
   
-  // Production fallback: Use your Google Cloud backend URL
-  return 'https://patient-discharge-backend-qnzythtpnq-uc.a.run.app';
+  // Production fallback: Use dev backend URL (should be overridden by NEXT_PUBLIC_API_URL)
+  return 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
 };
 
 const API_BASE_URL = getApiBaseUrl();
+
+export interface ReadabilityMetrics {
+  fleschKincaidGradeLevel: number;
+  fleschReadingEase: number;
+  smogIndex: number;
+  colemanLiauIndex?: number;
+  automatedReadabilityIndex?: number;
+}
+
+export interface LexicalMetrics {
+  typeTokenRatio?: number;
+  wordCount: number;
+  sentenceCount: number;
+  syllableCount?: number;
+  complexWordCount?: number;
+}
+
+export interface TranslationQualityMetrics {
+  translationConfidence?: number;
+  detectedSourceLanguage?: string;
+  targetLanguage: string;
+  translatedWordCount: number;
+  processingTimeMs: number;
+  readability?: ReadabilityMetrics;
+}
+
+export interface QualityMetrics {
+  // Simplified version metrics (legacy fields for backwards compatibility)
+  fleschKincaidGradeLevel?: number;
+  fleschReadingEase?: number;
+  smogIndex?: number;
+  compressionRatio?: number;
+  avgSentenceLength?: number;
+
+  // Raw discharge summary metrics (for comparison)
+  raw?: {
+    readability: ReadabilityMetrics;
+    lexical: LexicalMetrics;
+  };
+
+  // Translation metrics (if translated)
+  translation?: TranslationQualityMetrics;
+}
 
 export interface DischargeSummaryMetadata {
   id: string;
@@ -45,6 +88,7 @@ export interface DischargeSummaryMetadata {
   updatedAt: Date;
   simplifiedAt?: Date;
   translatedAt?: Date;
+  qualityMetrics?: QualityMetrics;
   metadata?: {
     facility?: string;
     department?: string;
@@ -291,6 +335,13 @@ export interface DischargeQueuePatient {
     id: string;
   };
   avatar: string | null;
+  qualityMetrics?: {
+    fleschKincaidGradeLevel?: number;
+    fleschReadingEase?: number;
+    smogIndex?: number;
+    compressionRatio?: number;
+    avgSentenceLength?: number;
+  };
 }
 
 export interface DischargeQueueResponse {
@@ -372,6 +423,7 @@ export interface PatientDetailsResponse {
   simplifiedInstructions?: {
     text: string;
   };
+  qualityMetrics?: QualityMetrics;
 }
 
 /**
@@ -564,6 +616,34 @@ export async function getPatientDetails(
     console.warn('Failed to fetch AI-simplified content:', error);
   }
 
+  // Fetch quality metrics from discharge queue API
+  let qualityMetrics: QualityMetrics | undefined = undefined;
+  try {
+    const queueResponse = await fetch(
+      `${apiUrl}/api/patients/discharge-queue`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId,
+        },
+      }
+    );
+
+    if (queueResponse.ok) {
+      const queueData = await queueResponse.json();
+      // Find the patient with matching compositionId
+      const matchingPatient = queueData.patients?.find((p: any) => p.compositionId === compositionId);
+      if (matchingPatient?.qualityMetrics) {
+        qualityMetrics = matchingPatient.qualityMetrics;
+      }
+    }
+  } catch (error) {
+    // Ignore errors fetching quality metrics
+    console.warn('Failed to fetch quality metrics:', error);
+  }
+
   return {
     patientId,
     compositionId,
@@ -582,5 +662,6 @@ export async function getPatientDetails(
     simplifiedInstructions: (aiSimplifiedInstructions || simplifiedInstructions) ? {
       text: (aiSimplifiedInstructions || simplifiedInstructions)?.text
     } : undefined,
+    qualityMetrics,
   };
 }

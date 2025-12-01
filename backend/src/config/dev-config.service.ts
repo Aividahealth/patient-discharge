@@ -379,11 +379,38 @@ export class DevConfigService {
     return cernerConfig?.patients || [];
   }
 
-  getAllTenantIds(): string[] {
-    if (!this.config.tenants) {
-      return ['default']; // Fallback to default tenant
+  /**
+   * Get all tenant IDs from both YAML config and Firestore
+   * Returns unique list combining both sources
+   */
+  async getAllTenantIds(): Promise<string[]> {
+    const tenantIds = new Set<string>();
+    
+    // Get tenants from YAML config
+    if (this.config.tenants) {
+      Object.keys(this.config.tenants).forEach(id => tenantIds.add(id));
+    } else {
+      // Fallback to default if no YAML config
+      tenantIds.add('default');
     }
-    return Object.keys(this.config.tenants);
+    
+    // Get tenants from Firestore config collection
+    try {
+      const snapshot = await this.getFirestore()
+        .collection('config')
+        .get();
+      
+      snapshot.forEach(doc => {
+        tenantIds.add(doc.id);
+      });
+      
+      this.logger.debug(`Found ${tenantIds.size} total tenants (${Object.keys(this.config.tenants || {}).length} from YAML, ${snapshot.size} from Firestore)`);
+    } catch (error) {
+      this.logger.warn(`Error getting tenants from Firestore: ${error.message}`);
+      // Continue with YAML tenants only
+    }
+    
+    return Array.from(tenantIds);
   }
 
   /**
@@ -495,5 +522,50 @@ export class DevConfigService {
   async getTenantEHRPatients(tenantId: string): Promise<string[]> {
     const ehrConfig = await this.getTenantEHRConfig(tenantId);
     return ehrConfig?.patients || [];
+  }
+
+  /**
+   * Get patient IDs from tenant-based Firestore collection
+   * Collection: tenant_patients
+   * Document ID: {tenantId}
+   * Structure: { patientIds: string[], updatedAt: timestamp }
+   */
+  async getTenantPatientIdsFromCollection(tenantId: string): Promise<string[]> {
+    try {
+      const doc = await this.getFirestore()
+        .collection('tenant_patients')
+        .doc(tenantId)
+        .get();
+
+      if (!doc.exists) {
+        this.logger.debug(`No patient IDs found in 'tenant_patients' collection for tenant: ${tenantId}`);
+        return [];
+      }
+
+      const data = doc.data();
+      const patientIds = data?.patientIds || [];
+      
+      if (Array.isArray(patientIds) && patientIds.length > 0) {
+        // Convert all IDs to strings (handle both string and number IDs)
+        const validIds = patientIds
+          .map((id: any) => {
+            if (typeof id === 'string' && id.length > 0) {
+              return id;
+            } else if (typeof id === 'number') {
+              return String(id);
+            }
+            return null;
+          })
+          .filter((id: string | null): id is string => id !== null);
+        
+        this.logger.debug(`Found ${validIds.length} patient IDs in 'tenant_patients' collection for tenant: ${tenantId}`);
+        return validIds;
+      }
+
+      return [];
+    } catch (error) {
+      this.logger.warn(`Error getting patient IDs from 'tenant_patients' collection for tenant ${tenantId}: ${error.message}`);
+      return [];
+    }
   }
 }

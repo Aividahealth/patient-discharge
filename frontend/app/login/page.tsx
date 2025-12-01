@@ -8,8 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Heart, Stethoscope, Settings, Eye, EyeOff, Shield, Users, User, AlertCircle } from "lucide-react"
+import { Heart, Stethoscope, Settings, Eye, EyeOff, User, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { CommonHeader } from "@/components/common-header"
@@ -50,7 +49,21 @@ export default function LoginPage() {
       // Redirect based on user role
       // Handle new role names and legacy admin role
       const portal = authData.user.role === 'tenant_admin' ? 'admin' : authData.user.role
-      router.push(`/${tenantId}/${portal}`)
+      
+      // For patients, redirect to patient portal with their linkedPatientId if available
+      console.log('[Login] User data:', {
+        role: authData.user.role,
+        linkedPatientId: authData.user.linkedPatientId,
+        userId: authData.user.id
+      })
+      
+      if (authData.user.role === 'patient' && authData.user.linkedPatientId) {
+        console.log('[Login] Redirecting patient to portal with linkedPatientId:', authData.user.linkedPatientId)
+        router.push(`/${tenantId}/${portal}?patientId=${authData.user.linkedPatientId}`)
+      } else {
+        console.log('[Login] Redirecting to portal without patientId:', { role: authData.user.role, hasLinkedPatientId: !!authData.user.linkedPatientId })
+        router.push(`/${tenantId}/${portal}`)
+      }
     } catch (error) {
       console.error('[Login] Error:', error)
 
@@ -312,24 +325,6 @@ export default function LoginPage() {
                 </form>
               </TabsContent>
             </Tabs>
-
-            <Separator className="my-6" />
-
-            {/* SSO Options */}
-            <div className="space-y-3">
-              <p className="text-sm text-center text-muted-foreground">Or continue with SSO</p>
-              <div className="grid grid-cols-2 gap-3">
-                <Button variant="outline" className="w-full bg-transparent" disabled>
-                  <Shield className="h-4 w-4 mr-2" />
-                  SAML
-                </Button>
-                <Button variant="outline" className="w-full bg-transparent" disabled>
-                  <Users className="h-4 w-4 mr-2" />
-                  OIDC
-                </Button>
-              </div>
-              <p className="text-xs text-center text-muted-foreground">SSO integration available in pilot deployment</p>
-            </div>
           </CardContent>
         </Card>
 

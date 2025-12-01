@@ -4,6 +4,9 @@ import { PubSubService, EncounterExportEvent } from '../pubsub/pubsub.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { logPipelineEvent } from '../utils/pipeline-logger';
 import { AuditService } from '../audit/audit.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
+import { FirestoreService } from '../discharge-summaries/firestore.service';
+import { DischargeSummaryStatus } from '../discharge-summaries/discharge-summary.types';
 
 interface UploadDischargeSummaryRequest {
   id: string; // patientId
@@ -31,6 +34,8 @@ export class DischargeUploadService {
     private readonly googleService: GoogleService,
     private readonly pubSubService: PubSubService,
     private readonly auditService: AuditService,
+    private readonly qualityMetricsService: QualityMetricsService,
+    private readonly firestoreService: FirestoreService,
   ) {}
 
   /**
@@ -516,6 +521,37 @@ export class DischargeUploadService {
       );
 
       this.logger.log(`✅ Successfully uploaded discharge summary. Composition ID: ${compositionId}`);
+
+      // Step 6: Write discharge summary metadata to Firestore
+      try {
+        await this.firestoreService.createWithId(
+          compositionId,
+          {
+            tenantId: ctx.tenantId,
+            patientId: request.id,
+            patientName: request.name,
+            mrn: request.mrn,
+            encounterId: encounterId,
+            dischargeDate: new Date(request.dischargeDate),
+            status: DischargeSummaryStatus.PROCESSING,
+            files: {
+              raw: `Binary/${dischargeSummaryBinaryId}`,
+            },
+            preferredLanguage: request.preferredLanguage, // Store preferred language in Firestore
+            metadata: {
+              attendingPhysician: request.attendingPhysician?.name || 'Unknown',
+            },
+          },
+          ctx.tenantId,
+        );
+        this.logger.log(`✅ Created discharge summary metadata in Firestore: ${compositionId}`);
+        if (request.preferredLanguage) {
+          this.logger.log(`🗣️ Stored preferred language in Firestore: ${request.preferredLanguage}`);
+        }
+      } catch (firestoreError) {
+        // Log error but don't fail the upload - quality metrics will still be created
+        this.logger.error(`❌ Failed to write discharge summary metadata to Firestore: ${firestoreError.message}`);
+      }
       // Log frontend_upload completion
       logPipelineEvent({
         tenantId: ctx.tenantId,
@@ -547,7 +583,8 @@ export class DischargeUploadService {
         };
 
         await this.pubSubService.publishEncounterExportEvent(event);
-        this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}`);
+        this.logger.log(`📤 Published Pub/Sub event for composition: ${compositionId}, patientId: ${patientId}, tenantId: ${ctx.tenantId}`);
+        this.logger.debug(`Event payload: ${JSON.stringify(event)}`);
         // Log backend_publish_to_topic completion
         logPipelineEvent({
           tenantId: ctx.tenantId,
@@ -613,8 +650,9 @@ export class DischargeUploadService {
 
   /**
    * Get discharge queue - list of patients ready for discharge review
+   * @param patientIdFilter - Optional patient ID to filter results (for patient role users)
    */
-  async getDischargeQueue(ctx: TenantContext): Promise<{
+  async getDischargeQueue(ctx: TenantContext, patientIdFilter?: string): Promise<{
     patients: Array<{
       id: string;
       mrn: string;
@@ -629,6 +667,13 @@ export class DischargeUploadService {
         id: string;
       };
       avatar: string | null;
+      qualityMetrics?: {
+        fleschKincaidGradeLevel: number;
+        fleschReadingEase: number;
+        smogIndex: number;
+        compressionRatio: number;
+        avgSentenceLength: number;
+      };
     }>;
     meta: {
       total: number;
@@ -676,6 +721,13 @@ export class DischargeUploadService {
           id: string;
         };
         avatar: string | null;
+        qualityMetrics?: {
+          fleschKincaidGradeLevel: number;
+          fleschReadingEase: number;
+          smogIndex: number;
+          compressionRatio: number;
+          avgSentenceLength: number;
+        };
       }> = [];
       const statusCounts = { pending: 0, review: 0, approved: 0 };
 
@@ -695,6 +747,12 @@ export class DischargeUploadService {
           }
 
           const patientId = patientRef.replace('Patient/', '');
+          
+          // Filter by patientId if provided (for patient role users)
+          if (patientIdFilter && patientId !== patientIdFilter) {
+            continue; // Skip this patient if it doesn't match the filter
+          }
+          
           const encounterId = encounterRef.replace('Encounter/', '');
 
           // Fetch Patient resource
@@ -775,12 +833,29 @@ export class DischargeUploadService {
         }
       }
 
-      this.logger.log(`✅ Retrieved ${patients.length} patients from discharge queue`);
+      // Fetch quality metrics for all compositions in batch BEFORE filtering
+      const compositionIds = patients.map(p => p.compositionId);
+      const qualityMetricsMap = await this.qualityMetricsService.getBatchMetrics(compositionIds);
+
+      // Add quality metrics to each patient
+      patients.forEach(patient => {
+        const metrics = qualityMetricsMap.get(patient.compositionId);
+        if (metrics) {
+          patient.qualityMetrics = metrics;
+        }
+      });
+
+      this.logger.log(`✅ Added quality metrics to ${qualityMetricsMap.size}/${patients.length} patients`);
+
+      // Filter out patients with status "approved" AFTER adding quality metrics
+      const filteredPatients = patients.filter(patient => patient.status !== 'approved');
+
+      this.logger.log(`✅ Retrieved ${filteredPatients.length} patients from discharge queue (${patients.length - filteredPatients.length} approved patients filtered out)`);
 
       return {
-        patients,
+        patients: filteredPatients,
         meta: {
-          total: patients.length,
+          total: filteredPatients.length,
           ...statusCounts,
         },
       };

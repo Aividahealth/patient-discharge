@@ -8,7 +8,7 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthGuard>
+    <AuthGuard requiredRole={['tenant_admin', 'system_admin']}>
       <TenantBranding />
       {children}
     </AuthGuard>

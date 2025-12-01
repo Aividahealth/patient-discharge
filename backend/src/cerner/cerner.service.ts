@@ -211,6 +211,40 @@ export class CernerService implements OnModuleInit {
     try {
       const response = await axios.post(url, resource, { headers });
       this.logger.log(`Created ${resourceType} successfully.`);
+      
+      // Cerner may return the ID in Location header or as a simple value in body
+      // If response.data is just a number/string, extract ID from Location header
+      if (response.data && typeof response.data === 'object' && response.data.resourceType) {
+        // Full FHIR resource returned
+        return response.data;
+      }
+      
+      // Check Location header (axios lowercases headers, but check both)
+      const location = response.headers?.location || response.headers?.Location;
+      if (location) {
+        // Extract ID from Location header (e.g., "https://.../DocumentReference/12345" or "/DocumentReference/12345")
+        const idMatch = location.match(/\/([^\/\?]+)(?:\?|$)/);
+        if (idMatch && idMatch[1]) {
+          const id = idMatch[1];
+          this.logger.log(`Extracted ID from Location header: ${id}`);
+          // Return a minimal resource object with the ID
+          return {
+            resourceType,
+            id: id,
+          };
+        }
+      }
+      
+      // Response body might be just the ID (number or string like "1")
+      if (response.data !== null && response.data !== undefined) {
+        const id = String(response.data);
+        this.logger.log(`Using ID from response body: ${id}`);
+        return {
+          resourceType,
+          id: id,
+        };
+      }
+      
       return response.data;
     } catch (error) {
       this.logger.error(`Failed to create ${resourceType}`, error);

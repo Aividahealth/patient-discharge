@@ -8,7 +8,7 @@ export default function ExpertLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthGuard>
+    <AuthGuard requiredRole="expert">
       <TenantBranding />
       {children}
     </AuthGuard>

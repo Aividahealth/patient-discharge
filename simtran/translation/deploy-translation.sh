@@ -16,7 +16,7 @@ FUNCTION_NAME="discharge-summary-translator"
 RUNTIME="nodejs20"
 REGION="us-central1"
 ENTRY_POINT="translateDischargeSummary"
-TRIGGER_BUCKET="discharge-summaries-simplified"
+TRIGGER_TOPIC="discharge-simplification-completed"
 OUTPUT_BUCKET="discharge-summaries-translated"
 MEMORY="512MB"
 TIMEOUT="540s"
@@ -46,7 +46,7 @@ echo "  Project ID: $PROJECT_ID"
 echo "  Function Name: $FUNCTION_NAME"
 echo "  Region: $REGION"
 echo "  Runtime: $RUNTIME"
-echo "  Trigger Bucket: $TRIGGER_BUCKET"
+echo "  Trigger Topic: $TRIGGER_TOPIC"
 echo "  Output Bucket: $OUTPUT_BUCKET"
 echo "  Memory: $MEMORY"
 echo "  Timeout: $TIMEOUT"
@@ -81,14 +81,8 @@ fi
 echo -e "${GREEN}✓ Build successful${NC}"
 echo ""
 
-# Check if buckets exist
+# Check if output bucket exists
 echo -e "${GREEN}Step 2: Verifying GCS buckets...${NC}"
-
-if ! gsutil ls -b "gs://${TRIGGER_BUCKET}" &> /dev/null; then
-    echo -e "${YELLOW}Warning: Trigger bucket gs://${TRIGGER_BUCKET} does not exist${NC}"
-    echo "Creating bucket..."
-    gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${TRIGGER_BUCKET}"
-fi
 
 if ! gsutil ls -b "gs://${OUTPUT_BUCKET}" &> /dev/null; then
     echo -e "${YELLOW}Warning: Output bucket gs://${OUTPUT_BUCKET} does not exist${NC}"
@@ -96,7 +90,7 @@ if ! gsutil ls -b "gs://${OUTPUT_BUCKET}" &> /dev/null; then
     gsutil mb -p "$PROJECT_ID" -l "$REGION" "gs://${OUTPUT_BUCKET}"
 fi
 
-echo -e "${GREEN}✓ Buckets verified${NC}"
+echo -e "${GREEN}✓ Bucket verified${NC}"
 echo ""
 
 # Enable required APIs
@@ -149,8 +143,9 @@ docs/
 .eslintrc.js
 .editorconfig
 
-# Compiled output (Cloud Build will create this)
-lib/
+# TypeScript source files (we only need compiled JS)
+*.ts
+!*.d.ts
 
 # Examples
 examples/
@@ -167,10 +162,10 @@ gcloud functions deploy "$FUNCTION_NAME" \
     --region="$REGION" \
     --source=. \
     --entry-point="$ENTRY_POINT" \
-    --trigger-bucket="$TRIGGER_BUCKET" \
+    --trigger-topic="$TRIGGER_TOPIC" \
     --memory="$MEMORY" \
     --timeout="$TIMEOUT" \
-    --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},OUTPUT_BUCKET=${OUTPUT_BUCKET},INPUT_BUCKET=${TRIGGER_BUCKET}" \
+    --set-env-vars="PROJECT_ID=${PROJECT_ID},LOCATION=${LOCATION},OUTPUT_BUCKET=${OUTPUT_BUCKET}" \
     --project="$PROJECT_ID"
 
 if [ $? -ne 0 ]; then
@@ -186,11 +181,11 @@ echo ""
 echo -e "${GREEN}Function Details:${NC}"
 echo "  Name: $FUNCTION_NAME"
 echo "  Region: $REGION"
-echo "  Trigger: gs://${TRIGGER_BUCKET}"
+echo "  Trigger: Pub/Sub topic: $TRIGGER_TOPIC"
 echo "  Output: gs://${OUTPUT_BUCKET}"
 echo ""
 echo -e "${GREEN}To test the function:${NC}"
-echo "  gsutil cp your-simplified-summary.md gs://${TRIGGER_BUCKET}/"
+echo "  Trigger a discharge summary simplification to publish to the topic"
 echo ""
 echo -e "${GREEN}To view logs:${NC}"
 echo "  gcloud functions logs read $FUNCTION_NAME --region=$REGION --project=$PROJECT_ID"

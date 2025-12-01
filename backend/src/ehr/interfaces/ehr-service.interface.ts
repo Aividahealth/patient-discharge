@@ -136,4 +136,13 @@ export interface IEHRService {
    * @returns Capabilities object describing what this EHR supports
    */
   getCapabilities?(): EHRCapabilities;
+
+  /**
+   * Discover patients automatically from the EHR system
+   * Uses hybrid approach: searches for recent Encounters and DocumentReferences,
+   * optionally includes manual patient list from configuration
+   * @param ctx - Tenant context
+   * @returns Array of patient IDs discovered from the EHR
+   */
+  discoverPatients(ctx: TenantContext): Promise<string[]>;
 }

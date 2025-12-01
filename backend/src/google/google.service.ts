@@ -1,16 +1,21 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { getGoogleAccessToken } from './auth';
 import { AxiosInstance } from 'axios';
 import { createFhirAxiosClient } from './fhirClient.js';
 import { DevConfigService } from '../config/dev-config.service';
 import { TenantContext } from '../tenant/tenant-context';
+import { FirestoreService } from '../discharge-summaries/firestore.service';
 
 @Injectable()
 export class GoogleService {
   private clientPromise: Promise<AxiosInstance> | null = null;
   private allowedTypes: Set<string> | null = null;
+  private readonly logger = new Logger(GoogleService.name);
 
-  constructor(private readonly configService: DevConfigService) {}
+  constructor(
+    private readonly configService: DevConfigService,
+    private readonly firestoreService?: FirestoreService,
+  ) {}
 
   async getAccessToken() {
     const token = await getGoogleAccessToken(['https://www.googleapis.com/auth/cloud-platform']);
@@ -274,6 +279,11 @@ export class GoogleService {
                     if (binaryMatch && binaryMatch[1]) {
                       binaryIds.add(binaryMatch[1]);
                     }
+                    // Also check for DocumentReference references
+                    const docRefMatch = ref.match(/^DocumentReference\/([^\/]+)$/);
+                    if (docRefMatch && docRefMatch[1] && !documentReferenceIds.includes(docRefMatch[1])) {
+                      documentReferenceIds.push(docRefMatch[1]);
+                    }
                   }
                 }
               }
@@ -291,25 +301,124 @@ export class GoogleService {
         }
       }
 
-      // Step 2: Delete all DocumentReferences first (they reference Binaries)
-      for (const docRefId of documentReferenceIds) {
+      // Step 1c: Find ALL Compositions that reference the Encounters we found
+      // This ensures we catch all Compositions, even if they don't directly reference the patient
+      for (const encounterId of Array.from(encounterIds)) {
         try {
-          await client.delete(`/DocumentReference/${docRefId}`);
-          deleted.documentReferences.push(docRefId);
-          console.log(`✅ Deleted DocumentReference: ${docRefId}`);
-        } catch (error: any) {
-          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
-          errors.push({
-            resourceType: 'DocumentReference',
-            id: docRefId,
-            error: errorMsg,
+          const encounterCompositionSearch = await client.get('/Composition', {
+            params: { encounter: `Encounter/${encounterId}`, _count: 100 },
           });
-          console.error(`❌ Failed to delete DocumentReference ${docRefId}:`, errorMsg);
-          // Continue with other deletions even if one DocumentReference fails
+
+          if (encounterCompositionSearch.data?.entry) {
+            for (const entry of encounterCompositionSearch.data.entry) {
+              const comp = entry.resource;
+              if (comp?.id) {
+                compositionIds.add(comp.id);
+                console.log(`📋 Found additional Composition ${comp.id} via Encounter ${encounterId}`);
+              }
+            }
+          }
+        } catch (error: any) {
+          console.error(`❌ Error searching for Compositions by Encounter ${encounterId}:`, error.message);
+          // Continue even if search fails
         }
       }
 
-      // Step 3: Delete ALL Compositions for this patient (they reference Binaries)
+      // Step 1d: Search for ALL Compositions of discharge summary type and check if they reference our Binaries
+      // This catches Compositions that might reference our Binaries but weren't found by patient/encounter search
+      // We'll search by type and then check their Binary references
+      try {
+        const allCompositionSearch = await client.get('/Composition', {
+          params: { type: 'http://loinc.org|18842-5', _count: 1000 }, // Search all discharge summaries
+        });
+
+        if (allCompositionSearch.data?.entry) {
+          for (const entry of allCompositionSearch.data.entry) {
+            const comp = entry.resource;
+            if (!comp?.id || compositionIds.has(comp.id)) {
+              continue; // Skip if already found
+            }
+
+            // Check if this Composition references any of our Binaries
+            let referencesOurBinary = false;
+            if (comp.section && Array.isArray(comp.section)) {
+              for (const section of comp.section) {
+                if (section.entry && Array.isArray(section.entry)) {
+                  for (const entry of section.entry) {
+                    if (entry.reference) {
+                      const ref = entry.reference;
+                      const binaryMatch = ref.match(/^Binary\/([^\/]+)$/);
+                      if (binaryMatch && binaryMatch[1] && binaryIds.has(binaryMatch[1])) {
+                        referencesOurBinary = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+                if (referencesOurBinary) break;
+              }
+            }
+
+            // Also check if it references any of our DocumentReferences
+            if (!referencesOurBinary && comp.section && Array.isArray(comp.section)) {
+              for (const section of comp.section) {
+                if (section.entry && Array.isArray(section.entry)) {
+                  for (const entry of section.entry) {
+                    if (entry.reference) {
+                      const ref = entry.reference;
+                      const docRefMatch = ref.match(/^DocumentReference\/([^\/]+)$/);
+                      if (docRefMatch && docRefMatch[1] && documentReferenceIds.includes(docRefMatch[1])) {
+                        referencesOurBinary = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+                if (referencesOurBinary) break;
+              }
+            }
+
+            if (referencesOurBinary) {
+              compositionIds.add(comp.id);
+              console.log(`📋 Found additional Composition ${comp.id} via Binary/DocumentReference reference`);
+              
+              // Extract additional Binary IDs and Encounter IDs from this Composition
+              if (comp.encounter?.reference) {
+                const encounterMatch = comp.encounter.reference.match(/^Encounter\/([^\/]+)$/);
+                if (encounterMatch && encounterMatch[1]) {
+                  encounterIds.add(encounterMatch[1]);
+                }
+              }
+              
+              if (comp.section && Array.isArray(comp.section)) {
+                for (const section of comp.section) {
+                  if (section.entry && Array.isArray(section.entry)) {
+                    for (const entry of section.entry) {
+                      if (entry.reference) {
+                        const ref = entry.reference;
+                        const binaryMatch = ref.match(/^Binary\/([^\/]+)$/);
+                        if (binaryMatch && binaryMatch[1]) {
+                          binaryIds.add(binaryMatch[1]);
+                        }
+                        const docRefMatch = ref.match(/^DocumentReference\/([^\/]+)$/);
+                        if (docRefMatch && docRefMatch[1] && !documentReferenceIds.includes(docRefMatch[1])) {
+                          documentReferenceIds.push(docRefMatch[1]);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error(`❌ Error searching for all Compositions to find Binary references:`, error.message);
+        // Continue even if search fails
+      }
+
+      // Step 2: Delete ALL Compositions FIRST (they reference DocumentReference, Patient, and Encounter)
+      // Composition must be deleted before DocumentReference, Encounter, and Patient
       for (const compId of Array.from(compositionIds)) {
         try {
           await client.delete(`/Composition/${compId}`);
@@ -339,7 +448,7 @@ export class GoogleService {
             if (error.response?.data) {
               console.error(`   Full error response:`, JSON.stringify(error.response.data, null, 2));
             }
-            // Don't continue to Patient deletion if Composition deletion fails (unless it's already gone)
+            // Don't continue to other deletions if main Composition deletion fails (unless it's already gone)
             if (compId === compositionId) {
               throw new Error(`Failed to delete Composition: ${fullError}`);
             }
@@ -347,7 +456,27 @@ export class GoogleService {
         }
       }
 
-      // Step 4: Delete all Binary resources (now that Compositions and DocumentReferences are deleted)
+      // Step 3: Delete all DocumentReferences (they reference Binary and Patient)
+      // Now safe to delete since Composition (which references DocumentReference) is deleted
+      for (const docRefId of documentReferenceIds) {
+        try {
+          await client.delete(`/DocumentReference/${docRefId}`);
+          deleted.documentReferences.push(docRefId);
+          console.log(`✅ Deleted DocumentReference: ${docRefId}`);
+        } catch (error: any) {
+          const errorMsg = error.response?.data?.issue?.[0]?.details?.text || error.message;
+          errors.push({
+            resourceType: 'DocumentReference',
+            id: docRefId,
+            error: errorMsg,
+          });
+          console.error(`❌ Failed to delete DocumentReference ${docRefId}:`, errorMsg);
+          // Continue with other deletions even if one DocumentReference fails
+        }
+      }
+
+      // Step 4: Delete all Binary resources (they are referenced by DocumentReference)
+      // Now safe to delete since DocumentReference (which references Binary) is deleted
       for (const binaryId of Array.from(binaryIds)) {
         try {
           await client.delete(`/Binary/${binaryId}`);
@@ -371,7 +500,8 @@ export class GoogleService {
         }
       }
 
-      // Step 5: Delete all Encounters
+      // Step 5: Delete all Encounters (they reference Patient)
+      // Now safe to delete since Composition (which references Encounter) is deleted
       for (const encounterId of Array.from(encounterIds)) {
         try {
           await client.delete(`/Encounter/${encounterId}`);
@@ -389,7 +519,8 @@ export class GoogleService {
         }
       }
 
-      // Step 6: Delete Patient
+      // Step 6: Delete Patient LAST (it's referenced by Composition, DocumentReference, and Encounter)
+      // Now safe to delete since all resources that reference Patient are deleted
       try {
         await client.delete(`/Patient/${patientId}`);
         deleted.patient = patientId;
@@ -403,6 +534,45 @@ export class GoogleService {
         });
         console.error(`❌ Failed to delete Patient ${patientId}:`, errorMsg);
         throw error;
+      }
+
+      // Step 7: Delete Firestore discharge_summaries document
+      // This is critical - the expert portal queries Firestore, so if we don't delete this,
+      // the patient will still appear in the list even though all FHIR resources are deleted
+      if (this.firestoreService) {
+        try {
+          // Delete all composition documents (in case there are multiple compositions for this patient)
+          for (const compId of Array.from(compositionIds)) {
+            try {
+              await this.firestoreService.delete(compId, ctx.tenantId);
+              this.logger.log(`✅ Deleted Firestore discharge_summaries document: ${compId}`);
+            } catch (firestoreError: any) {
+              // If document doesn't exist, that's okay - it might not have been created yet
+              if (firestoreError.status === 404 || firestoreError.message?.includes('not found')) {
+                this.logger.debug(`Firestore document ${compId} not found (may not exist), continuing...`);
+              } else {
+                const errorMsg = firestoreError.message || 'Unknown error';
+                errors.push({
+                  resourceType: 'Firestore',
+                  id: compId,
+                  error: `Failed to delete Firestore document: ${errorMsg}`,
+                });
+                this.logger.warn(`❌ Failed to delete Firestore document ${compId}: ${errorMsg}`);
+                // Don't throw - continue even if Firestore deletion fails
+              }
+            }
+          }
+        } catch (error: any) {
+          // Log but don't fail the entire operation if Firestore deletion fails
+          this.logger.error(`❌ Error during Firestore deletion: ${error.message}`);
+          errors.push({
+            resourceType: 'Firestore',
+            id: compositionId,
+            error: error.message,
+          });
+        }
+      } else {
+        this.logger.warn('FirestoreService not available - skipping Firestore document deletion');
       }
 
       return { success: true, deleted, errors };

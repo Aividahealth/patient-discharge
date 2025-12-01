@@ -18,12 +18,23 @@ import { ErrorBoundary } from "@/components/error-boundary"
 import { FileUploadModal } from "@/components/file-upload-modal"
 import { MarkdownRenderer, markdownToHtml } from "@/components/markdown-renderer"
 import { SimplifiedDischargeSummary, SimplifiedDischargeInstructions } from "@/components/simplified-discharge-renderer"
+import { QualityMetricsCard } from "@/components/quality-metrics-card"
 import { useTenant } from "@/contexts/tenant-context"
 import { usePDFExport } from "@/hooks/use-pdf-export"
 import { getDischargeSummaryRenderer } from "@/components/discharge-renderers/renderer-registry"
 import { parseDischargeDocument } from "@/lib/parsers/parser-registry"
 import { getDischargeQueue, getPatientDetails, getTranslatedContent, type DischargeQueuePatient } from "@/lib/discharge-summaries"
 import { SUPPORTED_LANGUAGES } from "@/lib/constants/languages"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Upload,
   FileText,
@@ -56,6 +67,7 @@ export default function ClinicianDashboard() {
   const [isLoadingQueue, setIsLoadingQueue] = useState(true)
   const [isLoadingPatient, setIsLoadingPatient] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
+  const [showPublishConfirmDialog, setShowPublishConfirmDialog] = useState(false)
   
   // Section approvals with audit trail (timestamp and clinician info)
   const [sectionApprovals, setSectionApprovals] = useState<{
@@ -120,6 +132,13 @@ export default function ClinicianDashboard() {
     specialty?: string;
     attendingPhysician?: string;
     compositionId?: string;
+    qualityMetrics?: {
+      fleschKincaidGradeLevel?: number;
+      fleschReadingEase?: number;
+      smogIndex?: number;
+      compressionRatio?: number;
+      avgSentenceLength?: number;
+    };
     [key: string]: any;
   }>>([])
 
@@ -544,12 +563,20 @@ export default function ClinicianDashboard() {
     };
   };
 
-  // Helper function to fetch simplified content from the API
-  const fetchSimplifiedContent = async (compositionId: string, token: string, tenantId: string) => {
+  // Helper function to fetch simplified or translated content from the API
+  const fetchSimplifiedContent = async (compositionId: string, token: string, tenantId: string, language?: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://patient-discharge-backend-dev-qnzythtpnq-uc.a.run.app';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://patient-discharge-backend-dev-647433528821.us-central1.run.app';
+
+      // Use translated endpoint if language is specified and not English
+      const endpoint = language && language.toLowerCase() !== 'en' ? 'translated' : 'simplified';
+      const summaryTag = endpoint === 'translated' ? 'discharge-summary-translated' : 'discharge-summary-simplified';
+      const instructionsTag = endpoint === 'translated' ? 'discharge-instructions-translated' : 'discharge-instructions-simplified';
+
+      console.log(`[ClinicianPortal] Fetching ${endpoint} content for language: ${language || 'en'}`);
+
       const simplifiedResponse = await fetch(
-        `${apiUrl}/google/fhir/Composition/${compositionId}/simplified`,
+        `${apiUrl}/google/fhir/Composition/${compositionId}/${endpoint}`,
         {
           method: 'GET',
           headers: {
@@ -562,20 +589,20 @@ export default function ClinicianDashboard() {
 
       if (simplifiedResponse.ok) {
         const simplifiedData = await simplifiedResponse.json();
-        
+
         const simplifiedSummary = simplifiedData.dischargeSummaries?.find((summary: any) =>
-          summary.tags?.some((tag: any) => tag.code === 'discharge-summary-simplified')
+          summary.tags?.some((tag: any) => tag.code === summaryTag)
         );
 
         const simplifiedInstructions = simplifiedData.dischargeInstructions?.find((instr: any) =>
-          instr.tags?.some((tag: any) => tag.code === 'discharge-instructions-simplified')
+          instr.tags?.some((tag: any) => tag.code === instructionsTag)
         );
 
-        console.log('[DEBUG] Simplified Summary length:', simplifiedSummary?.text?.length || 0);
-        console.log('[DEBUG] Simplified Summary preview:', simplifiedSummary?.text?.substring(0, 200));
-        console.log('[DEBUG] Simplified Instructions length:', simplifiedInstructions?.text?.length || 0);
-        console.log('[DEBUG] Simplified Instructions preview:', simplifiedInstructions?.text?.substring(0, 200));
-        
+        console.log(`[DEBUG] ${endpoint} Summary length:`, simplifiedSummary?.text?.length || 0);
+        console.log(`[DEBUG] ${endpoint} Summary preview:`, simplifiedSummary?.text?.substring(0, 200));
+        console.log(`[DEBUG] ${endpoint} Instructions length:`, simplifiedInstructions?.text?.length || 0);
+        console.log(`[DEBUG] ${endpoint} Instructions preview:`, simplifiedInstructions?.text?.substring(0, 200));
+
         return {
           summary: simplifiedSummary?.text || '',
           instructions: simplifiedInstructions?.text || ''
@@ -600,11 +627,15 @@ export default function ClinicianDashboard() {
     const rawSummary = patientDetails?.rawSummary;
     const rawInstructions = patientDetails?.rawInstructions;
     
-    // Fetch simplified content from the new API endpoint
+    // Fetch simplified or translated content from the new API endpoint
+    // Use viewLanguage to determine whether to fetch translated content
+    // If viewLanguage is "preferred", use the patient's preferred language, otherwise use "en"
+    const languageToFetch = viewLanguage === "preferred" ? patientPreferredLanguage || "en" : "en";
     const simplifiedContent = await fetchSimplifiedContent(
       queuePatient.compositionId,
       token || '',
-      tenantId
+      tenantId,
+      languageToFetch
     );
     
     const simplifiedSummaryText = simplifiedContent.summary;
@@ -639,6 +670,7 @@ export default function ClinicianDashboard() {
       specialty: queuePatient.unit,
       attendingPhysician: queuePatient.attendingPhysician?.name,
       compositionId: queuePatient.compositionId,
+      qualityMetrics: queuePatient.qualityMetrics, // Preserve quality metrics from queue patient
       // Add parsed data for structured rendering
       originalSummaryParsed: parsedSummaryData,
       originalInstructionsParsed: parsedInstructionsData,
@@ -702,6 +734,7 @@ export default function ClinicianDashboard() {
         specialty: p.unit,
         attendingPhysician: p.attendingPhysician?.name,
         compositionId: p.compositionId,
+        qualityMetrics: p.qualityMetrics, // Include quality metrics from API
       }));
 
       setPatients(transformedPatients);
@@ -723,7 +756,8 @@ export default function ClinicianDashboard() {
             name: firstPatient.attendingPhysician || '',
             id: `physician-${firstPatient.id}`
           },
-          avatar: null
+          avatar: null,
+          qualityMetrics: firstPatient.qualityMetrics, // Preserve quality metrics
         };
         await loadPatientDetails(firstPatient.id, firstPatient.compositionId, queuePatientForTransform);
       }
@@ -777,7 +811,8 @@ export default function ClinicianDashboard() {
             name: queuePatient.attendingPhysician || '',
             id: `physician-${queuePatient.id}`
           },
-          avatar: null
+          avatar: null,
+          qualityMetrics: queuePatient.qualityMetrics, // Preserve quality metrics from patients list
         };
       }
 
@@ -883,6 +918,53 @@ export default function ClinicianDashboard() {
       redactInsuranceInfo: false,
     })
   }, [selectedPatient])
+
+  // Re-fetch simplified/translated content when viewLanguage changes
+  useEffect(() => {
+    const refetchContent = async () => {
+      if (!selectedPatient || !token || !tenantId) return;
+
+      const patient = patients.find(p => p.id === selectedPatient);
+      if (!patient?.compositionId) return;
+
+      const languageToFetch = viewLanguage === "preferred" ? patientPreferredLanguage || "en" : "en";
+
+      console.log('[ClinicianPortal] Re-fetching content for language:', languageToFetch);
+
+      const simplifiedContent = await fetchSimplifiedContent(
+        patient.compositionId,
+        token,
+        tenantId,
+        languageToFetch
+      );
+
+      if (simplifiedContent) {
+        // Update translatedContent state when viewing in preferred language
+        if (viewLanguage === "preferred") {
+          setTranslatedContent({
+            summary: simplifiedContent.summary || '',
+            instructions: simplifiedContent.instructions || '',
+          });
+        } else {
+          // Clear translated content when viewing in English
+          setTranslatedContent(null);
+          // Update the patient data with simplified content
+          if (patientMedicalData[selectedPatient]) {
+            setPatientMedicalData({
+              ...patientMedicalData,
+              [selectedPatient]: {
+                ...patientMedicalData[selectedPatient],
+                simplifiedSummary: simplifiedContent.summary || '',
+                simplifiedInstructions: simplifiedContent.instructions || '',
+              }
+            });
+          }
+        }
+      }
+    };
+
+    refetchContent();
+  }, [viewLanguage, selectedPatient, token, tenantId, patientPreferredLanguage]);
 
   const getCurrentPatientData = () => {
     return selectedPatient ? patientMedicalData[selectedPatient] : null
@@ -1033,19 +1115,27 @@ export default function ClinicianDashboard() {
     })
   }
 
-  const handlePublish = async () => {
-    if (!currentPatient || !currentPatient.compositionId || !token || !tenantId || !user) {
-      console.error('[ClinicianPortal] Missing required data for publish')
-      return
-    }
-
-    // Validate all sections are approved
+  const handlePublishClick = () => {
+    // Validate all sections are approved first
     if (!sectionApprovals.medications.approved || 
         !sectionApprovals.appointments.approved || 
         !sectionApprovals.dietActivity.approved) {
       alert('Please approve all required sections before publishing.')
       return
     }
+
+    // Show confirmation dialog with reminder
+    setShowPublishConfirmDialog(true)
+  }
+
+  const handlePublish = async () => {
+    if (!currentPatient || !currentPatient.compositionId || !token || !tenantId || !user) {
+      console.error('[ClinicianPortal] Missing required data for publish')
+      return
+    }
+
+    // Close the dialog
+    setShowPublishConfirmDialog(false)
 
     setIsPublishing(true)
 
@@ -1256,7 +1346,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
 
   return (
     <ErrorBoundary>
-      <AuthGuard>
+      <AuthGuard requiredRole="clinician">
         <div className="min-h-screen bg-background flex flex-col">
       <CommonHeader title="Clinician Portal" />
       
@@ -1394,6 +1484,15 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                           <p className="font-medium truncate">{patient.name}</p>
                           <p className="text-sm opacity-80 truncate">{patient.mrn}</p>
                           <p className="text-xs opacity-60 truncate">{patient.specialty}</p>
+                          {patient.qualityMetrics && (
+                            <div className="mt-1">
+                              <QualityMetricsCard 
+                                metrics={patient.qualityMetrics} 
+                                compact 
+                                inverted={selectedPatient === patient.id}
+                              />
+                            </div>
+                          )}
                         </div>
                         <Badge variant={patient.status === 'approved' ? 'default' : 'secondary'}>
                           {patient.status === 'approved' ? t.approved : t.review}
@@ -1453,17 +1552,36 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                     </div>
                   </CardHeader>
                 </Card>
-                
+
                 {/* Side-by-Side Editor */}
                 <div className="grid lg:grid-cols-2 gap-6 mb-6">
                   {/* Original Document */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="font-heading text-lg flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        {t.originalDischargeSummary}
-                      </CardTitle>
-                    </CardHeader>
+                  <div className="space-y-3">
+                    {/* Quality Metrics for Original Summary */}
+                    {currentPatient?.qualityMetrics?.raw && (
+                      <Card className="bg-muted/30">
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">Original Quality</span>
+                            <QualityMetricsCard
+                              metrics={{
+                                fleschKincaidGradeLevel: currentPatient.qualityMetrics.raw.readability.fleschKincaidGradeLevel,
+                                fleschReadingEase: currentPatient.qualityMetrics.raw.readability.fleschReadingEase,
+                                smogIndex: currentPatient.qualityMetrics.raw.readability.smogIndex
+                              }}
+                              compact={true}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-heading text-lg flex items-center gap-2">
+                          <FileText className="h-5 w-5" />
+                          {t.originalDischargeSummary}
+                        </CardTitle>
+                      </CardHeader>
                     <CardContent>
                       <div className="bg-muted/30 p-4 rounded-lg text-sm max-h-[70vh] overflow-y-auto">
                         {(() => {
@@ -1559,24 +1677,44 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                       </div>
                     </CardContent>
                   </Card>
+                  </div>
 
                   {/* Simplified Patient Version */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="font-heading text-lg flex items-center gap-2">
-                        <User className="h-5 w-5" />
-                        {t.patientFriendlyVersion}
-                        {editMode && <Badge variant="secondary">{t.editingMode || 'Editing Mode'}</Badge>}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                          AI Generated
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          This content has been simplified using artificial intelligence
-                        </span>
-                      </div>
-                    </CardHeader>
+                  <div className="space-y-3">
+                    {/* Quality Metrics for Patient-Friendly Summary */}
+                    {currentPatient?.qualityMetrics && (
+                      <Card className="bg-muted/30">
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-muted-foreground">Simplified Quality</span>
+                            <QualityMetricsCard
+                              metrics={{
+                                fleschKincaidGradeLevel: currentPatient.qualityMetrics.fleschKincaidGradeLevel,
+                                fleschReadingEase: currentPatient.qualityMetrics.fleschReadingEase,
+                                smogIndex: currentPatient.qualityMetrics.smogIndex
+                              }}
+                              compact={true}
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="font-heading text-lg flex items-center gap-2">
+                          <User className="h-5 w-5" />
+                          {t.patientFriendlyVersion}
+                          {editMode && <Badge variant="secondary">{t.editingMode || 'Editing Mode'}</Badge>}
+                        </CardTitle>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                            AI Generated
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            This content has been simplified using artificial intelligence
+                          </span>
+                        </div>
+                      </CardHeader>
                     <CardContent>
                       {editMode ? (
                         <div className="space-y-4">
@@ -1690,6 +1828,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                       )}
                     </CardContent>
                   </Card>
+                  </div>
                 </div>
 
                 {/* Review Sections */}
@@ -1838,7 +1977,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                   <div className="flex items-center gap-2">
                     <Button
                       disabled={!Object.values(approvalStatus).every(Boolean) || isPublishing}
-                      onClick={handlePublish}
+                      onClick={handlePublishClick}
                       className="bg-green-600 hover:bg-green-700"
                     >
                       <Send className="h-4 w-4 mr-2" />
@@ -1846,6 +1985,42 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                     </Button>
                   </div>
                 </div>
+
+                {/* Publish Confirmation Dialog */}
+                <AlertDialog open={showPublishConfirmDialog} onOpenChange={setShowPublishConfirmDialog}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5 text-orange-500" />
+                        Reminder: Generate PDF or Print Handout
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-3 pt-2">
+                        <p>
+                          Before publishing to the patient, please make sure you have:
+                        </p>
+                        <ul className="list-disc list-inside space-y-1 ml-2">
+                          <li>Generated a PDF copy of the discharge summary, or</li>
+                          <li>Printed a handout for your records</li>
+                        </ul>
+                        <p className="font-medium text-foreground pt-2">
+                          Once published, you won't be able to go back to generate PDF or print handout for this patient.
+                        </p>
+                        <p className="text-sm text-muted-foreground pt-1">
+                          Do you want to proceed with publishing?
+                        </p>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handlePublish}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        Yes, Publish to Patient
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
 
                 {/* Status Alert */}
                 {!Object.values(approvalStatus).every(Boolean) && (
@@ -1940,6 +2115,18 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
               }
             }
 
+            // Fetch quality metrics from the discharge queue API
+            let qualityMetrics = undefined;
+            try {
+              const queueData = await getDischargeQueue(token || '', tenantId || '');
+              const matchingPatient = queueData.patients?.find((p: any) => p.compositionId === data.compositionId);
+              if (matchingPatient?.qualityMetrics) {
+                qualityMetrics = matchingPatient.qualityMetrics;
+              }
+            } catch (error) {
+              console.warn('[ClinicianPortal] Failed to fetch quality metrics for uploaded patient:', error);
+            }
+
             // Create a new patient entry matching the expected structure (reused from file upload)
             const newPatient = {
               id: data.patientId || `patient-${Date.now()}`,
@@ -1952,6 +2139,7 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
               specialty: data.patientInfo?.unit || 'General',
               attendingPhysician: data.patientInfo?.attendingPhysician?.name || undefined,
               compositionId: data.compositionId,
+              qualityMetrics: qualityMetrics, // Include quality metrics
               // Add parsed data for structured rendering
               originalSummaryParsed: parsedSummaryData,
               originalInstructionsParsed: parsedInstructionsData,

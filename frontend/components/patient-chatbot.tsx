@@ -82,6 +82,7 @@ export function PatientChatbot({
         }
         
         // Production fallback: Use the separate chatbot Cloud Run service
+        // This should be overridden by NEXT_PUBLIC_CHATBOT_SERVICE_URL
         return 'https://patient-discharge-chatbot-647433528821.us-central1.run.app/api/patient-chatbot/chat'
       }
 
@@ -168,6 +169,13 @@ export function PatientChatbot({
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col p-0 min-h-0">
+        {/* AI Disclaimer */}
+        <div className="px-4 pt-4 pb-2 border-b bg-muted/50">
+          <p className="text-xs text-muted-foreground text-center">
+            <strong>Disclaimer:</strong> You are chatting with an AI assistant. This assistant provides general information and is not a substitute for professional medical advice. For urgent medical concerns, call 911 or contact your healthcare provider immediately.
+          </p>
+        </div>
+        
         {/* Messages - Fixed height with scroll */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           {messages.map((message) => (

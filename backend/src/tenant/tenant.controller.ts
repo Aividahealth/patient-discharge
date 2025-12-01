@@ -11,6 +11,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard, TenantGuard } from '../auth/guards';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemAdminService } from '../system-admin/system-admin.service';
+import { QualityMetricsService } from '../quality-metrics/quality-metrics.service';
 
 /**
  * Controller for tenant-specific operations
@@ -22,7 +23,10 @@ import { SystemAdminService } from '../system-admin/system-admin.service';
 export class TenantController {
   private readonly logger = new Logger(TenantController.name);
 
-  constructor(private readonly systemAdminService: SystemAdminService) {}
+  constructor(
+    private readonly systemAdminService: SystemAdminService,
+    private readonly qualityMetricsService: QualityMetricsService,
+  ) {}
 
   /**
    * GET /api/tenant/metrics
@@ -48,6 +52,44 @@ export class TenantController {
       this.logger.error(`Error getting tenant metrics: ${error.message}`);
       throw new HttpException(
         { message: 'Failed to get tenant metrics', error: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * GET /api/tenant/quality-metrics/aggregate
+   * Get aggregate quality metrics for the authenticated tenant
+   * Requires: tenant_admin or system_admin role
+   * Protected by: TenantGuard (ensures tenant isolation)
+   */
+  @Get('quality-metrics/aggregate')
+  async getAggregateQualityMetrics(@Request() req) {
+    try {
+      const tenantId = req.user?.tenantId;
+
+      if (!tenantId) {
+        throw new HttpException('Tenant ID not found in request', HttpStatus.BAD_REQUEST);
+      }
+
+      this.logger.log(`Getting aggregate quality metrics for tenant: ${tenantId}`);
+      const aggregateMetrics = await this.qualityMetricsService.getAggregateMetrics(tenantId);
+
+      if (!aggregateMetrics) {
+        throw new HttpException(
+          'No quality metrics found for this tenant',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return aggregateMetrics;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`Error getting aggregate quality metrics: ${error.message}`);
+      throw new HttpException(
+        { message: 'Failed to get aggregate quality metrics', error: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

@@ -82,6 +82,8 @@ export default function SystemAdminPortal() {
   // Dialog states
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [tenantToDelete, setTenantToDelete] = useState<string | null>(null)
+  const [showMetricsDialog, setShowMetricsDialog] = useState(false)
+  const [loadingMetrics, setLoadingMetrics] = useState(false)
 
   // Verify system admin access
   useEffect(() => {
@@ -206,11 +208,16 @@ export default function SystemAdminPortal() {
     if (!api) return
 
     try {
+      setLoadingMetrics(true)
+      setError("")
       const metrics = await api.getTenantMetrics(tenantId)
       setSelectedTenantMetrics(metrics)
+      setShowMetricsDialog(true)
     } catch (err) {
       console.error('Error loading tenant metrics:', err)
       setError(err instanceof Error ? err.message : 'Failed to load tenant metrics')
+    } finally {
+      setLoadingMetrics(false)
     }
   }
 
@@ -410,65 +417,6 @@ export default function SystemAdminPortal() {
                   </Table>
                 </CardContent>
               </Card>
-
-              {/* Selected Tenant Metrics */}
-              {selectedTenantMetrics && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Metrics for {selectedTenantMetrics.tenantName}</CardTitle>
-                    <CardDescription>Detailed metrics breakdown</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <h3 className="font-semibold mb-2">Users by Role</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <div className="p-3 bg-blue-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Patients</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.patient}</div>
-                        </div>
-                        <div className="p-3 bg-green-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Clinicians</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.clinician}</div>
-                        </div>
-                        <div className="p-3 bg-light-gray rounded-md">
-                          <div className="text-sm text-muted-foreground">Experts</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.expert}</div>
-                        </div>
-                        <div className="p-3 bg-orange-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Admins</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.tenant_admin}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold mb-2">Discharge Summaries by Status</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        <div className="p-3 bg-gray-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Raw Only</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.raw_only}</div>
-                        </div>
-                        <div className="p-3 bg-blue-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Simplified</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.simplified}</div>
-                        </div>
-                        <div className="p-3 bg-green-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Translated</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.translated}</div>
-                        </div>
-                        <div className="p-3 bg-yellow-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Processing</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.processing}</div>
-                        </div>
-                        <div className="p-3 bg-red-50 rounded-md">
-                          <div className="text-sm text-muted-foreground">Error</div>
-                          <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.error}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </TabsContent>
 
             {/* Onboarding Tab */}
@@ -1068,6 +1016,98 @@ export default function SystemAdminPortal() {
           </Tabs>
         </div>
       </div>
+
+      {/* Tenant Metrics Dialog */}
+      <Dialog open={showMetricsDialog} onOpenChange={setShowMetricsDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Metrics for {selectedTenantMetrics?.tenantName || 'Tenant'}</DialogTitle>
+            <DialogDescription>Detailed metrics breakdown</DialogDescription>
+          </DialogHeader>
+          {loadingMetrics ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">Loading metrics...</p>
+            </div>
+          ) : selectedTenantMetrics ? (
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-semibold mb-3">Users by Role</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-4 bg-blue-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Patients</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.patient}</div>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Clinicians</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.clinician}</div>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Experts</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.expert}</div>
+                  </div>
+                  <div className="p-4 bg-orange-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Admins</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.users.byRole.tenant_admin}</div>
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                  <div className="text-sm text-muted-foreground">Total Users</div>
+                  <div className="text-xl font-bold">{selectedTenantMetrics.users.total}</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Discharge Summaries by Status</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div className="p-4 bg-gray-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Raw Only</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.raw_only}</div>
+                  </div>
+                  <div className="p-4 bg-blue-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Simplified</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.simplified}</div>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Translated</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.translated}</div>
+                  </div>
+                  <div className="p-4 bg-yellow-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Processing</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.processing}</div>
+                  </div>
+                  <div className="p-4 bg-red-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Error</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.dischargeSummaries.byStatus.error}</div>
+                  </div>
+                </div>
+                <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                  <div className="text-sm text-muted-foreground">Total Summaries</div>
+                  <div className="text-xl font-bold">{selectedTenantMetrics.dischargeSummaries.total}</div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold mb-3">Expert Feedback</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-purple-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Total Reviews</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.expertFeedback.total}</div>
+                  </div>
+                  <div className="p-4 bg-indigo-50 rounded-md">
+                    <div className="text-sm text-muted-foreground">Average Rating</div>
+                    <div className="text-2xl font-bold">{selectedTenantMetrics.expertFeedback.averageRating.toFixed(1)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMetricsDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
