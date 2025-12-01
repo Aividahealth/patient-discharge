@@ -42,7 +42,7 @@ export class JWKSController {
   async getJWKS(@Param('tenantId') tenantId: string) {
     try {
       // Get tenant configuration
-      const config = this.configService.getConfig();
+      const config = this.configService.get();
       const tenantConfig = config.tenants[tenantId];
 
       if (!tenantConfig) {
@@ -104,7 +104,7 @@ export class JWKSController {
   @Get('jwks/:tenantId/provider')
   async getProviderJWKS(@Param('tenantId') tenantId: string) {
     try {
-      const config = this.configService.getConfig();
+      const config = this.configService.get();
       const tenantConfig = config.tenants[tenantId];
 
       if (!tenantConfig) {
