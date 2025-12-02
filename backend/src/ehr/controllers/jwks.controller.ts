@@ -1,6 +1,7 @@
 import { Controller, Get, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { DevConfigService } from '../../config/dev-config.service';
 import { JWKConverter } from '../utils/jwk-converter';
+import { Public } from '../../auth/auth.guard';
 import * as path from 'path';
 
 /**
@@ -38,6 +39,7 @@ export class JWKSController {
    * This is a PUBLIC endpoint - no authentication required
    * EPIC will call this endpoint to fetch your public key
    */
+  @Public()
   @Get('jwks/:tenantId')
   async getJWKS(@Param('tenantId') tenantId: string) {
     try {
@@ -101,6 +103,7 @@ export class JWKSController {
    * Alternative endpoint for provider app (clinician-facing) JWKS
    * Use this if you have separate keys for system vs provider apps
    */
+  @Public()
   @Get('jwks/:tenantId/provider')
   async getProviderJWKS(@Param('tenantId') tenantId: string) {
     try {

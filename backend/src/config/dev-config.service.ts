@@ -202,7 +202,9 @@ export class DevConfigService {
           tenantConfig.ehr = {
             vendor: 'epic',
             base_url: ehrIntegration.epic.base_url || '',
-            // EPIC config can be extended here
+            system_app: ehrIntegration.epic.system_app,
+            provider_app: ehrIntegration.epic.provider_app,
+            patients: ehrIntegration.epic.patients,
           };
           this.logger.debug(`Loaded EPIC config from ehrIntegration for tenant: ${tenantId}`);
         } else {
