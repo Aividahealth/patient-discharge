@@ -1,0 +1,52 @@
+[0;34m========================================[0m
+[0;34mEPIC Sandbox Data Explorer[0m
+[0;34m========================================[0m
+
+[1;33mStep 1: Authenticating...[0m
+[0;32m✓ Authenticated[0m
+
+[1;33mStep 2: Checking test patients...[0m
+
+[0;34mTesting Patient: Tbt3KuCY0B5PSrJvCu2j-PlK.aiHsu2xUjUM8bWpetXoB[0m
+  [0;32m✓ Patient found: [0m
+  [0;34mSearching for DocumentReferences...[0m
+  Found 0 DocumentReference(s)
+  [0;34mSearching for Encounters...[0m
+  Found 0 Encounter(s)
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;34mTesting Patient: erXuFYUfucBZaryVksYEcMg3[0m
+  [0;32m✓ Patient found: [0m
+  [0;34mSearching for DocumentReferences...[0m
+  Found 0 DocumentReference(s)
+  [0;34mSearching for Encounters...[0m
+  Found 0 Encounter(s)
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;34mTesting Patient: eq081-VQEgP8drUUqCWzHfw3[0m
+  [0;32m✓ Patient found: [0m
+  [0;34mSearching for DocumentReferences...[0m
+  Found 0 DocumentReference(s)
+  [0;34mSearching for Encounters...[0m
+  Found 0 Encounter(s)
+[0;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;34m========================================[0m
+[0;34mSummary[0m
+[0;34m========================================[0m
+
+[1;33mNext Steps:[0m
+1. If documents were found above, run the import:
+   ./test-epic-e2e.sh
+
+2. If no documents found, you need to:
+   a) Log in to EPIC App Orchard: https://fhir.epic.com/
+   b) Navigate to your app (ID: 47095)
+   c) Use the sandbox tools to create test data
+   d) Or create a discharge summary in their test patient chart
+
+3. EPIC Sandbox Resources:
+   - Test Patient Gallery: https://fhir.epic.com/Sandbox
+   - API Documentation: https://fhir.epic.com/Documentation
+   - Sample Data: Available in 'My Apps' > 'Sandbox' section
+

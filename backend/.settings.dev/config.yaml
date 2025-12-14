@@ -133,4 +133,23 @@ tenants:
   #       redirect_uri: "https://your-aivida-portal.com/auth/cerner/callback"
   #       scopes: "launch/patient patient/Patient.read patient/Patient.write ..."
 
+  etest:
+    ehr:
+      vendor: epic
+      base_url: "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4"
 
+      system_app:
+        client_id: "1c9019b6-e5f9-425c-bd88-bef6ba914b5c"
+        private_key_path: ".settings.dev/epic-system-private-key.pem"
+        key_id: "epic-system-key-1764625902"
+        token_url: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token"
+        scopes: "system/Patient.read system/DocumentReference.read system/Binary.read system/Observation.read"
+
+      provider_app:
+        client_id: ""
+        private_key_path: ".settings.dev/epic-provider-private-key.pem"
+        key_id: "epic-provider-key-1764625902"
+        authorization_url: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize"
+        token_url: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token"
+        redirect_uri: "https://your-domain.com/auth/epic/callback"
+        scopes: "launch/patient patient/Patient.read patient/DocumentReference.read"

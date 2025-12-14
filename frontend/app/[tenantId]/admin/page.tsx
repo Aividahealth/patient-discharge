@@ -1008,10 +1008,10 @@ export default function AdminDashboard() {
                           </p>
                         </div>
 
-                        {/* College (>12th grade) */}
+                        {/* College (greater than 12th grade) */}
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">College (>12th grade)</span>
+                            <span className="text-muted-foreground">College (&gt;12th grade)</span>
                             <span className="font-medium">{metrics.qualityMetrics.gradeDistribution.college}</span>
                           </div>
                           <div className="w-full bg-muted rounded-full h-3">
