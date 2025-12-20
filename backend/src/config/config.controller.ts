@@ -35,7 +35,7 @@ export class ConfigController {
           translatedBucket: `discharge-summaries-translated-${tenantId}`,
         },
         simplificationConfig: {
-          modelName: process.env.MODEL_NAME || 'gemini-2.5-pro',
+          modelName: process.env.MODEL_NAME || 'gemini-3-flash',
           location: process.env.LOCATION || 'us-central1',
           temperature: 0.7,
           enabled: tenantConfig?.config?.simplificationEnabled ?? true,

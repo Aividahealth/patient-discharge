@@ -67,7 +67,7 @@ cd ../translation && npm install
 cd simplification
 export PROJECT_ID=your-project-id
 export LOCATION=us-central1
-export MODEL_NAME=gemini-2.5-pro
+export MODEL_NAME=gemini-3-flash
 ./deploy.sh
 
 # Deploy translation function
@@ -96,7 +96,7 @@ gsutil ls gs://discharge-summaries-translated/
 
 - `PROJECT_ID`: Google Cloud Project ID
 - `LOCATION`: Google Cloud region (default: us-central1)
-- `MODEL_NAME`: Vertex AI model name (default: gemini-2.5-pro)
+- `MODEL_NAME`: Vertex AI model name (default: gemini-3-flash)
 
 ### Buckets
 

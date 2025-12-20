@@ -6,7 +6,7 @@ import { VertexAI } from '@google-cloud/vertexai';
 export class PatientChatbotService {
   private readonly logger = new Logger(PatientChatbotService.name);
   private readonly vertexAI: VertexAI;
-  private readonly model = 'gemini-2.0-flash-exp';
+  private readonly model = 'gemini-3-flash';
   private readonly projectId: string;
   private readonly location: string;
 

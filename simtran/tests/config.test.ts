@@ -47,7 +47,7 @@ describe('Configuration', () => {
 
     expect(config.projectId).toBe('test-project');
     expect(config.location).toBe('us-central1');
-    expect(config.modelName).toBe('gemini-1.5-pro');
+    expect(config.modelName).toBe('gemini-3-flash');
     expect(config.maxOutputTokens).toBe(8192);
     expect(config.temperature).toBe(0.3);
     expect(config.maxRetries).toBe(3);

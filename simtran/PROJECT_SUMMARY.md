@@ -91,7 +91,7 @@ backend/
 
 **Optional (with defaults):**
 - `LOCATION` - us-central1
-- `MODEL_NAME` - gemini-1.5-pro
+- `MODEL_NAME` - gemini-3-flash
 - `INPUT_BUCKET` - discharge-summaries-raw
 - `OUTPUT_BUCKET` - discharge-summaries-simplified
 - `MAX_OUTPUT_TOKENS` - 8192

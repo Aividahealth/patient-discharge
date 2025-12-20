@@ -5,7 +5,7 @@ jest.mock('../src/utils/config', () => ({
   getConfig: jest.fn(() => ({
     projectId: 'test-project',
     location: 'us-central1',
-    modelName: 'gemini-1.5-pro',
+    modelName: 'gemini-3-flash',
     maxOutputTokens: 8192,
     temperature: 0.3,
     topP: 0.95,

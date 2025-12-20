@@ -41,7 +41,7 @@ npm run build
 
 ```bash
 export LOCATION=us-central1
-export MODEL_NAME=gemini-2.5-pro
+export MODEL_NAME=gemini-3-flash
 ./deploy.sh
 ```
 

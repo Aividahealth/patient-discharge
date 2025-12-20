@@ -12,7 +12,7 @@ export function loadConfig(): Config {
   const config: Config = {
     projectId: process.env.PROJECT_ID || process.env.GCP_PROJECT || '',
     location: process.env.LOCATION || 'us-central1',
-    modelName: process.env.MODEL_NAME || 'gemini-2.5-pro',
+    modelName: process.env.MODEL_NAME || 'gemini-3-flash',
     inputBucket: process.env.INPUT_BUCKET || 'discharge-summaries-raw',
     outputBucket: process.env.OUTPUT_BUCKET || 'discharge-summaries-simplified',
     maxOutputTokens: parseInt(process.env.MAX_OUTPUT_TOKENS || '8192', 10),
