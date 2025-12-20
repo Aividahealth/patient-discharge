@@ -64,6 +64,23 @@ export class DischargeUploadController {
         );
       }
 
+      // Validate file size (max 3MB for raw content)
+      const summarySize = Buffer.byteLength(body.rawDischargeSummary, 'utf8');
+      const instructionsSize = Buffer.byteLength(body.rawDischargeInstructions, 'utf8');
+      const totalSize = summarySize + instructionsSize;
+      const maxSize = 3 * 1024 * 1024; // 3MB
+
+      if (totalSize > maxSize) {
+        const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
+        throw new HttpException(
+          {
+            message: 'Content size exceeds limit',
+            error: `Total content size (${totalSizeMB}MB) exceeds 3MB limit. This limit ensures compatibility with FHIR Binary resource storage.`,
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
       const result = await this.dischargeUploadService.uploadDischargeSummary(body, ctx);
 
       this.logger.log(`✅ Upload successful. Composition ID: ${result.compositionId}`);

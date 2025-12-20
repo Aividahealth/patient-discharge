@@ -417,7 +417,7 @@ File: `/home/user/patient-discharge/backend/src/expert/expert.controller.ts`
 
 **Validation:**
 - Allowed types: PDF, DOC, DOCX, TXT
-- Max size: 10MB
+- Max size: 3MB
 - Required fields: mrn, name
 
 ---
