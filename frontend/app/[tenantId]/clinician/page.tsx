@@ -35,6 +35,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Upload,
   FileText,
@@ -50,12 +51,14 @@ import {
   RefreshCw,
   Globe,
   LogOut,
+  CheckCircle2,
 } from "lucide-react"
 
 export default function ClinicianDashboard() {
   const { tenant, tenantId, token, isLoading, isAuthenticated, user, logout } = useTenant()
   const { exportToPDF } = usePDFExport()
   const router = useRouter()
+  const [activeView, setActiveView] = useState<'review' | 'discharged'>('review')
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [language, setLanguage] = useState("en") // UI language for translations
@@ -699,13 +702,14 @@ export default function ClinicianDashboard() {
   };
 
   // Load discharge queue from API
-  const loadDischargeQueue = async () => {
-    console.log('[ClinicianPortal] loadDischargeQueue called', { 
-      hasToken: !!token, 
+  const loadDischargeQueue = async (statusFilter?: string) => {
+    console.log('[ClinicianPortal] loadDischargeQueue called', {
+      hasToken: !!token,
       hasTenantId: !!tenantId,
-      tenantId 
+      tenantId,
+      statusFilter
     });
-    
+
     if (!token || !tenantId) {
       console.warn('[ClinicianPortal] Cannot load queue - missing token or tenantId', {
         token: !!token,
@@ -714,10 +718,10 @@ export default function ClinicianDashboard() {
       return;
     }
 
-    console.log('[ClinicianPortal] Starting to fetch discharge queue from API...');
+    console.log('[ClinicianPortal] Starting to fetch discharge queue from API...', { statusFilter });
     setIsLoadingQueue(true);
     try {
-      const queueData = await getDischargeQueue(token, tenantId);
+      const queueData = await getDischargeQueue(token, tenantId, statusFilter);
       console.log('[ClinicianPortal] Discharge queue fetched successfully:', {
         patientCount: queueData.patients?.length || 0,
         meta: queueData.meta
@@ -860,24 +864,27 @@ export default function ClinicianDashboard() {
     }
   }, [isLoading, isAuthenticated, tenantId, token, router])
 
-  // Load discharge queue on mount
+  // Load discharge queue on mount or when active view changes
   useEffect(() => {
-    console.log('[ClinicianDashboard] Discharge queue effect:', { 
-      hasToken: !!token, 
-      hasTenantId: !!tenantId, 
+    console.log('[ClinicianDashboard] Discharge queue effect:', {
+      hasToken: !!token,
+      hasTenantId: !!tenantId,
       token: token ? `${token.substring(0, 20)}...` : null,
-      tenantId 
+      tenantId,
+      activeView
     });
-    if (token && tenantId) {
-      console.log('[ClinicianDashboard] Calling loadDischargeQueue...');
-      loadDischargeQueue();
+    if (token && tenantId && isAuthenticated) {
+      console.log('[ClinicianDashboard] Calling loadDischargeQueue with filter...', { activeView });
+      const statusFilter = activeView === 'review' ? 'review' : 'approved';
+      loadDischargeQueue(statusFilter);
     } else {
       console.warn('[ClinicianDashboard] Cannot load discharge queue - missing token or tenantId', {
         token: !!token,
-        tenantId: !!tenantId
+        tenantId: !!tenantId,
+        isAuthenticated
       });
     }
-  }, [token, tenantId]);
+  }, [token, tenantId, activeView, isAuthenticated]);
 
   // Load patient details when a patient is selected from the queue
   useEffect(() => {
@@ -1208,8 +1215,9 @@ export default function ClinicianDashboard() {
         })
       }
 
-      // Reload the discharge queue to refresh the list
-      await loadDischargeQueue()
+      // Switch to review tab and reload the discharge queue
+      setActiveView('review')
+      await loadDischargeQueue('review')
     } catch (error) {
       console.error('[ClinicianPortal] Failed to publish:', error)
       alert(error instanceof Error ? error.message : 'Failed to publish discharge summary. Please try again.')
@@ -1452,19 +1460,32 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={loadDischargeQueue}
+                  onClick={() => loadDischargeQueue(activeView === 'review' ? 'review' : 'approved')}
                   disabled={isLoadingQueue}
                 >
                   <RefreshCw className={`h-4 w-4 ${isLoadingQueue ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
-              {isLoadingQueue ? (
-                <div className="text-center py-8 text-muted-foreground">Loading...</div>
-              ) : patients.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">{t.selectPatient}</div>
-              ) : (
-                <div className="space-y-2">
-                  {patients.map((patient) => (
+              <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'review' | 'discharged')} className="mt-2">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="review">
+                    <FileText className="h-4 w-4 mr-2" />
+                    Review Queue
+                  </TabsTrigger>
+                  <TabsTrigger value="discharged">
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Discharged
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="review" className="mt-4">
+                  {isLoadingQueue ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                  ) : patients.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">No patients in review queue</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {patients.map((patient) => (
                     <div
                       key={patient.id}
                       onClick={() => setSelectedPatient(patient.id)}
@@ -1499,9 +1520,58 @@ ${currentPatient.patientFriendly?.activity?.[language as keyof typeof currentPat
                         </Badge>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="discharged" className="mt-4">
+                  {isLoadingQueue ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                  ) : patients.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">No discharged patients</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {patients.map((patient) => (
+                        <div
+                          key={patient.id}
+                          onClick={() => setSelectedPatient(patient.id)}
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedPatient === patient.id
+                              ? 'bg-primary text-primary-foreground border-primary'
+                              : 'bg-card hover:bg-accent border-border'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback>
+                                {patient.name.split(' ').map(n => n[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{patient.name}</p>
+                              <p className="text-sm opacity-80 truncate">{patient.mrn}</p>
+                              <p className="text-xs opacity-60 truncate">{patient.specialty}</p>
+                              {patient.qualityMetrics && (
+                                <div className="mt-1">
+                                  <QualityMetricsCard
+                                    metrics={patient.qualityMetrics}
+                                    compact
+                                    inverted={selectedPatient === patient.id}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            <Badge variant="default">
+                              {t.approved}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
           

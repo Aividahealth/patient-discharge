@@ -356,14 +356,19 @@ export interface DischargeQueueResponse {
 
 /**
  * Get discharge queue - list of patients ready for discharge review
+ * @param statusFilter - Optional status filter (review, approved, all)
  */
 export async function getDischargeQueue(
   token: string,
-  tenantId: string
+  tenantId: string,
+  statusFilter?: string
 ): Promise<DischargeQueueResponse> {
-  const url = `${API_BASE_URL}/api/patients/discharge-queue`;
+  const url = statusFilter
+    ? `${API_BASE_URL}/api/patients/discharge-queue?status=${statusFilter}`
+    : `${API_BASE_URL}/api/patients/discharge-queue`;
   console.log('[getDischargeQueue] Making request to:', url, {
     tenantId,
+    statusFilter,
     hasToken: !!token,
     tokenPreview: token ? `${token.substring(0, 20)}...` : null
   });

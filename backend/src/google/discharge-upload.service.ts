@@ -651,8 +651,10 @@ export class DischargeUploadService {
   /**
    * Get discharge queue - list of patients ready for discharge review
    * @param patientIdFilter - Optional patient ID to filter results (for patient role users)
+   * @param statusFilter - Optional status filter (review, approved, all)
+   * @param userRole - User role for role-based filtering
    */
-  async getDischargeQueue(ctx: TenantContext, patientIdFilter?: string): Promise<{
+  async getDischargeQueue(ctx: TenantContext, patientIdFilter?: string, statusFilter?: string, userRole?: string): Promise<{
     patients: Array<{
       id: string;
       mrn: string;
@@ -802,24 +804,22 @@ export class DischargeUploadService {
             physicianId = parts[1] || '';
           }
 
-          // Only add to queue if not approved (approved discharges should not appear in queue)
-          if (status !== 'approved') {
-            patients.push({
-              id: patientId,
-              mrn,
-              name,
-              room,
-              unit,
-              dischargeDate,
-              compositionId,
-              status,
-              attendingPhysician: {
-                name: physicianName,
-                id: physicianId,
-              },
-              avatar,
-            });
-          }
+          // Add all patients to queue (will be filtered later based on role)
+          patients.push({
+            id: patientId,
+            mrn,
+            name,
+            room,
+            unit,
+            dischargeDate,
+            compositionId,
+            status,
+            attendingPhysician: {
+              name: physicianName,
+              id: physicianId,
+            },
+            avatar,
+          });
 
           // Count statuses (still count approved for meta, but don't include in queue)
           if (status === 'pending') statusCounts.pending++;
@@ -847,10 +847,32 @@ export class DischargeUploadService {
 
       this.logger.log(`✅ Added quality metrics to ${qualityMetricsMap.size}/${patients.length} patients`);
 
-      // Filter out patients with status "approved" AFTER adding quality metrics
-      const filteredPatients = patients.filter(patient => patient.status !== 'approved');
+      // Apply role-based filtering
+      let filteredPatients = patients;
 
-      this.logger.log(`✅ Retrieved ${filteredPatients.length} patients from discharge queue (${patients.length - filteredPatients.length} approved patients filtered out)`);
+      if (userRole === 'patient') {
+        // Patients: ONLY see published discharges (status === 'approved')
+        filteredPatients = patients.filter(p => p.status === 'approved');
+        this.logger.log(`🔒 Patient role: showing only approved discharges (${filteredPatients.length}/${patients.length})`);
+      } else if (statusFilter) {
+        // Clinicians: Filter by requested status
+        if (statusFilter === 'review') {
+          filteredPatients = patients.filter(p => p.status === 'review' || p.status === 'pending');
+          this.logger.log(`🔍 Clinician filter (review): ${filteredPatients.length}/${patients.length} patients`);
+        } else if (statusFilter === 'approved') {
+          filteredPatients = patients.filter(p => p.status === 'approved');
+          this.logger.log(`🔍 Clinician filter (approved): ${filteredPatients.length}/${patients.length} patients`);
+        } else if (statusFilter === 'all') {
+          // No filtering - show all
+          this.logger.log(`🔍 Clinician filter (all): ${filteredPatients.length} patients`);
+        }
+      } else {
+        // Default clinician view: review queue only (not approved)
+        filteredPatients = patients.filter(p => p.status !== 'approved');
+        this.logger.log(`📋 Default clinician view: showing review queue (${filteredPatients.length}/${patients.length})`);
+      }
+
+      this.logger.log(`✅ Retrieved ${filteredPatients.length} patients from discharge queue (${patients.length - filteredPatients.length} filtered out)`);
 
       return {
         patients: filteredPatients,

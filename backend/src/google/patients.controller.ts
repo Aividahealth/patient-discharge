@@ -1,4 +1,4 @@
-import { Controller, Get, HttpException, HttpStatus, Logger, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus, Logger, UseGuards, Query } from '@nestjs/common';
 import { DischargeUploadService } from './discharge-upload.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
@@ -19,17 +19,19 @@ export class PatientsController {
    * GET /api/patients/discharge-queue
    * Retrieves list of patients ready for discharge review
    * Patients can only see their own discharge queue item
+   * @param status - Optional query parameter to filter by status (review, approved, all)
    */
   @Get('discharge-queue')
   async getDischargeQueue(
     @TenantContext() ctx: TenantContextType,
     @CurrentUser() user: any,
+    @Query('status') status?: string,
   ) {
     try {
-      this.logger.log(`📋 Retrieving discharge queue for user: ${user?.username} in tenant: ${ctx.tenantId}`);
+      this.logger.log(`📋 Retrieving discharge queue for user: ${user?.username} (role: ${user?.role}) in tenant: ${ctx.tenantId}, status filter: ${status || 'default'}`);
       // For patients, filter by their linkedPatientId
       const patientIdFilter = user?.role === 'patient' ? user?.linkedPatientId : undefined;
-      const result = await this.dischargeUploadService.getDischargeQueue(ctx, patientIdFilter);
+      const result = await this.dischargeUploadService.getDischargeQueue(ctx, patientIdFilter, status, user?.role);
       return result;
     } catch (error) {
       if (error instanceof HttpException) {
