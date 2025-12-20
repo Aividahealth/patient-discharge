@@ -2,6 +2,7 @@ import { Controller, Get, Param, Post, Body, Put, Delete, Query, HttpException, 
 import { GoogleService } from './google.service';
 import { TenantContext } from '../tenant/tenant.decorator';
 import type { TenantContext as TenantContextType } from '../tenant/tenant-context';
+import { CurrentUser } from '../auth/user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard, TenantGuard, PatientResourceGuard } from '../auth/guards';
 
@@ -238,6 +239,74 @@ export class GoogleController {
   }
 
   /**
+   * Check if a Composition's associated Encounter is published (status: finished or completed)
+   * Patients can only access published discharges
+   */
+  private async checkEncounterPublished(compositionId: string, ctx: TenantContextType, userRole: string): Promise<void> {
+    // Only check for patients
+    if (userRole !== 'patient') {
+      return; // Clinicians can access any discharge
+    }
+
+    // Fetch the Composition to get the Encounter reference
+    const compositionResult = await this.googleService.fhirSearch('Composition', { _id: compositionId }, ctx);
+
+    if (!compositionResult?.entry?.[0]?.resource) {
+      throw new HttpException(
+        {
+          message: 'Composition not found',
+          compositionId,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const composition = compositionResult.entry[0].resource;
+    const encounterRef = composition.encounter?.reference;
+
+    if (!encounterRef) {
+      this.logger.warn(`⚠️  Composition ${compositionId} has no encounter reference`);
+      // Allow access if no encounter (edge case)
+      return;
+    }
+
+    // Extract Encounter ID from reference (format: "Encounter/encounter-id")
+    const encounterId = encounterRef.replace('Encounter/', '');
+
+    // Fetch the Encounter
+    const encounter = await this.googleService.fhirRead('Encounter', encounterId, ctx);
+
+    if (!encounter) {
+      throw new HttpException(
+        {
+          message: 'Associated encounter not found',
+          compositionId,
+          encounterId,
+        },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    // Check if Encounter is published (status: finished or completed)
+    const encounterStatus = encounter.status;
+    const isPublished = encounterStatus === 'finished' || encounterStatus === 'completed';
+
+    if (!isPublished) {
+      this.logger.warn(`🔒 Patient attempted to access unpublished discharge. Composition: ${compositionId}, Encounter status: ${encounterStatus}`);
+      throw new HttpException(
+        {
+          message: 'This discharge summary has not been published yet. Please contact your healthcare provider.',
+          compositionId,
+          encounterStatus,
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    this.logger.log(`✅ Encounter ${encounterId} is published (status: ${encounterStatus})`);
+  }
+
+  /**
    * Common method to fetch and process Composition binaries with optional tag filtering
    */
   private async fetchCompositionBinaries(
@@ -379,7 +448,7 @@ export class GoogleController {
 
   /**
    * Get Composition binaries with text conversion
-   * Patients can access their own composition binaries; clinicians/experts can access any
+   * Patients can only access published discharges; clinicians/experts can access any
    */
   @Get('fhir/Composition/:id/binaries')
   @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
@@ -387,9 +456,14 @@ export class GoogleController {
   async getCompositionBinaries(
     @Param('id') id: string,
     @TenantContext() ctx: TenantContextType,
+    @CurrentUser() user: any,
   ): Promise<any> {
     try {
-      this.logger.log(`📋 Retrieving Composition ${id} binaries (tenant: ${ctx.tenantId})`);
+      this.logger.log(`📋 Retrieving Composition ${id} binaries (tenant: ${ctx.tenantId}, role: ${user?.role})`);
+
+      // Check if Encounter is published (only for patients)
+      await this.checkEncounterPublished(id, ctx, user?.role);
+
       const result = await this.fetchCompositionBinaries(id, ctx);
       this.logger.log(`✅ Composition binaries processed: ${result.dischargeSummaries.length} summaries, ${result.dischargeInstructions.length} instructions`);
       return result;
@@ -409,7 +483,7 @@ export class GoogleController {
 
   /**
    * Get Composition simplified binaries (filtered by discharge-summary-simplified and discharge-instructions-simplified tags)
-   * Patients can access their own composition simplified binaries; clinicians/experts can access any
+   * Patients can only access published discharges; clinicians/experts can access any
    */
   @Get('fhir/Composition/:id/simplified')
   @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
@@ -417,9 +491,14 @@ export class GoogleController {
   async getCompositionSimplifiedBinaries(
     @Param('id') id: string,
     @TenantContext() ctx: TenantContextType,
+    @CurrentUser() user: any,
   ): Promise<any> {
     try {
-      this.logger.log(`📋 Retrieving simplified binaries for Composition ${id} (tenant: ${ctx.tenantId})`);
+      this.logger.log(`📋 Retrieving simplified binaries for Composition ${id} (tenant: ${ctx.tenantId}, role: ${user?.role})`);
+
+      // Check if Encounter is published (only for patients)
+      await this.checkEncounterPublished(id, ctx, user?.role);
+
       const result = await this.fetchCompositionBinaries(id, ctx, {
         summaryTags: ['discharge-summary-simplified'],
         instructionsTags: ['discharge-instructions-simplified'],
@@ -442,7 +521,7 @@ export class GoogleController {
 
   /**
    * Get Composition translated binaries (filtered by discharge-summary-translated and discharge-instructions-translated tags)
-   * Patients can access their own composition translated binaries; clinicians/experts can access any
+   * Patients can only access published discharges; clinicians/experts can access any
    */
   @Get('fhir/Composition/:id/translated')
   @Roles('patient', 'clinician', 'expert', 'tenant_admin', 'system_admin')
@@ -450,9 +529,14 @@ export class GoogleController {
   async getCompositionTranslatedBinaries(
     @Param('id') id: string,
     @TenantContext() ctx: TenantContextType,
+    @CurrentUser() user: any,
   ): Promise<any> {
     try {
-      this.logger.log(`📋 Retrieving translated binaries for Composition ${id} (tenant: ${ctx.tenantId})`);
+      this.logger.log(`📋 Retrieving translated binaries for Composition ${id} (tenant: ${ctx.tenantId}, role: ${user?.role})`);
+
+      // Check if Encounter is published (only for patients)
+      await this.checkEncounterPublished(id, ctx, user?.role);
+
       const result = await this.fetchCompositionBinaries(id, ctx, {
         summaryTags: ['discharge-summary-translated'],
         instructionsTags: ['discharge-instructions-translated'],
