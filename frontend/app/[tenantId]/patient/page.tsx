@@ -69,6 +69,8 @@ export default function PatientDashboard() {
   const [checkedMeds, setCheckedMeds] = useState<Record<string, boolean>>({})
   const [activeTab, setActiveTab] = useState("overview")
   const [isLoadingData, setIsLoadingData] = useState(true)
+  const [isNotPublished, setIsNotPublished] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [dischargeSummary, setDischargeSummary] = useState<string>("")
   const [dischargeInstructions, setDischargeInstructions] = useState<string>("")
   const [translatedSummary, setTranslatedSummary] = useState<string>("")
@@ -166,56 +168,56 @@ export default function PatientDashboard() {
           setCompositionId(data.compositionId)
         } else {
           // Get error details from response
-          let errorMessage = response.statusText || `HTTP ${response.status}`
+          let errorMsg = response.statusText || `HTTP ${response.status}`
           let errorData: any = null
-          
+
           try {
             const text = await response.text()
             if (text) {
               try {
                 errorData = JSON.parse(text)
-                errorMessage = errorData.message || errorData.error || errorMessage
+                errorMsg = errorData.message || errorData.error || errorMsg
               } catch (e) {
-                errorMessage = text || errorMessage
+                errorMsg = text || errorMsg
               }
             }
           } catch (e) {
             // If we can't parse the response, use status text
             console.warn('[Patient Portal] Could not parse error response:', e)
           }
-          
+
           console.error('[Patient Portal] Failed to fetch compositionId:', {
             status: response.status,
             statusText: response.statusText || 'No status text',
-            error: errorMessage,
+            error: errorMsg,
             details: errorData,
             endpoint,
             patientId,
             tenantId: tenant.id
           })
-          
-          // Only show alert for 404 (not found), not for auth errors
-          if (response.status === 404) {
-            alert('Could not find discharge information for this patient. Please contact support.')
+
+          // Handle 403 Forbidden - likely unpublished discharge
+          if (response.status === 403 && errorMsg && errorMsg.toLowerCase().includes('not been published')) {
+            setIsNotPublished(true)
+            setErrorMessage(errorMsg)
+          } else if (response.status === 404) {
+            setErrorMessage('Could not find discharge information for this patient. Please contact your healthcare provider.')
           } else if (response.status === 401 || response.status === 403) {
-            console.error('[Patient Portal] Authentication/Authorization error. Please log in again.')
-            // Don't show alert for auth errors - let the auth system handle it
-          } else {
-            console.error('[Patient Portal] Server error. Please try again later.')
-            // Don't show alert for other errors - just log them
+            setErrorMessage('You do not have access to this discharge summary. Please contact your healthcare provider.')
           }
+
           setIsLoadingData(false)
         }
       } catch (error) {
         console.error('[Patient Portal] Error fetching compositionId:', error)
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error'
         console.error('[Patient Portal] Error details:', {
-          error: errorMessage,
+          error: errorMsg,
           patientId,
           tenantId: tenant?.id,
           hasToken: !!token
         })
-        // Don't show alert for network errors - just log them
+        setErrorMessage('Unable to load your discharge information. Please try again later or contact your healthcare provider.')
         setIsLoadingData(false)
       }
     }
@@ -389,8 +391,16 @@ export default function PatientDashboard() {
         setIsLoadingData(false)
       } catch (error) {
         console.error('[Patient Portal] Failed to fetch patient data:', error)
-        // Show user-friendly error message
-        alert('Failed to load your discharge information. Please refresh the page or contact support.')
+
+        // Check if it's a 403 Forbidden error (unpublished discharge)
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        if (errorMsg && (errorMsg.includes('403') || errorMsg.toLowerCase().includes('forbidden') || errorMsg.toLowerCase().includes('not been published'))) {
+          setIsNotPublished(true)
+          setErrorMessage('Your discharge summary has not been published yet. Please contact your healthcare provider.')
+        } else {
+          setErrorMessage('Unable to load your discharge information. Please try again later or contact your healthcare provider.')
+        }
+
         setIsLoadingData(false)
       }
     }
@@ -758,6 +768,120 @@ EMERGENCY CONTACTS:
                 <p className="text-lg text-muted-foreground">Loading your discharge information...</p>
               </div>
             </main>
+            <CommonFooter />
+          </div>
+        </AuthGuard>
+      </ErrorBoundary>
+    )
+  }
+
+  // Show error message if discharge is not published or other errors occurred
+  if (isNotPublished || errorMessage) {
+    return (
+      <ErrorBoundary>
+        <AuthGuard requiredRole="patient">
+          <div className="min-h-screen bg-background flex flex-col">
+            <CommonHeader title="Patient Portal" />
+
+            {/* Patient Portal Header */}
+            <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-40">
+              <div className="container mx-auto px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg text-white" style={tenantColors.bgPrimary}>
+                      <Heart className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h1 className="font-heading text-xl font-semibold text-foreground">Patient Portal</h1>
+                      <p className="text-sm text-muted-foreground">{t.patientPortal}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => logout()}
+                      className="flex items-center gap-2"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span className="hidden sm:inline">Logout</span>
+                    </Button>
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src="/patient-avatar.png" />
+                      <AvatarFallback>JS</AvatarFallback>
+                    </Avatar>
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <main className="flex-1 container mx-auto px-4 py-12 max-w-2xl">
+              <Card className="border-2">
+                <CardHeader className="text-center pb-4">
+                  <div className="flex justify-center mb-4">
+                    <div className="h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center">
+                      <AlertTriangle className="h-8 w-8 text-amber-600" />
+                    </div>
+                  </div>
+                  <CardTitle className="font-heading text-2xl">
+                    {isNotPublished ? 'Discharge Summary Not Ready' : 'Unable to Load Information'}
+                  </CardTitle>
+                  <CardDescription className="text-base mt-2">
+                    {errorMessage || 'Your discharge summary is being prepared by your healthcare team.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isNotPublished && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-blue-900 mb-2">What does this mean?</h3>
+                      <p className="text-sm text-blue-800">
+                        Your healthcare provider is reviewing your discharge summary before publishing it to you.
+                        This ensures all information is accurate and complete.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-3 pt-2">
+                    <h3 className="font-semibold text-gray-900">What you can do:</h3>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <span>Check back later - your discharge summary will appear here once published</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <span>Contact your healthcare provider if you have questions about your discharge</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                        <span>If you need immediate assistance, call your care team or emergency services</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <Separator className="my-4" />
+
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => window.location.reload()}
+                    >
+                      Refresh Page
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => logout()}
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Logout
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </main>
+
             <CommonFooter />
           </div>
         </AuthGuard>
