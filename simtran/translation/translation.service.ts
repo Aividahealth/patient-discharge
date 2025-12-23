@@ -153,6 +153,29 @@ export class TranslationService {
       fr: [
         {
           patterns: [
+            '## raisons de l\'hospitalisation',
+            '## raisons de l\'hospitalisation:',
+            '## raison de l\'hospitalisation',
+            '## raisons du séjour à l\'hôpital',
+            '## raisons du séjour',
+            '## motif d\'hospitalisation',
+            '## motifs d\'hospitalisation',
+          ],
+          replacement: '## Raisons de l\'Hospitalisation',
+        },
+        {
+          patterns: [
+            '## ce qui s\'est passé pendant votre séjour',
+            '## ce qui s\'est passé pendant votre séjour:',
+            '## ce qui s\'est passé durant votre séjour',
+            '## déroulement de votre séjour',
+            '## que s\'est-il passé pendant votre séjour',
+            '## ce qui s\'est passé',
+          ],
+          replacement: '## Ce qui s\'est Passé Pendant Votre Séjour',
+        },
+        {
+          patterns: [
             '## vos médicaments',
             '## médicaments',
             '## vos medicaments',
@@ -171,8 +194,9 @@ export class TranslationService {
             '## rendez-vous à venir:',
             '## rendez-vous:',
             '## prochains rendez-vous',
+            '## vos rendez-vous',
           ],
-          replacement: '## Rendez-vous à Venir',
+          replacement: '## Vos Rendez-vous',
         },
         {
           patterns: [
@@ -181,6 +205,7 @@ export class TranslationService {
             '## alimentation et activité',
             '## régime et activité:',
             '## alimentation et activités',
+            '## régime alimentaire et activité',
           ],
           replacement: '## Régime et Activité',
         },
@@ -191,6 +216,7 @@ export class TranslationService {
             '## symptômes d\'alerte',
             '## signes d\'alarme',
             '## signes d\'avertissement',
+            '## signaux d\'alarme',
           ],
           replacement: '## Signes d\'Alerte',
         },
@@ -206,6 +232,29 @@ export class TranslationService {
         },
       ],
       es: [
+        {
+          patterns: [
+            '## razones de la hospitalización',
+            '## razones de la hospitalización:',
+            '## razón de la hospitalización',
+            '## razones de la estancia hospitalaria',
+            '## razones de la estancia',
+            '## motivo de hospitalización',
+            '## motivos de hospitalización',
+          ],
+          replacement: '## Razones de la Hospitalización',
+        },
+        {
+          patterns: [
+            '## qué sucedió durante su estancia',
+            '## qué sucedió durante su estancia:',
+            '## qué pasó durante su estancia',
+            '## lo que sucedió durante su estancia',
+            '## lo que pasó durante su estancia',
+            '## qué ocurrió durante su estancia',
+          ],
+          replacement: '## Qué Sucedió Durante su Estancia',
+        },
         {
           patterns: [
             '## sus medicamentos',
@@ -225,8 +274,9 @@ export class TranslationService {
             '## citas:',
             '## citas próximas',
             '## citas de seguimiento',
+            '## sus citas',
           ],
-          replacement: '## Próximas Citas',
+          replacement: '## Sus Citas',
         },
         {
           patterns: [
@@ -264,6 +314,24 @@ export class TranslationService {
       ps: [
         {
           patterns: [
+            '## د روغتون د پاتې کیدو دلایل',
+            '## د روغتون د پاتې کیدو دلایل:',
+            '## د روغتون دلایل',
+            '## د بستر کیدو دلایل',
+          ],
+          replacement: '## د روغتون د پاتې کیدو دلایل',
+        },
+        {
+          patterns: [
+            '## ستاسو د پاتې کیدو په جریان کې څه پیښ شول',
+            '## ستاسو د پاتې کیدو په جریان کې څه پیښ شول:',
+            '## ستاسو د پاتې کیدو په موده کې څه پیښ شول',
+            '## د پاتې کیدو په جریان کې څه پیښ شول',
+          ],
+          replacement: '## ستاسو د پاتې کیدو په جریان کې څه پیښ شول',
+        },
+        {
+          patterns: [
             '## ستاسو درمل',
             '## درمل',
             '## ستاسو درمل:',
@@ -277,8 +345,9 @@ export class TranslationService {
             '## ناستې',
             '## راتلونکي ناستې:',
             '## ناستې:',
+            '## ستاسو ناستې',
           ],
-          replacement: '## راتلونکي ناستې',
+          replacement: '## ستاسو ناستې',
         },
         {
           patterns: [
