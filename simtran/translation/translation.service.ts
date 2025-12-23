@@ -884,25 +884,117 @@ export class TranslationService {
     let processed = translatedContent;
     const lines = processed.split('\n');
 
+    // Direct English to target language header mappings (for headers that slip through untranslated)
+    const englishToTargetHeaders: Record<string, Record<string, string>> = {
+      fr: {
+        'your medications': '## Vos Médicaments',
+        'medications': '## Vos Médicaments',
+        'upcoming appointments': '## Vos Rendez-vous',
+        'your appointments': '## Vos Rendez-vous',
+        'appointments': '## Vos Rendez-vous',
+        'diet & activity': '## Régime et Activité',
+        'diet and activity': '## Régime et Activité',
+        'warning signs': '## Signes d\'Alerte',
+        'emergency contacts': '## Contacts d\'Urgence',
+        'reasons for hospital stay': '## Raisons de l\'Hospitalisation',
+        'reason for hospital stay': '## Raisons de l\'Hospitalisation',
+        'what happened during your stay': '## Ce qui s\'est Passé Pendant Votre Séjour',
+        'what happened during your hospital stay': '## Ce qui s\'est Passé Pendant Votre Séjour',
+      },
+      es: {
+        'your medications': '## Sus Medicamentos',
+        'medications': '## Sus Medicamentos',
+        'upcoming appointments': '## Sus Citas',
+        'your appointments': '## Sus Citas',
+        'appointments': '## Sus Citas',
+        'diet & activity': '## Dieta y Actividad',
+        'diet and activity': '## Dieta y Actividad',
+        'warning signs': '## Señales de Advertencia',
+        'emergency contacts': '## Contactos de Emergencia',
+        'reasons for hospital stay': '## Razones de la Hospitalización',
+        'reason for hospital stay': '## Razones de la Hospitalización',
+        'what happened during your stay': '## Qué Sucedió Durante su Estancia',
+        'what happened during your hospital stay': '## Qué Sucedió Durante su Estancia',
+      },
+      ps: {
+        'your medications': '## ستاسو درمل',
+        'medications': '## ستاسو درمل',
+        'upcoming appointments': '## ستاسو ناستې',
+        'your appointments': '## ستاسو ناستې',
+        'appointments': '## ستاسو ناستې',
+        'diet & activity': '## خوراک او فعالیت',
+        'diet and activity': '## خوراک او فعالیت',
+        'warning signs': '## د خطر نښې',
+        'emergency contacts': '## د بیړني اړیکو معلومات',
+        'reasons for hospital stay': '## د روغتون د پاتې کیدو دلایل',
+        'reason for hospital stay': '## د روغتون د پاتې کیدو دلایل',
+        'what happened during your stay': '## ستاسو د پاتې کیدو په جریان کې څه پیښ شول',
+        'what happened during your hospital stay': '## ستاسو د پاتې کیدو په جریان کې څه پیښ شول',
+      },
+      hi: {
+        'your medications': '## आपकी दवाएं',
+        'medications': '## आपकी दवाएं',
+        'upcoming appointments': '## आगामी अपॉइंटमेंट',
+        'your appointments': '## आगामी अपॉइंटमेंट',
+        'appointments': '## आगामी अपॉइंटमेंट',
+        'diet & activity': '## आहार और गतिविधि',
+        'diet and activity': '## आहार और गतिविधि',
+        'warning signs': '## चेतावनी के संकेत',
+        'emergency contacts': '## आपातकालीन संपर्क',
+        'reasons for hospital stay': '## अस्पताल में रहने के कारण',
+        'reason for hospital stay': '## अस्पताल में रहने के कारण',
+        'what happened during your stay': '## आपके प्रवास के दौरान क्या हुआ',
+        'what happened during your hospital stay': '## आपके प्रवास के दौरान क्या हुआ',
+      },
+      vi: {
+        'your medications': '## Thuốc Của Bạn',
+        'medications': '## Thuốc Của Bạn',
+        'upcoming appointments': '## Các Cuộc Hẹn Sắp Tới',
+        'your appointments': '## Các Cuộc Hẹn Sắp Tới',
+        'appointments': '## Các Cuộc Hẹn Sắp Tới',
+        'diet & activity': '## Chế Độ Ăn và Hoạt Động',
+        'diet and activity': '## Chế Độ Ăn và Hoạt Động',
+        'warning signs': '## Dấu Hiệu Cảnh Báo',
+        'emergency contacts': '## Liên Hệ Khẩn Cấp',
+        'reasons for hospital stay': '## Lý Do Nhập Viện',
+        'reason for hospital stay': '## Lý Do Nhập Viện',
+        'what happened during your stay': '## Điều Gì Đã Xảy Ra Trong Thời Gian Nằm Viện',
+        'what happened during your hospital stay': '## Điều Gì Đã Xảy Ra Trong Thời Gian Nằm Viện',
+      },
+      zh: {
+        'your medications': '## 您的药物',
+        'medications': '## 您的药物',
+        'upcoming appointments': '## 即将到来的预约',
+        'your appointments': '## 即将到来的预约',
+        'appointments': '## 即将到来的预约',
+        'diet & activity': '## 饮食和活动',
+        'diet and activity': '## 饮食和活动',
+        'warning signs': '## 警告信号',
+        'emergency contacts': '## 紧急联系方式',
+        'reasons for hospital stay': '## 住院原因',
+        'reason for hospital stay': '## 住院原因',
+        'what happened during your stay': '## 住院期间发生的事情',
+        'what happened during your hospital stay': '## 住院期间发生的事情',
+      },
+    };
+
+    const englishHeaders = englishToTargetHeaders[targetLanguage] || {};
+
     // Process each line to normalize headers while preserving formatting
     const processedLines = lines.map((line) => {
       const trimmedLine = line.trim();
-      
+      const isRTL = targetLanguage === 'ps' || targetLanguage === 'ar' || targetLanguage === 'he' || targetLanguage === 'ur';
+
       // Check if this line is a section header (starts with ##)
       if (trimmedLine.startsWith('##')) {
-        // For RTL languages (like Pashto), don't convert to lowercase
-        // For LTR languages, convert to lowercase for matching
-        const isRTL = targetLanguage === 'ps' || targetLanguage === 'ar' || targetLanguage === 'he' || targetLanguage === 'ur';
         const lineForMatching = isRTL ? trimmedLine : trimmedLine.toLowerCase();
-        
+
         // Check against all mappings
         for (const mapping of mappings) {
           for (const pattern of mapping.patterns) {
-            // For RTL languages, match exactly (case-sensitive)
-            // For LTR languages, match case-insensitively
             const patternForMatching = isRTL ? pattern : pattern.toLowerCase();
             const matchPattern = isRTL ? pattern : pattern.toLowerCase();
-            
+
             // Match exact pattern or pattern with colon
             if (lineForMatching === matchPattern || lineForMatching === matchPattern + ':') {
               // Preserve original indentation if any
@@ -911,8 +1003,22 @@ export class TranslationService {
             }
           }
         }
+      } else {
+        // Check if this is a plain text or bold English header that slipped through
+        // Remove bold markers and check
+        const cleanedLine = trimmedLine.replace(/^\*\*/, '').replace(/\*\*$/, '').trim();
+        const lineForMatching = cleanedLine.toLowerCase();
+
+        // Check if this matches any English header and replace with target language
+        for (const [englishPattern, targetHeader] of Object.entries(englishHeaders)) {
+          if (lineForMatching === englishPattern || lineForMatching === englishPattern + ':') {
+            // Preserve original indentation if any
+            const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
+            return leadingWhitespace + targetHeader;
+          }
+        }
       }
-      
+
       // Preserve all other lines as-is (including markdown formatting, bold headers, tables, etc.)
       return line;
     });
