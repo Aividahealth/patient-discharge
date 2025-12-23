@@ -1004,17 +1004,33 @@ export class TranslationService {
           }
         }
       } else {
-        // Check if this is a plain text or bold English header that slipped through
+        // Check if this is a plain text or bold header that slipped through (English or translated)
         // Remove bold markers and check
         const cleanedLine = trimmedLine.replace(/^\*\*/, '').replace(/\*\*$/, '').trim();
-        const lineForMatching = cleanedLine.toLowerCase();
+        const lineForMatching = isRTL ? cleanedLine : cleanedLine.toLowerCase();
 
-        // Check if this matches any English header and replace with target language
+        // Check 1: English headers → convert to target language with ##
         for (const [englishPattern, targetHeader] of Object.entries(englishHeaders)) {
-          if (lineForMatching === englishPattern || lineForMatching === englishPattern + ':') {
+          if (lineForMatching === englishPattern.toLowerCase() || lineForMatching === englishPattern.toLowerCase() + ':') {
             // Preserve original indentation if any
             const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
             return leadingWhitespace + targetHeader;
+          }
+        }
+
+        // Check 2: Translated headers without ## → normalize and add ##
+        for (const mapping of mappings) {
+          for (const pattern of mapping.patterns) {
+            // Remove ## from pattern to match plain text/bold versions
+            const patternWithoutHash = pattern.replace('## ', '').replace('##', '');
+            const patternForMatching = isRTL ? patternWithoutHash : patternWithoutHash.toLowerCase();
+
+            // Match the pattern (with or without colon)
+            if (lineForMatching === patternForMatching || lineForMatching === patternForMatching + ':') {
+              // Preserve original indentation if any
+              const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
+              return leadingWhitespace + mapping.replacement;
+            }
           }
         }
       }
