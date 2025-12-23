@@ -151,6 +151,56 @@ export class TranslationService {
     // These match the headers expected by the frontend parsers
     const headerMappings: Record<string, Array<{ patterns: string[]; replacement: string }>> = {
       fr: [
+        // English headers that slipped through translation
+        {
+          patterns: [
+            '## reasons for hospital stay',
+            '## reason for hospital stay',
+          ],
+          replacement: '## Raisons de l\'Hospitalisation',
+        },
+        {
+          patterns: [
+            '## what happened during your stay',
+            '## what happened during your hospital stay',
+          ],
+          replacement: '## Ce qui s\'est Passé Pendant Votre Séjour',
+        },
+        {
+          patterns: [
+            '## your medications',
+            '## medications',
+          ],
+          replacement: '## Vos Médicaments',
+        },
+        {
+          patterns: [
+            '## upcoming appointments',
+            '## your appointments',
+            '## appointments',
+          ],
+          replacement: '## Vos Rendez-vous',
+        },
+        {
+          patterns: [
+            '## diet & activity',
+            '## diet and activity',
+          ],
+          replacement: '## Régime et Activité',
+        },
+        {
+          patterns: [
+            '## warning signs',
+          ],
+          replacement: '## Signes d\'Alerte',
+        },
+        {
+          patterns: [
+            '## emergency contacts',
+          ],
+          replacement: '## Contacts d\'Urgence',
+        },
+        // French variants
         {
           patterns: [
             '## raisons de l\'hospitalisation',
@@ -222,6 +272,15 @@ export class TranslationService {
         },
         {
           patterns: [
+            '## contacts d\'urgence',
+            '## contacts d\'urgence:',
+            '## coordonnées d\'urgence',
+            '## numéros d\'urgence',
+          ],
+          replacement: '## Contacts d\'Urgence',
+        },
+        {
+          patterns: [
             '## aperçu',
             '## résumé',
             '## vue d\'ensemble',
@@ -232,6 +291,56 @@ export class TranslationService {
         },
       ],
       es: [
+        // English headers that slipped through translation
+        {
+          patterns: [
+            '## reasons for hospital stay',
+            '## reason for hospital stay',
+          ],
+          replacement: '## Razones de la Hospitalización',
+        },
+        {
+          patterns: [
+            '## what happened during your stay',
+            '## what happened during your hospital stay',
+          ],
+          replacement: '## Qué Sucedió Durante su Estancia',
+        },
+        {
+          patterns: [
+            '## your medications',
+            '## medications',
+          ],
+          replacement: '## Sus Medicamentos',
+        },
+        {
+          patterns: [
+            '## upcoming appointments',
+            '## your appointments',
+            '## appointments',
+          ],
+          replacement: '## Sus Citas',
+        },
+        {
+          patterns: [
+            '## diet & activity',
+            '## diet and activity',
+          ],
+          replacement: '## Dieta y Actividad',
+        },
+        {
+          patterns: [
+            '## warning signs',
+          ],
+          replacement: '## Señales de Advertencia',
+        },
+        {
+          patterns: [
+            '## emergency contacts',
+          ],
+          replacement: '## Contactos de Emergencia',
+        },
+        // Spanish variants
         {
           patterns: [
             '## razones de la hospitalización',
@@ -300,6 +409,14 @@ export class TranslationService {
         },
         {
           patterns: [
+            '## contactos de emergencia',
+            '## contactos de emergencia:',
+            '## contactos de urgencia',
+          ],
+          replacement: '## Contactos de Emergencia',
+        },
+        {
+          patterns: [
             '## resumen',
             '## resumen:',
             '## vista general',
@@ -312,6 +429,56 @@ export class TranslationService {
         },
       ],
       ps: [
+        // English headers that slipped through translation
+        {
+          patterns: [
+            '## reasons for hospital stay',
+            '## reason for hospital stay',
+          ],
+          replacement: '## د روغتون د پاتې کیدو دلایل',
+        },
+        {
+          patterns: [
+            '## what happened during your stay',
+            '## what happened during your hospital stay',
+          ],
+          replacement: '## ستاسو د پاتې کیدو په جریان کې څه پیښ شول',
+        },
+        {
+          patterns: [
+            '## your medications',
+            '## medications',
+          ],
+          replacement: '## ستاسو درمل',
+        },
+        {
+          patterns: [
+            '## upcoming appointments',
+            '## your appointments',
+            '## appointments',
+          ],
+          replacement: '## ستاسو ناستې',
+        },
+        {
+          patterns: [
+            '## diet & activity',
+            '## diet and activity',
+          ],
+          replacement: '## خوراک او فعالیت',
+        },
+        {
+          patterns: [
+            '## warning signs',
+          ],
+          replacement: '## د خطر نښې',
+        },
+        {
+          patterns: [
+            '## emergency contacts',
+          ],
+          replacement: '## د بیړني اړیکو معلومات',
+        },
+        // Pashto variants
         {
           patterns: [
             '## د روغتون د پاتې کیدو دلایل',
@@ -367,11 +534,343 @@ export class TranslationService {
         },
         {
           patterns: [
+            '## د بیړني اړیکو معلومات',
+            '## د بیړني اړیکو معلومات:',
+            '## د بیړني اړیکې',
+          ],
+          replacement: '## د بیړني اړیکو معلومات',
+        },
+        {
+          patterns: [
             '## لنډیز',
             '## لنډیز:',
             '## کتنه',
           ],
           replacement: '## لنډیز',
+        },
+      ],
+      hi: [
+        // English headers that slipped through translation
+        {
+          patterns: [
+            '## reasons for hospital stay',
+            '## reason for hospital stay',
+          ],
+          replacement: '## अस्पताल में रहने के कारण',
+        },
+        {
+          patterns: [
+            '## what happened during your stay',
+            '## what happened during your hospital stay',
+          ],
+          replacement: '## आपके प्रवास के दौरान क्या हुआ',
+        },
+        {
+          patterns: [
+            '## your medications',
+            '## medications',
+          ],
+          replacement: '## आपकी दवाएं',
+        },
+        {
+          patterns: [
+            '## upcoming appointments',
+            '## your appointments',
+            '## appointments',
+          ],
+          replacement: '## आगामी अपॉइंटमेंट',
+        },
+        {
+          patterns: [
+            '## diet & activity',
+            '## diet and activity',
+          ],
+          replacement: '## आहार और गतिविधि',
+        },
+        {
+          patterns: [
+            '## warning signs',
+          ],
+          replacement: '## चेतावनी के संकेत',
+        },
+        {
+          patterns: [
+            '## emergency contacts',
+          ],
+          replacement: '## आपातकालीन संपर्क',
+        },
+        // Hindi variants
+        {
+          patterns: [
+            '## अस्पताल में रहने के कारण',
+            '## अस्पताल में रहने के कारण:',
+            '## अस्पताल में भर्ती के कारण',
+          ],
+          replacement: '## अस्पताल में रहने के कारण',
+        },
+        {
+          patterns: [
+            '## आपके प्रवास के दौरान क्या हुआ',
+            '## आपके प्रवास के दौरान क्या हुआ:',
+            '## आपके रहने के दौरान क्या हुआ',
+          ],
+          replacement: '## आपके प्रवास के दौरान क्या हुआ',
+        },
+        {
+          patterns: [
+            '## आपकी दवाएं',
+            '## आपकी दवाएं:',
+            '## दवाएं',
+          ],
+          replacement: '## आपकी दवाएं',
+        },
+        {
+          patterns: [
+            '## आगामी अपॉइंटमेंट',
+            '## आगामी अपॉइंटमेंट:',
+            '## आपके अपॉइंटमेंट',
+          ],
+          replacement: '## आगामी अपॉइंटमेंट',
+        },
+        {
+          patterns: [
+            '## आहार और गतिविधि',
+            '## आहार और गतिविधि:',
+            '## भोजन और गतिविधि',
+          ],
+          replacement: '## आहार और गतिविधि',
+        },
+        {
+          patterns: [
+            '## चेतावनी के संकेत',
+            '## चेतावनी के संकेत:',
+            '## चेतावनी संकेत',
+          ],
+          replacement: '## चेतावनी के संकेत',
+        },
+        {
+          patterns: [
+            '## आपातकालीन संपर्क',
+            '## आपातकालीन संपर्क:',
+            '## आपातकालीन नंबर',
+          ],
+          replacement: '## आपातकालीन संपर्क',
+        },
+      ],
+      vi: [
+        // English headers that slipped through translation
+        {
+          patterns: [
+            '## reasons for hospital stay',
+            '## reason for hospital stay',
+          ],
+          replacement: '## Lý Do Nhập Viện',
+        },
+        {
+          patterns: [
+            '## what happened during your stay',
+            '## what happened during your hospital stay',
+          ],
+          replacement: '## Điều Gì Đã Xảy Ra Trong Thời Gian Nằm Viện',
+        },
+        {
+          patterns: [
+            '## your medications',
+            '## medications',
+          ],
+          replacement: '## Thuốc Của Bạn',
+        },
+        {
+          patterns: [
+            '## upcoming appointments',
+            '## your appointments',
+            '## appointments',
+          ],
+          replacement: '## Các Cuộc Hẹn Sắp Tới',
+        },
+        {
+          patterns: [
+            '## diet & activity',
+            '## diet and activity',
+          ],
+          replacement: '## Chế Độ Ăn và Hoạt Động',
+        },
+        {
+          patterns: [
+            '## warning signs',
+          ],
+          replacement: '## Dấu Hiệu Cảnh Báo',
+        },
+        {
+          patterns: [
+            '## emergency contacts',
+          ],
+          replacement: '## Liên Hệ Khẩn Cấp',
+        },
+        // Vietnamese variants
+        {
+          patterns: [
+            '## lý do nhập viện',
+            '## lý do nhập viện:',
+            '## lí do nhập viện',
+          ],
+          replacement: '## Lý Do Nhập Viện',
+        },
+        {
+          patterns: [
+            '## điều gì đã xảy ra trong thời gian nằm viện',
+            '## điều gì đã xảy ra trong thời gian nằm viện:',
+            '## chuyện gì đã xảy ra',
+          ],
+          replacement: '## Điều Gì Đã Xảy Ra Trong Thời Gian Nằm Viện',
+        },
+        {
+          patterns: [
+            '## thuốc của bạn',
+            '## thuốc của bạn:',
+            '## thuốc',
+          ],
+          replacement: '## Thuốc Của Bạn',
+        },
+        {
+          patterns: [
+            '## các cuộc hẹn sắp tới',
+            '## các cuộc hẹn sắp tới:',
+            '## cuộc hẹn',
+          ],
+          replacement: '## Các Cuộc Hẹn Sắp Tới',
+        },
+        {
+          patterns: [
+            '## chế độ ăn và hoạt động',
+            '## chế độ ăn và hoạt động:',
+            '## chế độ ăn uống và hoạt động',
+          ],
+          replacement: '## Chế Độ Ăn và Hoạt Động',
+        },
+        {
+          patterns: [
+            '## dấu hiệu cảnh báo',
+            '## dấu hiệu cảnh báo:',
+            '## các dấu hiệu cảnh báo',
+          ],
+          replacement: '## Dấu Hiệu Cảnh Báo',
+        },
+        {
+          patterns: [
+            '## liên hệ khẩn cấp',
+            '## liên hệ khẩn cấp:',
+            '## thông tin liên hệ khẩn cấp',
+          ],
+          replacement: '## Liên Hệ Khẩn Cấp',
+        },
+      ],
+      zh: [
+        // English headers that slipped through translation
+        {
+          patterns: [
+            '## reasons for hospital stay',
+            '## reason for hospital stay',
+          ],
+          replacement: '## 住院原因',
+        },
+        {
+          patterns: [
+            '## what happened during your stay',
+            '## what happened during your hospital stay',
+          ],
+          replacement: '## 住院期间发生的事情',
+        },
+        {
+          patterns: [
+            '## your medications',
+            '## medications',
+          ],
+          replacement: '## 您的药物',
+        },
+        {
+          patterns: [
+            '## upcoming appointments',
+            '## your appointments',
+            '## appointments',
+          ],
+          replacement: '## 即将到来的预约',
+        },
+        {
+          patterns: [
+            '## diet & activity',
+            '## diet and activity',
+          ],
+          replacement: '## 饮食和活动',
+        },
+        {
+          patterns: [
+            '## warning signs',
+          ],
+          replacement: '## 警告信号',
+        },
+        {
+          patterns: [
+            '## emergency contacts',
+          ],
+          replacement: '## 紧急联系方式',
+        },
+        // Chinese variants
+        {
+          patterns: [
+            '## 住院原因',
+            '## 住院原因:',
+            '## 入院原因',
+          ],
+          replacement: '## 住院原因',
+        },
+        {
+          patterns: [
+            '## 住院期间发生的事情',
+            '## 住院期间发生的事情:',
+            '## 您住院期间发生了什么',
+          ],
+          replacement: '## 住院期间发生的事情',
+        },
+        {
+          patterns: [
+            '## 您的药物',
+            '## 您的药物:',
+            '## 药物',
+          ],
+          replacement: '## 您的药物',
+        },
+        {
+          patterns: [
+            '## 即将到来的预约',
+            '## 即将到来的预约:',
+            '## 您的预约',
+          ],
+          replacement: '## 即将到来的预约',
+        },
+        {
+          patterns: [
+            '## 饮食和活动',
+            '## 饮食和活动:',
+            '## 饮食与活动',
+          ],
+          replacement: '## 饮食和活动',
+        },
+        {
+          patterns: [
+            '## 警告信号',
+            '## 警告信号:',
+            '## 警告标志',
+          ],
+          replacement: '## 警告信号',
+        },
+        {
+          patterns: [
+            '## 紧急联系方式',
+            '## 紧急联系方式:',
+            '## 紧急联系',
+          ],
+          replacement: '## 紧急联系方式',
         },
       ],
     };
