@@ -350,6 +350,8 @@ export class TranslationService {
             '## razones de la estancia',
             '## motivo de hospitalización',
             '## motivos de hospitalización',
+            '## motivos de la hospitalización',  // Google Translate variation
+            '## motivo de la hospitalización',    // Google Translate variation
           ],
           replacement: '## Razones de la Hospitalización',
         },
@@ -361,6 +363,10 @@ export class TranslationService {
             '## lo que sucedió durante su estancia',
             '## lo que pasó durante su estancia',
             '## qué ocurrió durante su estancia',
+            '## qué sucedió durante su hospitalización',     // Google Translate variation
+            '## qué sucedió durante su hospitalización:',    // Google Translate variation
+            '## qué pasó durante su hospitalización',        // Google Translate variation
+            '## lo que sucedió durante su hospitalización',  // Google Translate variation
           ],
           replacement: '## Qué Sucedió Durante su Estancia',
         },
