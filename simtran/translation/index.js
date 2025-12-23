@@ -1,6 +1,6 @@
 // Entry point for Cloud Functions deployment
-const { translateDischargeSummary } = require('./lib/translation-function');
+const { processSimplificationCompletedEvent } = require('./lib/pubsub-handler');
 
 module.exports = {
-  translateDischargeSummary
+  processSimplificationCompletedEvent
 };
