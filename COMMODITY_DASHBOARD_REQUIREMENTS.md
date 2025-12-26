@@ -7,8 +7,9 @@ A comprehensive commodity trading intelligence platform that tracks precious met
 
 ### 1.2 Primary Objectives
 - Monitor real-time and historical price data for precious metals across multiple instruments (spot, futures, options, ETFs)
-- Track fund flows for leveraged commodity ETFs with focus on silver products (AGQ, etc.)
-- Generate trading signals based on statistical analysis of flow patterns and price correlations
+- Track fund flows for leveraged commodity ETFs with focus on silver and gold products (AGQ, UGL, etc.)
+- Attribute flows by investor segment (South Korean retail, US retail, institutional, sovereign funds)
+- Generate trading signals based on statistical analysis of flow patterns, price correlations, and investor behavior
 - Provide visual dashboard for decision-making and alerting system for extreme market conditions
 
 ### 1.3 Target Users
@@ -129,11 +130,13 @@ For each metal, collect:
 #### 3.2.1 Target Tickers
 **Primary Focus**:
 - **AGQ** (ProShares Ultra Silver - 2x leveraged long)
+- **UGL** (ProShares Ultra Gold - 2x leveraged long)
 
 **Extended List** (monitor for delisting/low volume):
 - **USLV** (VelocityShares 3x Long Silver ETN) - *likely delisted*
 - **DSLV** (VelocityShares 3x Inverse Silver ETN) - *likely delisted*
 - **ZSL** (ProShares UltraShort Silver - 2x inverse)
+- **UBG** (ProShares Ultra Basic Materials - includes gold/silver miners)
 - **SLVP** (iShares MSCI Global Silver Miners ETF) - miners, not pure silver
 - **SILJ** (ETFMG Junior Silver Miners ETF)
 
@@ -175,6 +178,157 @@ For each ticker, collect:
 5. Trigger analytics pipeline
 
 **Manual Override**: UI to manually upload CSV if automation fails
+
+#### 3.3.3 Investor Segment Attribution
+
+**Overview**:
+Leveraged commodity ETFs like AGQ and UGL attract diverse investor segments with different trading behaviors and market impact. Understanding flow attribution by investor type provides deeper signal intelligence.
+
+**Key Investor Segments**:
+
+**A. South Korean Retail Investors**
+
+South Korean retail investors have emerged as a dominant force in US leveraged ETF markets, particularly for commodity and volatility products. As of 2025, they hold an estimated **$15.6 billion in US-listed equity leveraged ETFs**, with **28.7% of overseas ETF holdings in leveraged or inverse funds**.
+
+**Why Track Korean Retail**:
+- High concentration in leveraged products (AGQ, UGL likely targets)
+- Retail sentiment indicator (contrarian signals when extreme)
+- Flow volumes often spike during Asian trading hours
+- Known for momentum-chasing behavior (can amplify trends)
+
+**Data Sources**:
+1. **Korea Securities Depository (KSD)** - Primary source for Korean overseas securities purchases
+   - URL: Available through Korean financial data providers
+   - Update frequency: Monthly official reports
+   - Access: Requires Korean language capability or third-party aggregator
+
+2. **ETFGI Reports** - Monthly tracking of Korean retail ETF flows
+   - URL: [ETFGI.com](https://etfgi.com)
+   - Sample data: $9.66B in overseas ETF purchases (June 2025), $15.85B all-time high (Oct 2025)
+   - Access: Subscription required for detailed reports; press releases are public
+   - Update frequency: Monthly
+
+3. **Korea Exchange (KRX)** - Domestic ETF market data
+   - URL: [KRX.co.kr](http://www.krx.co.kr)
+   - Coverage: 1,370 ETFs with $167.38B AUM (as of June 2025)
+   - Useful for cross-referencing Korean investor behavior patterns
+
+**Implementation Strategy**:
+- **Phase 1 (MVP)**: Manual monthly tracking via ETFGI press releases + estimated AGQ/UGL exposure
+- **Phase 2**: Automated scraping of KRX data + paid ETFGI subscription for detailed breakdowns
+- **Phase 3**: Time-zone analysis of AGQ/UGL volume during Asian hours as proxy for Korean activity
+
+**B. Hedge Funds & Institutional Investors**
+
+Hedge funds use leveraged ETFs for tactical positioning, hedging, and short-term momentum plays. Their flows tend to lead retail flows and can signal smart money positioning.
+
+**Data Sources**:
+1. **13F Filings (SEC)** - Quarterly institutional holdings
+   - URL: [SEC EDGAR](https://www.sec.gov/edgar/searchedgar/companysearch)
+   - Coverage: US institutions managing >$100M must disclose long equity positions
+   - Limitations: 45-day lag, no short positions, no intra-quarter changes
+   - Access: Free via SEC EDGAR or aggregators (WhaleWisdom, Dataroma)
+
+2. **EPFR (Emerging Portfolio Fund Research)** - Real-time institutional flow tracking
+   - URL: [EPFR.com](https://epfr.com)
+   - Coverage: Global ETF and mutual fund flows with retail vs. institutional breakdown
+   - Key feature: Can filter by investor type (retail vs. institutional)
+   - Limitation: **Excludes pension funds, hedge funds, insurance companies, sovereign wealth funds** (tracks fund flows, not direct hedge fund activity)
+   - Access: Expensive subscription (~$20k-50k/year)
+
+3. **Prime Brokerage Reports** - Proprietary hedge fund flow data
+   - Sources: Goldman Sachs, Morgan Stanley, JP Morgan client reports
+   - Access: Restricted to institutional clients
+   - Alternative: Some data leaked via financial media (Bloomberg, FT)
+
+**Implementation Strategy**:
+- **Phase 1 (MVP)**: Quarterly 13F scraping for AGQ/UGL institutional holders (free)
+- **Phase 2**: Track changes in top 20 institutional holders quarter-over-quarter
+- **Phase 3**: EPFR subscription for weekly institutional flow estimates (if budget allows)
+
+**C. Sovereign Wealth Funds & Asset Owners**
+
+Sovereign wealth funds (SWFs) and pension funds typically avoid leveraged ETFs due to risk constraints, but may use them during crisis periods or for currency hedging.
+
+**Data Sources**:
+1. **13F Filings** - Same as hedge funds (quarterly, 45-day lag)
+2. **SWF Direct Disclosures** - Annual reports from major SWFs
+   - Norway GPFG, Abu Dhabi ADIA, Singapore GIC, China CIC
+   - Access: Public annual reports (published yearly)
+   - Limitation: High-level allocations only, no specific ETF holdings
+
+**Implementation Strategy**:
+- **Phase 1**: Monitor 13F for unusual SWF activity in AGQ/UGL (rare but high-signal)
+- **Phase 2**: Flag any SWF appearance in holder list as major event alert
+
+**D. Retail Investors (US & Global)**
+
+US and other global retail investors tracked via aggregate ETF flow data from ETFdb.com and ETF.com (already covered in Section 3.3.1).
+
+**Attribution Analysis Framework**:
+
+**Table: investor_segment_flows**
+```sql
+CREATE TABLE investor_segment_flows (
+    week_ending DATE NOT NULL,
+    ticker VARCHAR(10) NOT NULL,
+    segment VARCHAR(50) NOT NULL,  -- KOREAN_RETAIL, US_RETAIL, INSTITUTIONAL, SOVEREIGN, UNKNOWN
+    estimated_flow DECIMAL(16,2),  -- in USD millions
+    confidence_score DECIMAL(3,2), -- 0.0-1.0 (data quality indicator)
+    data_source VARCHAR(100),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (week_ending, ticker, segment)
+);
+
+CREATE INDEX ON investor_segment_flows (ticker, segment, week_ending DESC);
+```
+
+**Calculation Methodology**:
+
+1. **Korean Retail Flow Estimation**:
+   ```
+   Korean_AGQ_flow = (Total_Korean_Leveraged_ETF_Flow * AGQ_market_share)
+                     + Asian_hours_volume_spike_adjustment
+   ```
+   - Use ETFGI monthly totals, prorate to weekly
+   - Estimate AGQ/UGL market share based on AUM and volume rankings
+   - Confidence score: 0.6-0.7 (estimation-based)
+
+2. **Institutional Flow (13F-based)**:
+   ```
+   Institutional_quarterly_change = SUM(13F_new_positions + 13F_increased_positions - 13F_decreased_positions)
+   Weekly_estimate = Institutional_quarterly_change / 13
+   ```
+   - Aggregate top 50 institutional holders' quarterly changes
+   - Confidence score: 0.5-0.6 (stale data, smoothed over quarter)
+
+3. **Residual Retail Flow**:
+   ```
+   US_Retail_flow = Total_ETF_flow - Korean_retail_flow - Institutional_flow
+   ```
+   - Confidence score: 0.4-0.5 (residual calculation)
+
+**Signal Enhancements Using Segment Data**:
+
+**1. Smart Money Divergence Alert**:
+- Trigger: Institutional flows (13F) move opposite to total flows
+- Example: AGQ sees +$50M total inflow, but top hedge funds reduce by 20% in 13F
+- Signal: Retail buying peak, potential reversal
+
+**2. Korean Retail Euphoria Indicator**:
+- Trigger: Korean retail flows exceed 30% of total AGQ/UGL weekly flows
+- Historical context: Korean retail often peak-buys during blow-off tops
+- Signal: Contrarian sell signal (fade the Korean retail)
+
+**3. Institutional Accumulation**:
+- Trigger: 3+ consecutive quarters of increasing institutional 13F holdings
+- Signal: Long-term bullish confirmation
+
+**Dashboard Visualization**:
+- Stacked bar chart: Weekly flows broken down by segment (Korean retail, US retail, institutional, unknown)
+- Pie chart: Current month's flow composition by segment
+- Time series: Korean retail flows vs. AGQ price (correlation analysis)
 
 ### 3.4 Analytics & Signal Generation
 
@@ -241,6 +395,23 @@ Classify price moves as:
 - **Signal**: Strong trend confirmation
 - **Output**: STRONG BUY/STRONG SELL
 
+**5. Smart Money Divergence** (Segment-Based)
+- **Trigger**: Institutional flows (13F) move opposite to total flows
+- **Example**: AGQ sees +$50M total inflow, but top hedge funds reduce by 20%
+- **Signal**: Retail buying peak, potential reversal
+- **Output**: CONTRARIAN SELL (or vice versa)
+
+**6. Korean Retail Euphoria Indicator** (Segment-Based)
+- **Trigger**: Korean retail flows exceed 30% of total AGQ/UGL weekly flows
+- **Context**: Korean retail historically peak-buys during blow-off tops
+- **Signal**: Contrarian sell signal (fade the Korean retail momentum)
+- **Output**: CONTRARIAN SELL with sentiment warning
+
+**7. Institutional Accumulation** (Segment-Based)
+- **Trigger**: 3+ consecutive quarters of increasing institutional 13F holdings
+- **Signal**: Long-term bullish confirmation from smart money
+- **Output**: LONG-TERM BUY with high conviction
+
 **Signal Dashboard Display**:
 - Current signal status for each ticker
 - Signal strength (1-5 stars or percentage confidence)
@@ -259,6 +430,9 @@ Classify price moves as:
 - Weekly flow data import complete
 - Z-score exceeds threshold (configurable, default ±2.0)
 - New trading signal generated
+- Korean retail flows spike above 30% of total flows
+- Smart money divergence detected (institutional selling while retail buying)
+- 13F filing shows significant institutional position changes (>20%)
 - Data collection failure (missing flows, API errors)
 - Ticker delisted or volume below threshold
 
