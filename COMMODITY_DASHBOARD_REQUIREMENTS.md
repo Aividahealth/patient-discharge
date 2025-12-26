@@ -3,7 +3,7 @@
 ## 1. Executive Summary
 
 ### 1.1 Project Overview
-A comprehensive commodity trading intelligence platform that tracks precious metals (gold, silver, platinum) and leveraged ETF products, providing actionable buy/sell signals based on fund flows, price movements, and futures market activity.
+A comprehensive commodity trading intelligence platform that tracks precious metals (gold, silver, platinum) and leveraged ETF products, providing actionable buy/sell signals based on fund flows, price movements, and futures market activity. The system combines strategic weekly flow data with near real-time market microstructure, options activity, and macroeconomic indicators for multi-timeframe trading signals.
 
 ### 1.2 Primary Objectives
 - Monitor real-time and historical price data for precious metals across multiple instruments (spot, futures, options, ETFs)
@@ -329,6 +329,351 @@ CREATE INDEX ON investor_segment_flows (ticker, segment, week_ending DESC);
 - Stacked bar chart: Weekly flows broken down by segment (Korean retail, US retail, institutional, unknown)
 - Pie chart: Current month's flow composition by segment
 - Time series: Korean retail flows vs. AGQ price (correlation analysis)
+
+#### 3.3.4 Near Real-Time Data Sources
+
+**Overview**:
+While weekly ETF flows and quarterly 13F filings provide strategic positioning data, near real-time sources enable tactical trading decisions and early signal detection. This section covers intraday and sub-minute data feeds.
+
+**A. Intraday Price & Volume Data**
+
+**1. Real-Time Quote Data (Stocks & ETFs)**
+
+**Data Sources**:
+
+| Source | Latency | Coverage | Cost | Best For |
+|--------|---------|----------|------|----------|
+| **Polygon.io** | 15-min delayed (free)<br>Real-time (paid) | Stocks, ETFs, options, futures | Free tier: 5 calls/min<br>Starter: $199/mo (real-time)<br>Advanced: $399/mo (WebSocket) | Production-grade, reliable API |
+| **Alpha Vantage** | Real-time | Stocks, ETFs, limited futures | Free: 25 calls/day<br>Premium: $49.99/mo (75 calls/min) | MVP testing (limited calls) |
+| **Twelve Data** | Real-time | Stocks, ETFs, futures, forex | Free: 800 calls/day<br>Basic: $79/mo (8 calls/sec) | Good free tier for testing |
+| **Interactive Brokers API** | Real-time (market data sub required) | Everything (global) | $10/mo + $1-2/exchange | Best latency if you have IB account |
+| **Yahoo Finance (yfinance)** | 15-min delayed | Stocks, ETFs, futures | Free (unofficial) | MVP only, unreliable |
+| **Tradier** | Real-time | Stocks, ETFs, options | Free tier available<br>Brokerage account required | Options data included |
+
+**Recommended Stack**:
+- **MVP (Phase 1)**: Twelve Data (free tier) for intraday OHLCV
+- **Phase 2**: Polygon.io Starter ($199/mo) for real-time prices + WebSocket
+- **Phase 3**: Add Interactive Brokers for lowest latency execution signals
+
+**Data Points Collected** (per ticker: AGQ, UGL, GC=F, SI=F, etc.):
+- **1-minute OHLCV bars** (for intraday charts and volume analysis)
+- **Real-time quotes**: Last price, bid/ask, spread
+- **Level 1 data**: Volume, VWAP (Volume Weighted Average Price)
+- **Tick data** (optional Phase 3): Every trade for microstructure analysis
+
+**2. Intraday Volume Analysis**
+
+**Volume Spike Detection**:
+- Compare current 5-min volume to 20-day average 5-min volume
+- Alert when volume exceeds 3x average (potential breakout or news event)
+- Track volume by time zone (US hours vs. Asian hours for Korean retail proxy)
+
+**Time-Zone Volume Breakdown**:
+```sql
+-- Example query to detect Asian hours volume spikes (Korean retail proxy)
+SELECT
+    DATE_TRUNC('hour', timestamp AT TIME ZONE 'America/New_York') as hour_et,
+    ticker,
+    SUM(volume) as total_volume,
+    AVG(SUM(volume)) OVER (
+        PARTITION BY ticker, EXTRACT(HOUR FROM timestamp AT TIME ZONE 'America/New_York')
+        ORDER BY DATE_TRUNC('day', timestamp)
+        ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING
+    ) as avg_volume_20d
+FROM intraday_bars
+WHERE ticker IN ('AGQ', 'UGL')
+    AND EXTRACT(HOUR FROM timestamp AT TIME ZONE 'America/New_York') BETWEEN 20 AND 23  -- 8pm-11pm ET = 9am-12pm KST
+GROUP BY DATE_TRUNC('hour', timestamp AT TIME ZONE 'America/New_York'), ticker;
+```
+
+**Signal**: If AGQ volume during 8pm-11pm ET (Korean morning) is >2x normal, flag as potential Korean retail activity.
+
+**B. Options Flow & Unusual Activity**
+
+Options data provides leading indicators of institutional positioning and hedging activity.
+
+**Data Sources**:
+
+| Source | Latency | Coverage | Cost | Best For |
+|--------|---------|----------|------|----------|
+| **CBOE DataShop** | Real-time | All US options | Varies (exchange data expensive) | Official but costly |
+| **Tradier** | Real-time | All US options | Free with brokerage account | Good free option |
+| **Polygon.io** | Real-time | Options quotes + Greeks | Included in Advanced plan ($399/mo) | Good value bundle |
+| **Unusual Whales** | Near real-time | Options flow analysis | $50/mo (retail)<br>$200/mo (pro) | Pre-analyzed unusual activity |
+| **FlowAlgo** | Real-time | Options flow scanner | $150-300/mo | Alerts for block trades |
+
+**Data Points**:
+- **Unusual options activity**: Block trades (>$100k premium) in AGQ/UGL/GLD/SLV calls/puts
+- **Put/Call ratio**: Intraday AGQ put/call volume ratio (sentiment indicator)
+- **Implied volatility (IV)**: Front-month ATM IV spikes indicate expected moves
+- **Greeks**: Delta, gamma to estimate dealer hedging flows
+
+**Implementation**:
+- **Phase 1 (MVP)**: Daily options data via free Tradier account (end-of-day summary)
+- **Phase 2**: Real-time unusual options alerts via Polygon.io or Unusual Whales
+- **Phase 3**: Full options flow analysis with Greeks and dealer positioning
+
+**Signal Examples**:
+- **Large call sweeps on AGQ**: Institutional bullish bet, confirm with flow data
+- **IV spike on UGL**: Expect volatility, upcoming news or positioning
+- **Put/Call ratio >2.0**: Bearish sentiment (contrarian bullish?)
+
+**C. Futures Market Microstructure**
+
+CME COMEX futures for gold (GC), silver (SI), and platinum (PL) trade nearly 24/5, providing continuous price discovery.
+
+**Data Sources**:
+
+| Source | Latency | Coverage | Cost | Best For |
+|--------|---------|----------|------|----------|
+| **CME DataMine** | Real-time | All CME futures (official) | $500-5000+/mo depending on data | Official, expensive |
+| **Interactive Brokers API** | Real-time | CME futures | $10/mo + $1.50 CME fee | Best value for futures data |
+| **Polygon.io** | Real-time | Major futures contracts | Included in Advanced ($399/mo) | Good bundle deal |
+| **Barchart** | Real-time | Futures + commitments of traders | $40-200/mo | COT reports included |
+
+**Data Points**:
+- **Front-month futures prices** (GC, SI, PL): 1-minute bars
+- **Open interest (OI)**: Daily OI changes (increasing OI + rising price = bullish)
+- **Commitment of Traders (COT) reports**: Weekly (Fridays 3:30pm ET) - shows commercial vs. speculative positioning
+- **Funding rate / basis**: Spot vs. futures spread (contango/backwardation)
+
+**COT Report Analysis**:
+- **Commercials (hedgers)** typically sell into strength (contrarian indicator)
+- **Large speculators (hedge funds)** follow trends
+- **Small speculators (retail)** are wrong at extremes (contrarian indicator)
+
+**Implementation**:
+- **Phase 1**: Daily futures data via Twelve Data or yfinance
+- **Phase 2**: Real-time futures via Interactive Brokers API
+- **Phase 3**: Automated COT report parsing and extreme positioning alerts
+
+**D. Alternative Data Sources**
+
+**1. Social Media Sentiment**
+
+Track retail sentiment and early trend detection.
+
+**Data Sources**:
+
+| Source | Coverage | Cost | Best For |
+|--------|----------|------|----------|
+| **Twitter API v2** | Tweets, mentions | $100-5000/mo (paid tiers) | Real-time keyword tracking |
+| **Reddit API (PRAW)** | r/WallStreetBets, r/Silverbugs | Free | Retail sentiment gauge |
+| **StockTwits API** | Social sentiment for $AGQ, $UGL | Free tier available | Trader-focused sentiment |
+| **LunarCrush** | Crypto + stock social metrics | Free tier + $50-200/mo | Aggregated sentiment scores |
+
+**Tracked Metrics**:
+- **Mention volume**: Spikes in "$AGQ" or "silver" mentions on Twitter/Reddit
+- **Sentiment score**: Bullish vs. bearish (NLP analysis)
+- **Influencer activity**: Track key commodity traders/analysts
+
+**Signal Example**:
+- **Reddit WallStreetBets "silver squeeze" mentions >1000/day**: Retail euphoria, contrarian sell signal (historically preceded tops)
+
+**Implementation**:
+- **Phase 1**: Manual check of r/WallStreetBets daily threads
+- **Phase 2**: Automated Reddit/Twitter scraping with sentiment analysis (VADER, FinBERT)
+- **Phase 3**: Real-time StockTwits feed with sentiment scoring
+
+**2. News & Event Detection**
+
+Real-time financial news can move commodity prices instantly.
+
+**Data Sources**:
+
+| Source | Latency | Coverage | Cost | Best For |
+|--------|----------|------|----------|----------|
+| **Benzinga News API** | Real-time | Financial news, earnings | $300-1000/mo | Fast, reliable |
+| **Alpha Vantage News** | Real-time | General + ticker-specific | Free tier available | Good for testing |
+| **NewsAPI.org** | Real-time | Global news (general) | Free: 100 calls/day<br>Paid: $449/mo | Good free tier |
+| **Google News RSS** | 15-min delay | Free scraping (check ToS) | Free | MVP, legal gray area |
+| **Bloomberg Terminal** | Real-time | Everything (best-in-class) | $25,000/year | Only if you already have access |
+
+**Tracked Keywords**:
+- "Silver", "gold", "platinum", "Fed", "inflation", "dollar", "China demand"
+- Company names: ProShares (AGQ/UGL issuer)
+- Central bank policy: "FOMC", "Powell", "rate hike/cut"
+
+**Implementation**:
+- **Phase 1**: Google News RSS scraping for "silver news" + "gold news"
+- **Phase 2**: Alpha Vantage News API (free tier)
+- **Phase 3**: Benzinga News API with NLP categorization (hawkish/dovish, bullish/bearish)
+
+**E. Macroeconomic Indicators (Real-Time)**
+
+Commodities correlate strongly with macro factors.
+
+**Key Indicators to Track**:
+
+| Indicator | Impact on Gold/Silver | Data Source | Update Frequency |
+|-----------|----------------------|-------------|------------------|
+| **US Dollar Index (DXY)** | Inverse correlation | Twelve Data, Polygon.io, IB | Real-time |
+| **10-Year Treasury Yield** | Gold inverse to real yields | FRED API, Twelve Data | Real-time |
+| **Real Yields (TIPS)** | Strongest gold correlation | FRED API | Daily |
+| **VIX (Volatility Index)** | Risk-off → gold up | CBOE, Polygon.io | Real-time |
+| **Bitcoin (BTC)** | Correlation varies (digital gold?) | Coinbase API, Polygon.io | Real-time |
+| **Oil (CL futures)** | Commodity complex correlation | Same as futures sources | Real-time |
+| **China PMI, CPI** | Demand indicator for metals | Trading Economics API | Monthly |
+
+**Correlation Trading Signals**:
+- **DXY down + Gold up**: Reinforcing trend, bullish for UGL
+- **DXY up + Gold up**: Divergence, defensive buying (geopolitical risk)
+- **VIX spike >30 + Gold flat**: Gold underperforming safe-haven bid, potential catch-up trade
+
+**Data Source: FRED (Federal Reserve Economic Data)**
+- **URL**: [FRED API](https://fred.stlouisfed.org/docs/api/fred/)
+- **Cost**: Free
+- **Data**: 10Y yield (DGS10), inflation (CPI), GDP, employment
+- **Update**: Daily for most series
+
+**Implementation**:
+- **Phase 1**: Daily FRED API pulls for DXY, 10Y yield, VIX
+- **Phase 2**: Real-time macro dashboard panel with correlation heatmap
+- **Phase 3**: Automated correlation breakout alerts
+
+**F. Intraday ETF Creation/Redemption Data**
+
+ETF creation/redemption is a leading indicator of institutional flows, faster than weekly flow data.
+
+**Challenge**: Official creation/redemption data is reported with a 1-day lag (next business day).
+
+**Proxy Method**:
+- **ETF Premium/Discount to NAV**: Intraday tracking
+  - Formula: `(ETF_price - estimated_NAV) / estimated_NAV`
+  - Data source: Calculate using ETF price + underlying commodity spot price
+  - Signal: Premium >0.5% suggests strong buying (creation likely), Discount <-0.5% suggests redemption
+
+**Data Sources**:
+- ETF price: Real-time via Polygon.io, Twelve Data
+- Spot gold/silver: Same sources
+- Estimated NAV: `Spot_price × Leverage_factor × (1 - daily_fee_accrual)`
+
+**Implementation**:
+- **Phase 2**: Real-time premium/discount calculator for AGQ, UGL
+- **Phase 3**: Alert when premium/discount exceeds thresholds
+
+---
+
+**G. Real-Time Data Infrastructure**
+
+**WebSocket Streaming**:
+For sub-second latency, replace polling with WebSocket streams.
+
+**Supported by**:
+- **Polygon.io** (Advanced plan): WebSocket for stocks, options, futures
+- **Interactive Brokers**: Native streaming via TWS API
+- **Twelve Data**: WebSocket available on higher tiers
+- **Alpaca Markets**: Free WebSocket for stocks (if using their broker)
+
+**Architecture**:
+```
+┌──────────────────────────────────────────────┐
+│  Data Source WebSocket (Polygon.io, etc.)   │
+└──────────────────────────────────────────────┘
+                    ↓
+┌──────────────────────────────────────────────┐
+│  WebSocket Handler Service (Python/Node.js)  │
+│  - Parse incoming messages                    │
+│  - Calculate derived metrics (VWAP, etc.)    │
+│  - Check alert conditions                    │
+└──────────────────────────────────────────────┘
+                    ↓
+          ┌─────────┴─────────┐
+          ↓                   ↓
+┌──────────────────┐  ┌──────────────────┐
+│  Redis Pub/Sub   │  │  TimescaleDB     │
+│  (real-time)     │  │  (persistence)   │
+└──────────────────┘  └──────────────────┘
+          ↓
+┌──────────────────────────────────────────────┐
+│  Frontend WebSocket (dashboard updates)      │
+└──────────────────────────────────────────────┘
+```
+
+**Implementation**:
+- **Phase 1**: HTTP polling every 1 minute (sufficient for MVP)
+- **Phase 2**: WebSocket for real-time price updates during market hours
+- **Phase 3**: Full streaming analytics with Redis pub/sub
+
+---
+
+**H. Data Latency & Refresh Frequency Summary**
+
+| Data Type | Source | Latency | Refresh Frequency | Phase |
+|-----------|--------|---------|-------------------|-------|
+| **Weekly ETF flows** | ETFdb.com | 3-7 days | Weekly (Monday) | 1 |
+| **13F institutional** | SEC EDGAR | 45 days | Quarterly | 1 |
+| **Korean retail flows** | ETFGI | 1 month | Monthly | 1 |
+| **Daily OHLCV** | Twelve Data / Polygon | 15 min - EOD | Daily | 1 |
+| **Intraday 1-min bars** | Polygon.io | Real-time | 1 minute | 2 |
+| **Real-time quotes** | Polygon WebSocket | <100ms | Sub-second | 2 |
+| **Options flow** | Unusual Whales | 1-5 min | Real-time | 2 |
+| **Futures data** | Interactive Brokers | <50ms | Real-time | 2 |
+| **COT reports** | CFTC / Barchart | Weekly (Fri 3:30pm) | Weekly | 2 |
+| **News events** | Benzinga API | <1 sec | Real-time | 2 |
+| **Social sentiment** | Twitter/Reddit | 5-15 min | Real-time | 3 |
+| **Macro indicators** | FRED API | Daily | Daily (some weekly) | 1 |
+| **Premium/Discount** | Calculated | Real-time | 1 minute | 2 |
+
+---
+
+**I. Real-Time Signal Enhancements**
+
+Combining near real-time data with weekly flow analysis creates multi-timeframe signals:
+
+**1. Volume Confirmation Signal**
+- **Trigger**: Weekly flow z-score >2.0 (extreme inflow) **AND** intraday volume >3x average
+- **Signal**: High-conviction buy, flows confirmed by immediate volume response
+- **Timeframe**: Execute same-day
+
+**2. Options-Flow Divergence**
+- **Trigger**: Large institutional put-buying on AGQ **BUT** weekly flows show inflows
+- **Signal**: Institutions hedging long exposure, potential top
+- **Timeframe**: 1-3 days
+
+**3. Asian Hours Pump**
+- **Trigger**: AGQ volume during 8pm-11pm ET (Korean hours) >3x normal
+- **Signal**: Korean retail FOMO, fade the move next day (contrarian)
+- **Timeframe**: Next morning (US open)
+
+**4. Macro Catalyst Alert**
+- **Trigger**: DXY drops >1% intraday **AND** gold futures +2% **AND** AGQ/UGL lagging
+- **Signal**: ETFs will catch up to futures, buy AGQ/UGL
+- **Timeframe**: Intraday (minutes to hours)
+
+**5. News Spike + Premium**
+- **Trigger**: Hawkish Fed news + gold spikes + UGL premium to NAV >0.8%
+- **Signal**: Institutions creating new UGL shares (strong buying), trend starting
+- **Timeframe**: Same-day entry
+
+---
+
+**J. Cost-Benefit Analysis for Real-Time Data**
+
+**Free Tier (MVP)**:
+- Twelve Data (800 calls/day) - FREE
+- FRED API - FREE
+- yfinance (unreliable) - FREE
+- Manual Reddit/Twitter checks - FREE
+- **Total**: $0/month
+- **Limitation**: 15-min delayed data, no WebSocket, rate limits
+
+**Mid-Tier (Phase 2)**:
+- Polygon.io Starter - $199/mo (real-time stocks, ETFs, futures)
+- Alpha Vantage News - FREE tier
+- StockTwits API - FREE tier
+- **Total**: ~$200/month
+- **Capability**: Real-time prices, intraday signals, basic news
+
+**Production (Phase 3)**:
+- Polygon.io Advanced - $399/mo (WebSocket, options)
+- Unusual Whales - $200/mo (options flow)
+- Benzinga News - $300/mo
+- Interactive Brokers - $10/mo
+- **Total**: ~$900/month
+- **Capability**: Full real-time streaming, institutional-grade data
+
+**Recommendation**: Start with free tier, upgrade to Polygon.io Starter ($199/mo) once MVP proves valuable, then scale to production tier if generating alpha.
 
 ### 3.4 Analytics & Signal Generation
 
