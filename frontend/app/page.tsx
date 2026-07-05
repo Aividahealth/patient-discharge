@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
 import {
   Activity,
   ArrowRight,
@@ -40,6 +40,12 @@ import {
 const NAVY = "#0A2540"
 const BLUE = "#0B63CE"
 const TEAL = "#0D9488"
+
+/* Web3Forms access key. This value is public by design (it only permits
+   submitting to your form). Set NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY in
+   frontend/.env.local for local dev and in the Vercel project env vars. */
+const WEB3FORMS_ACCESS_KEY = process.env.NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY ?? ""
+const WEB3FORMS_ENDPOINT = "https://api.web3forms.com/submit"
 
 /* ---------------------------------------------------------------- */
 /* Scroll-reveal wrapper (subtle fade-up animation)                 */
@@ -1233,7 +1239,30 @@ function Leadership() {
 /* ---------------------------------------------------------------- */
 function Newsletter() {
   const [email, setEmail] = useState("")
-  const [done, setDone] = useState(false)
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    setStatus("submitting")
+    try {
+      const formData = new FormData(form)
+      formData.append("access_key", WEB3FORMS_ACCESS_KEY)
+      formData.append("subject", "New Discharge Safety Report subscription")
+      formData.append("from_name", "Aivida Newsletter")
+      const res = await fetch(WEB3FORMS_ENDPOINT, { method: "POST", body: formData })
+      const data = await res.json()
+      if (data.success) {
+        setStatus("success")
+        setEmail("")
+      } else {
+        setStatus("error")
+      }
+    } catch {
+      setStatus("error")
+    }
+  }
+
   return (
     <section id="the-discharge-safety-report" className="py-20 sm:py-24">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
@@ -1250,15 +1279,19 @@ function Newsletter() {
               Insights for healthcare leaders on discharge safety risk, patient understanding, readability, multilingual
               communication, language access, and governed AI at discharge.
             </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                if (email) setDone(true)
-              }}
-              className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row"
-            >
+            <form onSubmit={handleSubmit} className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
+              {/* Honeypot spam trap (hidden from real users) */}
+              <input
+                type="checkbox"
+                name="botcheck"
+                tabIndex={-1}
+                autoComplete="off"
+                className="hidden"
+                aria-hidden="true"
+              />
               <input
                 type="email"
+                name="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -1267,13 +1300,19 @@ function Newsletter() {
               />
               <button
                 type="submit"
-                className="rounded-lg bg-white px-6 py-3 text-sm font-semibold transition-colors hover:bg-slate-100"
+                disabled={status === "submitting" || status === "success"}
+                className="rounded-lg bg-white px-6 py-3 text-sm font-semibold transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-70"
                 style={{ color: NAVY }}
               >
-                {done ? "Subscribed" : "Subscribe"}
+                {status === "submitting" ? "Subscribing…" : status === "success" ? "Subscribed" : "Subscribe"}
               </button>
             </form>
-            {done && <p className="mt-3 text-sm text-teal-200">Thank you — you&apos;re on the list.</p>}
+            {status === "success" && (
+              <p className="mt-3 text-sm text-teal-200">Thank you — you&apos;re on the list.</p>
+            )}
+            {status === "error" && (
+              <p className="mt-3 text-sm text-rose-200">Something went wrong. Please try again.</p>
+            )}
           </Reveal>
         </div>
       </div>
@@ -1320,7 +1359,30 @@ function FinalCTA() {
 /* Section 15 — Contact                                             */
 /* ---------------------------------------------------------------- */
 function Contact() {
-  const [submitted, setSubmitted] = useState(false)
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle")
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    setStatus("submitting")
+    try {
+      const formData = new FormData(form)
+      formData.append("access_key", WEB3FORMS_ACCESS_KEY)
+      formData.append("subject", "New Discharge Safety Risk Assessment Request")
+      formData.append("from_name", "Aivida Website")
+      const res = await fetch(WEB3FORMS_ENDPOINT, { method: "POST", body: formData })
+      const data = await res.json()
+      if (data.success) {
+        setStatus("success")
+        form.reset()
+      } else {
+        setStatus("error")
+      }
+    } catch {
+      setStatus("error")
+    }
+  }
+
   const fields: { name: string; label: string; type?: string; full?: boolean }[] = [
     { name: "firstName", label: "First Name" },
     { name: "lastName", label: "Last Name" },
@@ -1376,12 +1438,18 @@ function Contact() {
 
           <Reveal className="lg:col-span-3" delay={120}>
             <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                setSubmitted(true)
-              }}
+              onSubmit={handleSubmit}
               className="rounded-2xl border border-slate-200 bg-white p-7 shadow-lg shadow-slate-900/5"
             >
+              {/* Honeypot spam trap (hidden from real users) */}
+              <input
+                type="checkbox"
+                name="botcheck"
+                tabIndex={-1}
+                autoComplete="off"
+                className="hidden"
+                aria-hidden="true"
+              />
               <div className="grid gap-5 sm:grid-cols-2">
                 {fields.map((f) => (
                   <div key={f.name} className={f.name === "hospitals" ? "sm:col-span-2" : ""}>
@@ -1410,15 +1478,29 @@ function Contact() {
               </div>
               <button
                 type="submit"
-                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.01] sm:w-auto"
+                disabled={status === "submitting" || status === "success"}
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3.5 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                 style={{ backgroundColor: BLUE }}
               >
-                {submitted ? "Request Received" : "Request Assessment"}
+                {status === "submitting"
+                  ? "Sending…"
+                  : status === "success"
+                    ? "Request Received"
+                    : "Request Assessment"}
                 <ArrowRight className="h-4 w-4" />
               </button>
-              {submitted && (
+              {status === "success" && (
                 <p className="mt-3 text-sm text-teal-600">
                   Thank you — we&apos;ll be in touch shortly to schedule your assessment.
+                </p>
+              )}
+              {status === "error" && (
+                <p className="mt-3 text-sm text-rose-600">
+                  Something went wrong. Please try again or email{" "}
+                  <a href="mailto:info@aividahealth.ai" className="underline">
+                    info@aividahealth.ai
+                  </a>
+                  .
                 </p>
               )}
             </form>
