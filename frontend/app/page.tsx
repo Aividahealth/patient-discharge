@@ -1404,7 +1404,7 @@ function Contact() {
             </p>
             <div className="mt-8 space-y-4">
               <a
-                href="mailto:info@aividahealth.ai"
+                href="mailto:ai@aividahealth.ai"
                 className="flex items-center gap-3 text-sm text-slate-700 transition-colors hover:text-[#0B63CE]"
               >
                 <span
@@ -1413,7 +1413,7 @@ function Contact() {
                 >
                   <Mail className="h-5 w-5" style={{ color: BLUE }} />
                 </span>
-                info@aividahealth.ai
+                ai@aividahealth.ai
               </a>
               <div className="flex items-center gap-3 text-sm text-slate-700">
                 <span
@@ -1497,8 +1497,8 @@ function Contact() {
               {status === "error" && (
                 <p className="mt-3 text-sm text-rose-600">
                   Something went wrong. Please try again or email{" "}
-                  <a href="mailto:info@aividahealth.ai" className="underline">
-                    info@aividahealth.ai
+                  <a href="mailto:ai@aividahealth.ai" className="underline">
+                    ai@aividahealth.ai
                   </a>
                   .
                 </p>
@@ -1566,8 +1566,8 @@ function Footer() {
               <a href="#the-discharge-safety-report" className="inline-flex items-center gap-2 text-slate-300 hover:text-white">
                 <ScrollText className="h-4 w-4" /> Newsletter Subscription
               </a>
-              <a href="mailto:info@aividahealth.ai" className="inline-flex items-center gap-2 text-slate-300 hover:text-white">
-                <Mail className="h-4 w-4" /> info@aividahealth.ai
+              <a href="mailto:ai@aividahealth.ai" className="inline-flex items-center gap-2 text-slate-300 hover:text-white">
+                <Mail className="h-4 w-4" /> ai@aividahealth.ai
               </a>
             </div>
           </div>
